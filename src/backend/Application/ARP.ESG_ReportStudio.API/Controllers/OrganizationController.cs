@@ -37,6 +37,12 @@ public sealed class OrganizationController : ControllerBase
             return BadRequest("Name, legal form, country, and identifier are required.");
         }
 
+        if (request.Name.Length > 255 || request.LegalForm.Length > 100 
+            || request.Country.Length > 100 || request.Identifier.Length > 100)
+        {
+            return BadRequest("Input fields exceed maximum length.");
+        }
+
         var existingOrg = _store.GetOrganization();
         if (existingOrg != null)
         {
@@ -44,7 +50,7 @@ public sealed class OrganizationController : ControllerBase
         }
 
         var organization = _store.CreateOrganization(request);
-        return CreatedAtAction(nameof(GetOrganization), organization);
+        return CreatedAtAction(nameof(GetOrganization), new { id = organization.Id }, organization);
     }
 
     [HttpPut("{id}")]
@@ -56,6 +62,12 @@ public sealed class OrganizationController : ControllerBase
             || string.IsNullOrWhiteSpace(request.Identifier))
         {
             return BadRequest("Name, legal form, country, and identifier are required.");
+        }
+
+        if (request.Name.Length > 255 || request.LegalForm.Length > 100 
+            || request.Country.Length > 100 || request.Identifier.Length > 100)
+        {
+            return BadRequest("Input fields exceed maximum length.");
         }
 
         var organization = _store.UpdateOrganization(id, request);

@@ -42,8 +42,14 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
         setSyncError(null)
       } catch (error) {
         if (!isActive) return
-        // Organization not found is expected initially
-        setSyncError(null)
+        // 404 is expected when organization doesn't exist yet
+        if (error instanceof Error && error.message.includes('404')) {
+          setSyncError(null)
+        } else {
+          // Show other errors to the user
+          console.error('Failed to load organization:', error)
+          setSyncError('Failed to load organization. Using local data.')
+        }
       }
     }
 
@@ -74,15 +80,26 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
 
     if (!name.trim()) {
       newErrors.name = 'Company name is required'
+    } else if (name.length > 255) {
+      newErrors.name = 'Company name must be 255 characters or less'
     }
+    
     if (!legalForm.trim()) {
       newErrors.legalForm = 'Legal form is required'
+    } else if (legalForm.length > 100) {
+      newErrors.legalForm = 'Legal form must be 100 characters or less'
     }
+    
     if (!country.trim()) {
       newErrors.country = 'Country is required'
+    } else if (country.length > 100) {
+      newErrors.country = 'Country must be 100 characters or less'
     }
+    
     if (!identifier.trim()) {
       newErrors.identifier = 'Company identifier is required'
+    } else if (identifier.length > 100) {
+      newErrors.identifier = 'Identifier must be 100 characters or less'
     }
 
     setErrors(newErrors)
