@@ -3,6 +3,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { useKV } from '@github/spark/hooks'
 import { Building, FloppyDisk, PencilSimple } from '@phosphor-icons/react'
 import type { User, Organization } from '@/lib/types'
@@ -22,6 +24,8 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
   const [legalForm, setLegalForm] = useState('')
   const [country, setCountry] = useState('')
   const [identifier, setIdentifier] = useState('')
+  const [coverageType, setCoverageType] = useState<'full' | 'limited'>('full')
+  const [coverageJustification, setCoverageJustification] = useState('')
 
   // Validation state
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -39,6 +43,8 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
         setLegalForm(org.legalForm)
         setCountry(org.country)
         setIdentifier(org.identifier)
+        setCoverageType(org.coverageType)
+        setCoverageJustification(org.coverageJustification || '')
         setSyncError(null)
       } catch (error) {
         if (!isActive) return
@@ -66,6 +72,8 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
       setLegalForm(organization.legalForm)
       setCountry(organization.country)
       setIdentifier(organization.identifier)
+      setCoverageType(organization.coverageType)
+      setCoverageJustification(organization.coverageJustification || '')
     }
   }, [organization, isEditing])
 
@@ -102,6 +110,10 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
       newErrors.identifier = 'Identifier must be 100 characters or less'
     }
 
+    if (coverageType === 'limited' && !coverageJustification.trim()) {
+      newErrors.coverageJustification = 'Justification is required for limited coverage'
+    }
+
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
@@ -118,7 +130,9 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
           name,
           legalForm,
           country,
-          identifier
+          identifier,
+          coverageType,
+          coverageJustification: coverageType === 'limited' ? coverageJustification : undefined
         })
         setOrganization(updated)
       } else {
@@ -128,7 +142,9 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
           legalForm,
           country,
           identifier,
-          createdBy: currentUser.id
+          createdBy: currentUser.id,
+          coverageType,
+          coverageJustification: coverageType === 'limited' ? coverageJustification : undefined
         })
         setOrganization(created)
       }
@@ -145,6 +161,8 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
       setLegalForm(organization.legalForm)
       setCountry(organization.country)
       setIdentifier(organization.identifier)
+      setCoverageType(organization.coverageType)
+      setCoverageJustification(organization.coverageJustification || '')
       setIsEditing(false)
       setErrors({})
     }
@@ -269,6 +287,62 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
                 </div>
               </div>
 
+              <div className="space-y-4 pt-4 border-t">
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-base font-semibold">
+                      Reporting Coverage <span className="text-destructive">*</span>
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Define which parts of the organization are included in ESG reporting
+                    </p>
+                  </div>
+                  
+                  <RadioGroup value={coverageType} onValueChange={(value) => setCoverageType(value as 'full' | 'limited')}>
+                    <div className="flex items-center space-x-3 space-y-0">
+                      <RadioGroupItem value="full" id="coverage-full" />
+                      <Label htmlFor="coverage-full" className="font-normal cursor-pointer">
+                        <div>
+                          <div className="font-medium">Full Coverage</div>
+                          <div className="text-sm text-muted-foreground">All organizational units are included in reporting</div>
+                        </div>
+                      </Label>
+                    </div>
+                    <div className="flex items-center space-x-3 space-y-0">
+                      <RadioGroupItem value="limited" id="coverage-limited" />
+                      <Label htmlFor="coverage-limited" className="font-normal cursor-pointer">
+                        <div>
+                          <div className="font-medium">Limited Coverage</div>
+                          <div className="text-sm text-muted-foreground">Only specific parts of the organization are included</div>
+                        </div>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+
+                  {coverageType === 'limited' && (
+                    <div className="space-y-2 pl-7">
+                      <Label htmlFor="coverage-justification">
+                        Justification <span className="text-destructive">*</span>
+                      </Label>
+                      <Textarea
+                        id="coverage-justification"
+                        placeholder="Explain why limited coverage is used and which parts are excluded..."
+                        value={coverageJustification}
+                        onChange={(e) => setCoverageJustification(e.target.value)}
+                        className={errors.coverageJustification ? 'border-destructive' : ''}
+                        rows={3}
+                      />
+                      {errors.coverageJustification && (
+                        <p className="text-xs text-destructive">{errors.coverageJustification}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">
+                        Required: Provide a clear explanation for using limited coverage
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 <Button onClick={handleSave} className="gap-2">
                   <FloppyDisk size={16} weight="bold" />
@@ -302,6 +376,24 @@ export default function OrganizationView({ currentUser }: OrganizationViewProps)
                 <div>
                   <Label className="text-muted-foreground">Company Identifier</Label>
                   <p className="text-sm font-medium mt-1">{organization?.identifier}</p>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4">
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-muted-foreground">Reporting Coverage</Label>
+                    <p className="text-sm font-medium mt-1">
+                      {organization?.coverageType === 'full' ? 'Full Coverage' : 'Limited Coverage'}
+                    </p>
+                  </div>
+                  
+                  {organization?.coverageType === 'limited' && organization.coverageJustification && (
+                    <div>
+                      <Label className="text-muted-foreground">Coverage Justification</Label>
+                      <p className="text-sm mt-1 whitespace-pre-wrap">{organization.coverageJustification}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

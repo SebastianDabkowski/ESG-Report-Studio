@@ -84,6 +84,8 @@ export interface CreateOrganizationPayload {
   country: string
   identifier: string
   createdBy: string
+  coverageType: 'full' | 'limited'
+  coverageJustification?: string
 }
 
 export interface UpdateOrganizationPayload {
@@ -91,6 +93,8 @@ export interface UpdateOrganizationPayload {
   legalForm: string
   country: string
   identifier: string
+  coverageType: 'full' | 'limited'
+  coverageJustification?: string
 }
 
 export function getOrganization(): Promise<Organization> {
