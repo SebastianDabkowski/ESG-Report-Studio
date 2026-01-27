@@ -235,12 +235,12 @@ export default function OrganizationalStructureView({ currentUser }: Organizatio
 
                 <div className="space-y-2">
                   <Label htmlFor="parent">Parent Unit</Label>
-                  <Select value={parentId} onValueChange={setParentId}>
+                  <Select value={parentId || 'none'} onValueChange={(value) => setParentId(value === 'none' ? '' : value)}>
                     <SelectTrigger>
                       <SelectValue placeholder="None (Top Level)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None (Top Level)</SelectItem>
+                      <SelectItem value="none">None (Top Level)</SelectItem>
                       {availableParents.map((unit) => (
                         <SelectItem key={unit.id} value={unit.id}>
                           {unit.name}
@@ -393,12 +393,12 @@ export default function OrganizationalStructureView({ currentUser }: Organizatio
 
             <div className="space-y-2">
               <Label htmlFor="edit-parent">Parent Unit</Label>
-              <Select value={parentId} onValueChange={setParentId}>
+              <Select value={parentId || 'none'} onValueChange={(value) => setParentId(value === 'none' ? '' : value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="None (Top Level)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None (Top Level)</SelectItem>
+                  <SelectItem value="none">None (Top Level)</SelectItem>
                   {availableParents.map((unit) => (
                     <SelectItem key={unit.id} value={unit.id}>
                       {unit.name}
