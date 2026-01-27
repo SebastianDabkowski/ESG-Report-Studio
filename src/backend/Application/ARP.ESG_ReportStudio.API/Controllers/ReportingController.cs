@@ -42,6 +42,32 @@ public sealed class ReportingController : ControllerBase
         return Ok(snapshot);
     }
 
+    [HttpPut("periods/{id}")]
+    public ActionResult<ReportingPeriod> UpdatePeriod(string id, [FromBody] UpdateReportingPeriodRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)
+            || string.IsNullOrWhiteSpace(request.StartDate)
+            || string.IsNullOrWhiteSpace(request.EndDate))
+        {
+            return BadRequest("Name and dates are required.");
+        }
+
+        var (isValid, errorMessage, period) = _store.ValidateAndUpdatePeriod(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(period);
+    }
+
+    [HttpGet("periods/{id}/has-started")]
+    public ActionResult<bool> HasReportingStarted(string id)
+    {
+        return Ok(_store.HasReportingStarted(id));
+    }
+
     [HttpGet("sections")]
     public ActionResult<IReadOnlyList<ReportSection>> GetSections([FromQuery] string? periodId)
     {

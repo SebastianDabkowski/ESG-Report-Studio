@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CalendarDots, CheckCircle, Warning } from '@phosphor-icons/react'
+import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportingMode, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
-import { createReportingPeriod, getReportingData } from '@/lib/api'
+import { createReportingPeriod, getReportingData, updateReportingPeriod, hasReportingStarted } from '@/lib/api'
 
 interface PeriodsViewProps {
   currentUser: User
@@ -44,6 +44,8 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [sectionSummaries, setSectionSummaries] = useKV<SectionSummary[]>('section-summaries', [])
   
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [isEditOpen, setIsEditOpen] = useState(false)
+  const [editingPeriod, setEditingPeriod] = useState<ReportingPeriod | null>(null)
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
@@ -211,6 +213,73 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     } catch (error) {
       // Display server validation error
       const errorMessage = error instanceof Error ? error.message : 'Failed to create reporting period.'
+      setValidationError(errorMessage)
+    }
+  }
+
+  const handleEdit = async (period: ReportingPeriod) => {
+    try {
+      // Check if reporting has started
+      const started = await hasReportingStarted(period.id)
+      
+      if (started) {
+        setValidationError('Cannot edit configuration after reporting has started. Reporting is considered started when data points have been added to sections.')
+        return
+      }
+      
+      // Set up edit mode
+      setEditingPeriod(period)
+      setName(period.name)
+      setStartDate(period.startDate)
+      setEndDate(period.endDate)
+      setReportingMode(period.reportingMode)
+      setReportScope(period.reportScope)
+      setIsEditOpen(true)
+      setValidationError(null)
+    } catch (error) {
+      setValidationError('Failed to check reporting status. Please try again.')
+    }
+  }
+
+  const handleUpdate = async () => {
+    if (!editingPeriod) return
+
+    // Clear previous errors
+    setValidationError(null)
+    setSyncError(null)
+
+    // Client-side validation
+    const dateError = validateDates()
+    if (dateError) {
+      setValidationError(dateError)
+      return
+    }
+
+    try {
+      const updatedPeriod = await updateReportingPeriod(editingPeriod.id, {
+        name,
+        startDate,
+        endDate,
+        reportingMode,
+        reportScope
+      })
+
+      setPeriods((current) => 
+        (current || []).map(p => p.id === updatedPeriod.id ? updatedPeriod : p)
+      )
+      
+      setValidationError(null)
+      setSyncError(null)
+      setIsEditOpen(false)
+      setEditingPeriod(null)
+      setName('')
+      setStartDate('')
+      setEndDate('')
+      setReportingMode('simplified')
+      setReportScope('single-company')
+    } catch (error) {
+      // Display server validation error
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update reporting period.'
       setValidationError(errorMessage)
     }
   }
@@ -388,6 +457,128 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         )}
       </div>
 
+      {/* Edit Period Dialog */}
+      <Dialog open={isEditOpen} onOpenChange={(open) => {
+        setIsEditOpen(open)
+        if (!open) {
+          setValidationError(null)
+          setSyncError(null)
+          setEditingPeriod(null)
+          setName('')
+          setStartDate('')
+          setEndDate('')
+          setReportingMode('simplified')
+          setReportScope('single-company')
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Reporting Period</DialogTitle>
+            <DialogDescription>
+              Update the reporting period configuration. Changes can only be made before data collection begins.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="edit-period-name">Period Name</Label>
+              <Input
+                id="edit-period-name"
+                placeholder="e.g., FY 2024, Q1 2024"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-start-date">Start Date</Label>
+                <Input
+                  id="edit-start-date"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="edit-end-date">End Date</Label>
+                <Input
+                  id="edit-end-date"
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="edit-reporting-mode">Reporting Mode</Label>
+              <Select value={reportingMode} onValueChange={(v) => setReportingMode(v as ReportingMode)}>
+                <SelectTrigger id="edit-reporting-mode">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simplified">
+                    <div>
+                      <div className="font-medium">Simplified</div>
+                      <div className="text-xs text-muted-foreground">6 core ESG sections for SMEs</div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="extended">
+                    <div>
+                      <div className="font-medium">Extended</div>
+                      <div className="text-xs text-muted-foreground">13 comprehensive sections (GRI/SASB aligned)</div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-report-scope">Reporting Scope</Label>
+              <Select value={reportScope} onValueChange={(v) => setReportScope(v as ReportScope)}>
+                <SelectTrigger id="edit-report-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="single-company">
+                    <div>
+                      <div className="font-medium">Single Company</div>
+                      <div className="text-xs text-muted-foreground">Report covers a single legal entity</div>
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="group">
+                    <div>
+                      <div className="font-medium">Group</div>
+                      <div className="text-xs text-muted-foreground">Report covers multiple entities in a group</div>
+                    </div>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {validationError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {validationError}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdate}
+              disabled={!name || !startDate || !endDate}
+            >
+              Update Period
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="grid gap-4">
         {periods && periods.length > 0 ? (
           periods.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(period => {
@@ -428,12 +619,23 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center gap-6 text-sm">
+                  <div className="flex items-center justify-between gap-6 text-sm">
                     <div className="flex items-center gap-2">
                       <CheckCircle size={16} className="text-success" weight="fill" />
                       <span className="font-mono font-semibold">{approvedCount}</span>
                       <span className="text-muted-foreground">/ {periodSections.length} sections approved</span>
                     </div>
+                    {currentUser.role !== 'auditor' && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleEdit(period)}
+                        className="gap-2"
+                      >
+                        <PencilSimple size={14} weight="bold" />
+                        Edit Configuration
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -174,6 +174,71 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public bool HasReportingStarted(string periodId)
+    {
+        lock (_lock)
+        {
+            // Reporting is considered "started" if any section has data points
+            var periodSummaries = _summaries.Where(s => s.PeriodId == periodId).ToList();
+            return periodSummaries.Any(s => s.DataPointCount > 0);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, ReportingPeriod? Period) ValidateAndUpdatePeriod(string periodId, UpdateReportingPeriodRequest request)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.", null);
+            }
+
+            // Check if reporting has started
+            if (HasReportingStarted(periodId))
+            {
+                return (false, "Cannot edit configuration after reporting has started. Reporting is considered started when data points have been added to sections.", null);
+            }
+
+            // Validate date range: start date must be before end date
+            if (!DateTime.TryParse(request.StartDate, out var startDate) || 
+                !DateTime.TryParse(request.EndDate, out var endDate))
+            {
+                return (false, "Invalid date format. Please provide valid dates.", null);
+            }
+
+            if (startDate >= endDate)
+            {
+                return (false, "Start date must be before end date.", null);
+            }
+
+            // Check for overlapping periods (excluding the current period)
+            foreach (var existingPeriod in _periods.Where(p => p.Id != periodId))
+            {
+                if (!DateTime.TryParse(existingPeriod.StartDate, out var existingStart) ||
+                    !DateTime.TryParse(existingPeriod.EndDate, out var existingEnd))
+                {
+                    continue;
+                }
+
+                // Check if periods overlap
+                if (startDate < existingEnd && existingStart < endDate)
+                {
+                    return (false, $"Reporting period overlaps with existing period '{existingPeriod.Name}' ({existingPeriod.StartDate} - {existingPeriod.EndDate}).", null);
+                }
+            }
+
+            // Update the period
+            period.Name = request.Name;
+            period.StartDate = request.StartDate;
+            period.EndDate = request.EndDate;
+            period.ReportingMode = request.ReportingMode;
+            period.ReportScope = request.ReportScope;
+
+            return (true, null, period);
+        }
+    }
+
     public IReadOnlyList<ReportSection> GetSections(string? periodId)
     {
         lock (_lock)
