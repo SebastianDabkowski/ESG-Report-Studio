@@ -239,6 +239,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
             setIsCreateOpen(open)
             if (!open) {
               setValidationError(null)
+              setSyncError(null)
             }
           }}>
             <DialogTrigger asChild>

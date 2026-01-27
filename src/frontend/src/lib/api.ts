@@ -36,6 +36,10 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let errorMessage = 'Request failed'
+    
+    // Clone the response to allow multiple reads
+    const clonedResponse = response.clone()
+    
     try {
       const errorData = await response.json()
       // Check if it's a structured error with 'error' field
@@ -45,9 +49,9 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
         errorMessage = errorData
       }
     } catch {
-      // If JSON parsing fails, try to get text
+      // If JSON parsing fails, try to get text from cloned response
       try {
-        const text = await response.text()
+        const text = await clonedResponse.text()
         if (text) {
           errorMessage = text
         }
