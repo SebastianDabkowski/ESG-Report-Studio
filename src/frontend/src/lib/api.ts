@@ -19,6 +19,14 @@ export interface CreateReportingPeriodPayload {
   organizationId?: string
 }
 
+export interface UpdateReportingPeriodPayload {
+  name: string
+  startDate: string
+  endDate: string
+  reportingMode: 'simplified' | 'extended'
+  reportScope: 'single-company' | 'group'
+}
+
 const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api'
 
 function buildUrl(path: string): string {
@@ -76,6 +84,17 @@ export function createReportingPeriod(payload: CreateReportingPeriodPayload): Pr
     method: 'POST',
     body: JSON.stringify(payload)
   })
+}
+
+export function updateReportingPeriod(id: string, payload: UpdateReportingPeriodPayload): Promise<ReportingPeriod> {
+  return requestJson<ReportingPeriod>(`periods/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function hasReportingStarted(id: string): Promise<boolean> {
+  return requestJson<boolean>(`periods/${id}/has-started`)
 }
 
 export interface CreateOrganizationPayload {
