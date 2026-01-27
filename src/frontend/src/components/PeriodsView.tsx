@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CalendarDots, CheckCircle, Warning } from '@phosphor-icons/react'
-import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, ReportScope, Organization } from '@/lib/types'
+import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
 import { createReportingPeriod, getReportingData } from '@/lib/api'
 
@@ -38,6 +38,7 @@ const EXTENDED_SECTIONS = [
 
 export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [organization, setOrganization] = useKV<Organization | null>('organization', null)
+  const [organizationalUnits, setOrganizationalUnits] = useKV<OrganizationalUnit[]>('organizational-units', [])
   const [periods, setPeriods] = useKV<ReportingPeriod[]>('reporting-periods', [])
   const [sections, setSections] = useKV<ReportSection[]>('report-sections', [])
   const [sectionSummaries, setSectionSummaries] = useKV<SectionSummary[]>('section-summaries', [])
@@ -62,6 +63,9 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         if (snapshot.organization) {
           setOrganization(snapshot.organization)
         }
+        if (snapshot.organizationalUnits.length > 0) {
+          setOrganizationalUnits(snapshot.organizationalUnits)
+        }
         if (snapshot.periods.length > 0) {
           setPeriods(snapshot.periods)
         }
@@ -84,7 +88,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     return () => {
       isActive = false
     }
-  }, [setPeriods, setSections, setSectionSummaries, setOrganization])
+  }, [setPeriods, setSections, setSectionSummaries, setOrganization, setOrganizationalUnits])
 
   const createLocalPeriod = () => {
     const newPeriod: ReportingPeriod = {
@@ -169,6 +173,11 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       return
     }
 
+    if (!organizationalUnits || organizationalUnits.length === 0) {
+      setValidationError('Organizational structure must be defined before creating periods. Please add at least one organizational unit in the Structure tab.')
+      return
+    }
+
     // Client-side validation
     const dateError = validateDates()
     if (dateError) {
@@ -218,6 +227,22 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
               </p>
               <p className="text-xs text-amber-700 dark:text-amber-400">
                 You must configure your organization information before creating reporting periods. Go to the Organization tab to get started.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {organization && (!organizationalUnits || organizationalUnits.length === 0) && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Warning size={24} weight="fill" className="text-amber-600 dark:text-amber-500" />
+            <div>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                Organizational structure required
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                You must define at least one organizational unit before creating reporting periods. Go to the Structure tab to get started.
               </p>
             </div>
           </CardContent>

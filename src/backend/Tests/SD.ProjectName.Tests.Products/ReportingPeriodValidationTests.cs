@@ -4,11 +4,23 @@ namespace SD.ProjectName.Tests.Products
 {
     public class ReportingPeriodValidationTests
     {
+        private static void CreateTestOrganizationalUnit(InMemoryReportStore store)
+        {
+            // Create a default organizational unit to satisfy the validation requirement
+            store.CreateOrganizationalUnit(new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Organization Unit",
+                Description = "Default unit for testing",
+                CreatedBy = "test-user"
+            });
+        }
+
         [Fact]
         public void CreatePeriod_WithValidDates_ShouldSucceed()
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -34,6 +46,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Invalid Period",
@@ -59,6 +72,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Same Day Period",
@@ -84,6 +98,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Invalid Format Period",
@@ -109,6 +124,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -150,6 +166,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -189,6 +206,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -228,6 +246,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -267,6 +286,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -294,6 +314,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            CreateTestOrganizationalUnit(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
