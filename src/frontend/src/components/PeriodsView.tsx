@@ -464,6 +464,11 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
           setValidationError(null)
           setSyncError(null)
           setEditingPeriod(null)
+          setName('')
+          setStartDate('')
+          setEndDate('')
+          setReportingMode('simplified')
+          setReportScope('single-company')
         }
       }}>
         <DialogContent>

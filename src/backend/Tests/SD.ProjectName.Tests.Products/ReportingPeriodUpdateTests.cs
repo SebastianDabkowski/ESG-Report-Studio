@@ -67,23 +67,15 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
-        public void UpdatePeriod_AfterReportingStarts_ShouldFail()
+        public void UpdatePeriod_BeforeDataPoints_ShouldSucceed()
         {
             // Arrange
             var store = new InMemoryReportStore();
             var periodId = CreateTestPeriod(store);
             
-            // Simulate reporting has started by adding a data point
-            var sections = store.GetSectionSummaries(periodId);
-            Assert.NotEmpty(sections);
-            
-            // Manually increment data point count to simulate reporting started
-            var section = sections.First();
-            // We need to simulate this through the store's internal state
-            // Since we can't directly modify summaries, we'll test the HasReportingStarted method
-            
-            // For this test, we need to set up data through the actual methods
-            // Let's create a simpler test first
+            // Verify reporting has not started (no data points)
+            var hasStarted = store.HasReportingStarted(periodId);
+            Assert.False(hasStarted);
             
             var updateRequest = new UpdateReportingPeriodRequest
             {
@@ -94,12 +86,14 @@ namespace SD.ProjectName.Tests.Products
                 ReportScope = "group"
             };
 
-            // Act - This should succeed since we haven't actually added data points yet
-            // The real test will be in integration testing
+            // Act
             var (isValid, errorMessage, period) = store.ValidateAndUpdatePeriod(periodId, updateRequest);
 
-            // Assert - For now this will pass, proper test requires data point creation
+            // Assert
             Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(period);
+            Assert.Equal("FY 2024 Updated", period.Name);
         }
 
         [Fact]
@@ -142,6 +136,7 @@ namespace SD.ProjectName.Tests.Products
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
                 ReportingMode = "simplified",
+                ReportScope = "single-company",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -155,6 +150,7 @@ namespace SD.ProjectName.Tests.Products
                 StartDate = "2025-01-01",
                 EndDate = "2025-12-31",
                 ReportingMode = "simplified",
+                ReportScope = "single-company",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
