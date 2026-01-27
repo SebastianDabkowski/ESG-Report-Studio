@@ -51,6 +51,15 @@ public sealed class CreateReportingPeriodRequest
     public string? OrganizationId { get; set; }
 }
 
+public sealed class UpdateReportingPeriodRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string StartDate { get; set; } = string.Empty;
+    public string EndDate { get; set; } = string.Empty;
+    public string ReportingMode { get; set; } = "simplified";
+    public string ReportScope { get; set; } = "single-company";
+}
+
 public sealed class ReportingDataSnapshot
 {
     public Organization? Organization { get; set; }
