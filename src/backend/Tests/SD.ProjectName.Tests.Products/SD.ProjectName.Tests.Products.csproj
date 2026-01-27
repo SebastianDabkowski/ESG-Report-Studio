@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Modules\SD.ProjectName.Modules.Products\SD.ProjectName.Modules.Products.csproj" />
+    <ProjectReference Include="..\..\Application\ARP.ESG_ReportStudio.API\ARP.ESG_ReportStudio.API.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -48,6 +48,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [endDate, setEndDate] = useState('')
   const [variant, setVariant] = useState<ReportVariant>('simplified')
   const [syncError, setSyncError] = useState<string | null>(null)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -136,9 +137,39 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     setVariant('simplified')
   }
 
+  const validateDates = (): string | null => {
+    if (!startDate || !endDate) {
+      return 'Start date and end date are required.'
+    }
+
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      return 'Invalid date format. Please provide valid dates.'
+    }
+
+    if (start >= end) {
+      return 'Start date must be before end date.'
+    }
+
+    return null
+  }
+
   const handleCreate = async () => {
+    // Clear previous errors
+    setValidationError(null)
+    setSyncError(null)
+
     if (!organization) {
-      setSyncError('Organization must be configured before creating periods.')
+      setValidationError('Organization must be configured before creating periods.')
+      return
+    }
+
+    // Client-side validation
+    const dateError = validateDates()
+    if (dateError) {
+      setValidationError(dateError)
       return
     }
 
@@ -156,6 +187,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       setPeriods(snapshot.periods)
       setSections(snapshot.sections)
       setSectionSummaries(snapshot.sectionSummaries)
+      setValidationError(null)
       setSyncError(null)
       setIsCreateOpen(false)
       setName('')
@@ -163,8 +195,9 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       setEndDate('')
       setVariant('simplified')
     } catch (error) {
-      setSyncError('Backend sync unavailable. Created locally only.')
-      createLocalPeriod()
+      // Display server validation error
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create reporting period.'
+      setValidationError(errorMessage)
     }
   }
 
@@ -202,7 +235,13 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         </div>
         
         {currentUser.role !== 'auditor' && (
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={(open) => {
+            setIsCreateOpen(open)
+            if (!open) {
+              setValidationError(null)
+              setSyncError(null)
+            }
+          }}>
             <DialogTrigger asChild>
               <Button className="gap-2" disabled={!organization}>
                 <Plus size={16} weight="bold" />
@@ -272,6 +311,12 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {validationError && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {validationError}
+                  </div>
+                )}
               </div>
               
               <DialogFooter>
