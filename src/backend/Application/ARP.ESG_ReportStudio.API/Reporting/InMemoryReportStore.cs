@@ -358,9 +358,11 @@ public sealed class InMemoryReportStore
                 return true; // Circular reference detected
             }
 
+            // This check detects pre-existing cycles in the data (data corruption scenario)
+            // Under normal operation, this should never trigger as validation prevents cycles
             if (!visited.Add(current))
             {
-                return true; // Already visited, circular reference
+                return true; // Already visited, circular reference in existing data
             }
 
             var parent = _organizationalUnits.FirstOrDefault(u => u.Id == current);

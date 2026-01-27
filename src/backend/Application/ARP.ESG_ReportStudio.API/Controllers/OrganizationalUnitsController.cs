@@ -40,6 +40,11 @@ public sealed class OrganizationalUnitsController : ControllerBase
             return BadRequest("Name is required.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.CreatedBy))
+        {
+            return BadRequest("CreatedBy is required.");
+        }
+
         if (request.Name.Length > 255)
         {
             return BadRequest("Name must be 255 characters or less.");

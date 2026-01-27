@@ -173,6 +173,53 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
+        public void UpdateOrganizationalUnit_WithDeepCircularReference_ShouldThrow()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            // Create grandparent -> parent -> child hierarchy
+            var grandparentRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Grandparent",
+                Description = "Top level",
+                CreatedBy = "user1"
+            };
+            var grandparent = store.CreateOrganizationalUnit(grandparentRequest);
+
+            var parentRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Parent",
+                ParentId = grandparent.Id,
+                Description = "Middle level",
+                CreatedBy = "user1"
+            };
+            var parent = store.CreateOrganizationalUnit(parentRequest);
+
+            var childRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Child",
+                ParentId = parent.Id,
+                Description = "Bottom level",
+                CreatedBy = "user1"
+            };
+            var child = store.CreateOrganizationalUnit(childRequest);
+
+            // Try to make grandparent a child of child (deep circular reference)
+            var updateRequest = new UpdateOrganizationalUnitRequest
+            {
+                Name = "Grandparent",
+                ParentId = child.Id,
+                Description = "Top level"
+            };
+
+            // Act & Assert
+            var exception = Assert.Throws<InvalidOperationException>(() => 
+                store.UpdateOrganizationalUnit(grandparent.Id, updateRequest));
+            Assert.Contains("circular reference", exception.Message);
+        }
+
+        [Fact]
         public void DeleteOrganizationalUnit_WithoutChildren_ShouldSucceed()
         {
             // Arrange
