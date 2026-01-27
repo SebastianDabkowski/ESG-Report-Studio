@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CalendarDots, CheckCircle, Warning } from '@phosphor-icons/react'
-import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
+import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportingMode, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
 import { createReportingPeriod, getReportingData } from '@/lib/api'
 
@@ -47,7 +47,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [variant, setVariant] = useState<ReportVariant>('simplified')
+  const [reportingMode, setReportingMode] = useState<ReportingMode>('simplified')
   const [reportScope, setReportScope] = useState<ReportScope>('single-company')
   const [syncError, setSyncError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
@@ -96,7 +96,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       name,
       startDate,
       endDate,
-      variant,
+      reportingMode,
       reportScope,
       status: 'active',
       createdAt: new Date().toISOString(),
@@ -108,7 +108,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       return [...updated, newPeriod]
     })
 
-    const sectionTemplates = variant === 'simplified' ? SIMPLIFIED_SECTIONS : EXTENDED_SECTIONS
+    const sectionTemplates = reportingMode === 'simplified' ? SIMPLIFIED_SECTIONS : EXTENDED_SECTIONS
     
     const newSections: ReportSection[] = sectionTemplates.map((template, index) => ({
       id: generateId(),
@@ -140,7 +140,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     setName('')
     setStartDate('')
     setEndDate('')
-    setVariant('simplified')
+    setReportingMode('simplified')
     setReportScope('single-company')
   }
 
@@ -190,7 +190,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         name,
         startDate,
         endDate,
-        variant,
+        reportingMode,
         reportScope,
         ownerId: currentUser.id,
         ownerName: currentUser.name,
@@ -206,7 +206,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       setName('')
       setStartDate('')
       setEndDate('')
-      setVariant('simplified')
+      setReportingMode('simplified')
       setReportScope('single-company')
     } catch (error) {
       // Display server validation error
@@ -320,16 +320,16 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="variant">Report Variant</Label>
-                  <Select value={variant} onValueChange={(v) => setVariant(v as ReportVariant)}>
-                    <SelectTrigger id="variant">
+                  <Label htmlFor="reporting-mode">Reporting Mode</Label>
+                  <Select value={reportingMode} onValueChange={(v) => setReportingMode(v as ReportingMode)}>
+                    <SelectTrigger id="reporting-mode">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="simplified">
                         <div>
                           <div className="font-medium">Simplified</div>
-                          <div className="text-xs text-muted-foreground">6 core ESG sections</div>
+                          <div className="text-xs text-muted-foreground">6 core ESG sections for SMEs</div>
                         </div>
                       </SelectItem>
                       <SelectItem value="extended">
@@ -413,9 +413,9 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                     
                     <div className="text-right space-y-3">
                       <div>
-                        <div className="text-xs text-muted-foreground mb-1">Variant</div>
+                        <div className="text-xs text-muted-foreground mb-1">Mode</div>
                         <Badge variant="outline">
-                          {period.variant === 'simplified' ? 'Simplified' : 'Extended'}
+                          {period.reportingMode === 'simplified' ? 'Simplified' : 'Extended'}
                         </Badge>
                       </div>
                       <div>

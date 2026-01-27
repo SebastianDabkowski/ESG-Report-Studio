@@ -6,7 +6,7 @@ public sealed class ReportingPeriod
     public string Name { get; set; } = string.Empty;
     public string StartDate { get; set; } = string.Empty;
     public string EndDate { get; set; } = string.Empty;
-    public string Variant { get; set; } = "simplified";
+    public string ReportingMode { get; set; } = "simplified";
     public string ReportScope { get; set; } = "single-company";
     public string Status { get; set; } = "active";
     public string CreatedAt { get; set; } = string.Empty;
@@ -44,7 +44,7 @@ public sealed class CreateReportingPeriodRequest
     public string Name { get; set; } = string.Empty;
     public string StartDate { get; set; } = string.Empty;
     public string EndDate { get; set; } = string.Empty;
-    public string Variant { get; set; } = "simplified";
+    public string ReportingMode { get; set; } = "simplified";
     public string ReportScope { get; set; } = "single-company";
     public string OwnerId { get; set; } = string.Empty;
     public string OwnerName { get; set; } = string.Empty;

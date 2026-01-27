@@ -26,7 +26,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -52,7 +52,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "Invalid Period",
                 StartDate = "2024-12-31",
                 EndDate = "2024-01-01",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -78,7 +78,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "Same Day Period",
                 StartDate = "2024-06-15",
                 EndDate = "2024-06-15",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -104,7 +104,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "Invalid Format Period",
                 StartDate = "invalid-date",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -132,7 +132,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -145,7 +145,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "Q4 2024",
                 StartDate = "2024-10-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -174,7 +174,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -186,7 +186,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "Q2 2024",
                 StartDate = "2024-04-01",
                 EndDate = "2024-06-30",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -214,7 +214,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -226,7 +226,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2025",
                 StartDate = "2025-01-01",
                 EndDate = "2025-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -254,7 +254,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "H1 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-06-30",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -266,7 +266,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "H2 2024",
                 StartDate = "2024-07-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -292,7 +292,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 ReportScope = "group",
                 OwnerId = "user1",
                 OwnerName = "Test User"
@@ -320,7 +320,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };

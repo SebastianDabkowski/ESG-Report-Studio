@@ -12,7 +12,7 @@ export interface CreateReportingPeriodPayload {
   name: string
   startDate: string
   endDate: string
-  variant: 'simplified' | 'extended'
+  reportingMode: 'simplified' | 'extended'
   reportScope: 'single-company' | 'group'
   ownerId: string
   ownerName: string

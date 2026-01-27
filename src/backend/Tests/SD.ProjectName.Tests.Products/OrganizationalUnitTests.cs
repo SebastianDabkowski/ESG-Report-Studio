@@ -281,7 +281,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
@@ -316,7 +316,7 @@ namespace SD.ProjectName.Tests.Products
                 Name = "FY 2024",
                 StartDate = "2024-01-01",
                 EndDate = "2024-12-31",
-                Variant = "simplified",
+                ReportingMode = "simplified",
                 OwnerId = "user1",
                 OwnerName = "Test User"
             };
