@@ -43,6 +43,12 @@ public sealed class OrganizationController : ControllerBase
             return BadRequest("Input fields exceed maximum length.");
         }
 
+        // Validate coverage type
+        if (request.CoverageType != "full" && request.CoverageType != "limited")
+        {
+            return BadRequest("Coverage type must be either 'full' or 'limited'.");
+        }
+
         // Validate coverage: if limited, justification is required
         if (request.CoverageType == "limited" && string.IsNullOrWhiteSpace(request.CoverageJustification))
         {
@@ -74,6 +80,12 @@ public sealed class OrganizationController : ControllerBase
             || request.Country.Length > 100 || request.Identifier.Length > 100)
         {
             return BadRequest("Input fields exceed maximum length.");
+        }
+
+        // Validate coverage type
+        if (request.CoverageType != "full" && request.CoverageType != "limited")
+        {
+            return BadRequest("Coverage type must be either 'full' or 'limited'.");
         }
 
         // Validate coverage: if limited, justification is required

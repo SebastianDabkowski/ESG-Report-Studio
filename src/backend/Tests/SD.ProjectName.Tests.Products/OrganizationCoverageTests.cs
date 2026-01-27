@@ -145,5 +145,31 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("full", updated.CoverageType);
             Assert.Null(updated.CoverageJustification);
         }
+
+        [Fact]
+        public void CreateOrganization_WithInvalidCoverageType_ShouldStillCreateInStore()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            // Note: The controller validates this, but the store itself accepts any value
+            // This test verifies store behavior - controller tests would verify the validation
+            var request = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "GmbH",
+                Country = "Germany",
+                Identifier = "DE123456789",
+                CreatedBy = "test-user",
+                CoverageType = "invalid-type"
+            };
+
+            // Act
+            var organization = store.CreateOrganization(request);
+
+            // Assert
+            Assert.NotNull(organization);
+            Assert.Equal("invalid-type", organization.CoverageType);
+        }
     }
 }
