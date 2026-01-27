@@ -335,7 +335,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                       <SelectItem value="extended">
                         <div>
                           <div className="font-medium">Extended</div>
-                          <div className="text-xs text-muted-foreground">13 comprehensive sections (CSRD/ESRS aligned)</div>
+                          <div className="text-xs text-muted-foreground">13 comprehensive sections (GRI/SASB aligned)</div>
                         </div>
                       </SelectItem>
                     </SelectContent>
