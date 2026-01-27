@@ -72,7 +72,7 @@ function App() {
           </TabsContent>
 
           <TabsContent value="summary" className="space-y-6">
-            <ReportingContextSummary currentUser={currentUser} />
+            <ReportingContextSummary />
           </TabsContent>
 
           <TabsContent value="organization" className="space-y-6">

@@ -1,7 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { useKV } from '@github/spark/hooks'
 import { 
   Building, 
@@ -13,19 +14,20 @@ import {
   WarningCircle,
   Info
 } from '@phosphor-icons/react'
-import type { User, Organization, ReportingPeriod, SectionSummary, OrganizationalUnit } from '@/lib/types'
+import type { Organization, ReportingPeriod, SectionSummary, OrganizationalUnit } from '@/lib/types'
 import { formatDate } from '@/lib/helpers'
 import { getReportingData } from '@/lib/api'
 
 interface ReportingContextSummaryProps {
-  currentUser: User
+  // Future enhancement: could be used for role-based visibility or personalization
 }
 
-export default function ReportingContextSummary({ currentUser }: ReportingContextSummaryProps) {
+export default function ReportingContextSummary(_props: ReportingContextSummaryProps) {
   const [organization, setOrganization] = useKV<Organization | null>('organization', null)
   const [periods, setPeriods] = useKV<ReportingPeriod[]>('reporting-periods', [])
   const [sectionSummaries, setSectionSummaries] = useKV<SectionSummary[]>('section-summaries', [])
   const [organizationalUnits, setOrganizationalUnits] = useKV<OrganizationalUnit[]>('organizational-units', [])
+  const [syncError, setSyncError] = useState<string | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -47,9 +49,12 @@ export default function ReportingContextSummary({ currentUser }: ReportingContex
         if (snapshot.organizationalUnits.length > 0) {
           setOrganizationalUnits(snapshot.organizationalUnits)
         }
+        setSyncError(null)
       } catch (error) {
-        // Silently handle errors - data will be loaded from local KV storage
+        if (!isActive) return
+        // Show error to user but continue with local data
         console.error('Failed to load reporting data:', error)
+        setSyncError('Backend sync unavailable. Using local data.')
       }
     }
 
@@ -103,6 +108,11 @@ export default function ReportingContextSummary({ currentUser }: ReportingContex
         <p className="text-sm text-muted-foreground mt-1">
           Comprehensive overview of reporting configuration and readiness
         </p>
+        {syncError && (
+          <p className="text-xs text-muted-foreground mt-1">
+            {syncError}
+          </p>
+        )}
       </div>
 
       {/* Overall Status Card */}
@@ -254,7 +264,16 @@ export default function ReportingContextSummary({ currentUser }: ReportingContex
                     {organization.coverageType === 'full' ? 'Full Coverage' : 'Limited Coverage'}
                   </Badge>
                   {organization.coverageType === 'limited' && organization.coverageJustification && (
-                    <Info size={14} className="text-muted-foreground" />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Info size={14} className="text-muted-foreground" aria-label="Coverage justification available" />
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p className="max-w-xs">See justification below</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   )}
                 </div>
                 {organization.coverageType === 'limited' && organization.coverageJustification && (
@@ -460,12 +479,14 @@ export default function ReportingContextSummary({ currentUser }: ReportingContex
               <p className="text-sm font-medium text-warning-foreground">
                 Configuration Incomplete
               </p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Complete the following steps to begin reporting: 
-                {!organization && ' Configure organization information.'}
-                {(!organizationalUnits || organizationalUnits.length === 0) && ' Define organizational structure.'}
-                {!activePeriod && ' Create an active reporting period.'}
-              </p>
+              <div className="text-xs text-muted-foreground mt-1">
+                <p>Complete the following steps to begin reporting:</p>
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  {!organization && <li>Configure organization information</li>}
+                  {(!organizationalUnits || organizationalUnits.length === 0) && <li>Define organizational structure</li>}
+                  {!activePeriod && <li>Create an active reporting period</li>}
+                </ul>
+              </div>
             </div>
           </CardContent>
         </Card>
