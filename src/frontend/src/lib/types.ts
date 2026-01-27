@@ -10,6 +10,8 @@ export type ContentType = 'narrative' | 'metric' | 'evidence' | 'assumption' | '
 
 export type ReportVariant = 'simplified' | 'extended'
 
+export type ReportScope = 'single-company' | 'group'
+
 export interface User {
   id: string
   name: string
@@ -34,6 +36,7 @@ export interface ReportingPeriod {
   startDate: string
   endDate: string
   variant: ReportVariant
+  reportScope: ReportScope
   status: 'active' | 'closed'
   createdAt: string
   ownerId: string

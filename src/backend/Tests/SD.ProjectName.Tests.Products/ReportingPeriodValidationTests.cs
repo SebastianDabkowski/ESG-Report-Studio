@@ -261,5 +261,58 @@ namespace SD.ProjectName.Tests.Products
             Assert.NotNull(snapshot);
             Assert.Equal(2, snapshot.Periods.Count);
         }
+
+        [Fact]
+        public void CreatePeriod_WithReportScope_ShouldSetCorrectScope()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            var request = new CreateReportingPeriodRequest
+            {
+                Name = "FY 2024",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                Variant = "simplified",
+                ReportScope = "group",
+                OwnerId = "user1",
+                OwnerName = "Test User"
+            };
+
+            // Act
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(request);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(snapshot);
+            Assert.Single(snapshot.Periods);
+            Assert.Equal("group", snapshot.Periods[0].ReportScope);
+        }
+
+        [Fact]
+        public void CreatePeriod_WithoutReportScope_ShouldDefaultToSingleCompany()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            var request = new CreateReportingPeriodRequest
+            {
+                Name = "FY 2024",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                Variant = "simplified",
+                OwnerId = "user1",
+                OwnerName = "Test User"
+            };
+
+            // Act
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(request);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(snapshot);
+            Assert.Single(snapshot.Periods);
+            Assert.Equal("single-company", snapshot.Periods[0].ReportScope);
+        }
     }
 }

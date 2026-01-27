@@ -96,6 +96,7 @@ public sealed class InMemoryReportStore
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
                 Variant = request.Variant,
+                ReportScope = request.ReportScope,
                 Status = "active",
                 CreatedAt = DateTime.UtcNow.ToString("O"),
                 OwnerId = request.OwnerId,

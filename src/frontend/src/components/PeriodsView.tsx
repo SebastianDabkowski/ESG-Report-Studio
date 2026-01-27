@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CalendarDots, CheckCircle, Warning } from '@phosphor-icons/react'
-import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, Organization } from '@/lib/types'
+import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, ReportScope, Organization } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
 import { createReportingPeriod, getReportingData } from '@/lib/api'
 
@@ -47,6 +47,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [variant, setVariant] = useState<ReportVariant>('simplified')
+  const [reportScope, setReportScope] = useState<ReportScope>('single-company')
   const [syncError, setSyncError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -92,6 +93,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       startDate,
       endDate,
       variant,
+      reportScope,
       status: 'active',
       createdAt: new Date().toISOString(),
       ownerId: currentUser.id
@@ -135,6 +137,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     setStartDate('')
     setEndDate('')
     setVariant('simplified')
+    setReportScope('single-company')
   }
 
   const validateDates = (): string | null => {
@@ -179,6 +182,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         startDate,
         endDate,
         variant,
+        reportScope,
         ownerId: currentUser.id,
         ownerName: currentUser.name,
         organizationId: organization.id
@@ -194,6 +198,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       setStartDate('')
       setEndDate('')
       setVariant('simplified')
+      setReportScope('single-company')
     } catch (error) {
       // Display server validation error
       const errorMessage = error instanceof Error ? error.message : 'Failed to create reporting period.'
@@ -312,6 +317,29 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor="report-scope">Reporting Scope</Label>
+                  <Select value={reportScope} onValueChange={(v) => setReportScope(v as ReportScope)}>
+                    <SelectTrigger id="report-scope">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="single-company">
+                        <div>
+                          <div className="font-medium">Single Company</div>
+                          <div className="text-xs text-muted-foreground">Report covers a single legal entity</div>
+                        </div>
+                      </SelectItem>
+                      <SelectItem value="group">
+                        <div>
+                          <div className="font-medium">Group</div>
+                          <div className="text-xs text-muted-foreground">Report covers multiple entities in a group</div>
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {validationError && (
                   <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
                     {validationError}
@@ -358,11 +386,19 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                       </CardDescription>
                     </div>
                     
-                    <div className="text-right">
-                      <div className="text-xs text-muted-foreground mb-1">Variant</div>
-                      <Badge variant="outline">
-                        {period.variant === 'simplified' ? 'Simplified' : 'Extended'}
-                      </Badge>
+                    <div className="text-right space-y-3">
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Variant</div>
+                        <Badge variant="outline">
+                          {period.variant === 'simplified' ? 'Simplified' : 'Extended'}
+                        </Badge>
+                      </div>
+                      <div>
+                        <div className="text-xs text-muted-foreground mb-1">Scope</div>
+                        <Badge variant="outline">
+                          {period.reportScope === 'single-company' ? 'Single Company' : 'Group'}
+                        </Badge>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
