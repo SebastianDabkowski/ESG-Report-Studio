@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "46GZWegL2/c=",
+  "success": true,
+  "projectFilePath": "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\ARP.ESG_ReportStudio.API.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\sdabk\\.nuget\\packages\\microsoft.aspnetcore.openapi\\9.0.12\\microsoft.aspnetcore.openapi.9.0.12.nupkg.sha512",
+    "C:\\Users\\sdabk\\.nuget\\packages\\microsoft.openapi\\1.6.17\\microsoft.openapi.1.6.17.nupkg.sha512"
+  ],
+  "logs": []
+}
