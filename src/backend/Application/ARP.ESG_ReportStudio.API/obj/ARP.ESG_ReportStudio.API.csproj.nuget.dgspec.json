@@ -1,32 +1,25 @@
 {
   "format": 1,
   "restore": {
-    "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\ARP.ESG_ReportStudio.API.csproj": {}
+    "/home/runner/work/ESG-Report-Studio/ESG-Report-Studio/src/backend/Application/ARP.ESG_ReportStudio.API/ARP.ESG_ReportStudio.API.csproj": {}
   },
   "projects": {
-    "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\ARP.ESG_ReportStudio.API.csproj": {
+    "/home/runner/work/ESG-Report-Studio/ESG-Report-Studio/src/backend/Application/ARP.ESG_ReportStudio.API/ARP.ESG_ReportStudio.API.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\ARP.ESG_ReportStudio.API.csproj",
+        "projectUniqueName": "/home/runner/work/ESG-Report-Studio/ESG-Report-Studio/src/backend/Application/ARP.ESG_ReportStudio.API/ARP.ESG_ReportStudio.API.csproj",
         "projectName": "ARP.ESG_ReportStudio.API",
-        "projectPath": "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\ARP.ESG_ReportStudio.API.csproj",
-        "packagesPath": "C:\\Users\\sdabk\\.nuget\\packages\\",
-        "outputPath": "c:\\RepoSD\\Arp.ESG_ReportStudio\\ESG-Report-Studio\\src\\backend\\Application\\ARP.ESG_ReportStudio.API\\obj\\",
+        "projectPath": "/home/runner/work/ESG-Report-Studio/ESG-Report-Studio/src/backend/Application/ARP.ESG_ReportStudio.API/ARP.ESG_ReportStudio.API.csproj",
+        "packagesPath": "/home/runner/.nuget/packages/",
+        "outputPath": "/home/runner/work/ESG-Report-Studio/ESG-Report-Studio/src/backend/Application/ARP.ESG_ReportStudio.API/obj/",
         "projectStyle": "PackageReference",
-        "fallbackFolders": [
-          "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
-        ],
         "configFilePaths": [
-          "C:\\Users\\sdabk\\AppData\\Roaming\\NuGet\\NuGet.Config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
-          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+          "/home/runner/.nuget/NuGet/NuGet.Config"
         ],
         "originalTargetFrameworks": [
           "net9.0"
         ],
         "sources": {
-          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
-          "C:\\Program Files\\dotnet\\library-packs": {},
           "https://api.nuget.org/v3/index.json": {}
         },
         "frameworks": {
@@ -75,7 +68,7 @@
               "privateAssets": "all"
             }
           },
-          "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\10.0.102/PortableRuntimeIdentifierGraph.json"
+          "runtimeIdentifierGraphPath": "/usr/share/dotnet/sdk/10.0.102/PortableRuntimeIdentifierGraph.json"
         }
       }
     }

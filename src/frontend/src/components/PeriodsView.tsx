@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CalendarDots, CheckCircle } from '@phosphor-icons/react'
-import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant } from '@/lib/types'
+import { Plus, CalendarDots, CheckCircle, Warning } from '@phosphor-icons/react'
+import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportVariant, Organization } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
 import { createReportingPeriod, getReportingData } from '@/lib/api'
 
@@ -37,6 +37,7 @@ const EXTENDED_SECTIONS = [
 ]
 
 export default function PeriodsView({ currentUser }: PeriodsViewProps) {
+  const [organization, setOrganization] = useKV<Organization | null>('organization', null)
   const [periods, setPeriods] = useKV<ReportingPeriod[]>('reporting-periods', [])
   const [sections, setSections] = useKV<ReportSection[]>('report-sections', [])
   const [sectionSummaries, setSectionSummaries] = useKV<SectionSummary[]>('section-summaries', [])
@@ -56,6 +57,9 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         const snapshot = await getReportingData()
         if (!isActive) return
 
+        if (snapshot.organization) {
+          setOrganization(snapshot.organization)
+        }
         if (snapshot.periods.length > 0) {
           setPeriods(snapshot.periods)
         }
@@ -78,7 +82,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     return () => {
       isActive = false
     }
-  }, [setPeriods, setSections, setSectionSummaries])
+  }, [setPeriods, setSections, setSectionSummaries, setOrganization])
 
   const createLocalPeriod = () => {
     const newPeriod: ReportingPeriod = {
@@ -133,6 +137,11 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   }
 
   const handleCreate = async () => {
+    if (!organization) {
+      setSyncError('Organization must be configured before creating periods.')
+      return
+    }
+
     try {
       const snapshot = await createReportingPeriod({
         name,
@@ -140,7 +149,8 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         endDate,
         variant,
         ownerId: currentUser.id,
-        ownerName: currentUser.name
+        ownerName: currentUser.name,
+        organizationId: organization.id
       })
 
       setPeriods(snapshot.periods)
@@ -160,6 +170,22 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
 
   return (
     <div className="space-y-6">
+      {!organization && (
+        <Card className="border-amber-500/50 bg-amber-500/5">
+          <CardContent className="flex items-center gap-3 py-4">
+            <Warning size={24} weight="fill" className="text-amber-600 dark:text-amber-500" />
+            <div>
+              <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                Organization configuration required
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                You must configure your organization information before creating reporting periods. Go to the Organization tab to get started.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -178,7 +204,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         {currentUser.role !== 'auditor' && (
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
-              <Button className="gap-2">
+              <Button className="gap-2" disabled={!organization}>
                 <Plus size={16} weight="bold" />
                 New Period
               </Button>

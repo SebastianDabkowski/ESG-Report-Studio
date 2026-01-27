@@ -1,6 +1,7 @@
-import type { ReportingPeriod, ReportSection, SectionSummary } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
+  organization: Organization | null
   periods: ReportingPeriod[]
   sections: ReportSection[]
   sectionSummaries: SectionSummary[]
@@ -13,6 +14,7 @@ export interface CreateReportingPeriodPayload {
   variant: 'simplified' | 'extended'
   ownerId: string
   ownerName: string
+  organizationId?: string
 }
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api'
@@ -50,3 +52,37 @@ export function createReportingPeriod(payload: CreateReportingPeriodPayload): Pr
     body: JSON.stringify(payload)
   })
 }
+
+export interface CreateOrganizationPayload {
+  name: string
+  legalForm: string
+  country: string
+  identifier: string
+  createdBy: string
+}
+
+export interface UpdateOrganizationPayload {
+  name: string
+  legalForm: string
+  country: string
+  identifier: string
+}
+
+export function getOrganization(): Promise<Organization> {
+  return requestJson<Organization>('organization')
+}
+
+export function createOrganization(payload: CreateOrganizationPayload): Promise<Organization> {
+  return requestJson<Organization>('organization', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function updateOrganization(id: string, payload: UpdateOrganizationPayload): Promise<Organization> {
+  return requestJson<Organization>(`organization/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+

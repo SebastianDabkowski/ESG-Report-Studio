@@ -10,6 +10,7 @@ public sealed class ReportingPeriod
     public string Status { get; set; } = "active";
     public string CreatedAt { get; set; } = string.Empty;
     public string OwnerId { get; set; } = string.Empty;
+    public string? OrganizationId { get; set; }
 }
 
 public class ReportSection
@@ -45,10 +46,12 @@ public sealed class CreateReportingPeriodRequest
     public string Variant { get; set; } = "simplified";
     public string OwnerId { get; set; } = string.Empty;
     public string OwnerName { get; set; } = string.Empty;
+    public string? OrganizationId { get; set; }
 }
 
 public sealed class ReportingDataSnapshot
 {
+    public Organization? Organization { get; set; }
     public IReadOnlyList<ReportingPeriod> Periods { get; set; } = Array.Empty<ReportingPeriod>();
     public IReadOnlyList<ReportSection> Sections { get; set; } = Array.Empty<ReportSection>();
     public IReadOnlyList<SectionSummary> SectionSummaries { get; set; } = Array.Empty<SectionSummary>();

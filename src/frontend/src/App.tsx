@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Building } from '@phosphor-icons/react'
 import Dashboard from '@/components/Dashboard'
+import OrganizationView from '@/components/OrganizationView'
 import PeriodsView from '@/components/PeriodsView'
 import SectionsView from '@/components/SectionsView'
 import EvidenceView from '@/components/EvidenceView'
@@ -55,6 +56,7 @@ function App() {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           <TabsList className="bg-muted">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="organization">Organization</TabsTrigger>
             <TabsTrigger value="periods">Periods</TabsTrigger>
             <TabsTrigger value="sections">Sections</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
@@ -63,6 +65,10 @@ function App() {
 
           <TabsContent value="dashboard" className="space-y-6">
             <Dashboard currentUser={currentUser} />
+          </TabsContent>
+
+          <TabsContent value="organization" className="space-y-6">
+            <OrganizationView currentUser={currentUser} />
           </TabsContent>
 
           <TabsContent value="periods" className="space-y-6">

@@ -3,6 +3,7 @@ namespace ARP.ESG_ReportStudio.API.Reporting;
 public sealed class InMemoryReportStore
 {
     private readonly object _lock = new();
+    private Organization? _organization;
     private readonly List<ReportingPeriod> _periods = new();
     private readonly List<ReportSection> _sections = new();
     private readonly List<SectionSummary> _summaries = new();
@@ -41,6 +42,7 @@ public sealed class InMemoryReportStore
         {
             return new ReportingDataSnapshot
             {
+                Organization = _organization,
                 Periods = _periods.ToList(),
                 Sections = _sections.ToList(),
                 SectionSummaries = _summaries.ToList()
@@ -66,7 +68,8 @@ public sealed class InMemoryReportStore
                 Variant = request.Variant,
                 Status = "active",
                 CreatedAt = DateTime.UtcNow.ToString("O"),
-                OwnerId = request.OwnerId
+                OwnerId = request.OwnerId,
+                OrganizationId = request.OrganizationId
             };
 
             _periods.Add(newPeriod);
@@ -113,6 +116,7 @@ public sealed class InMemoryReportStore
 
             return new ReportingDataSnapshot
             {
+                Organization = _organization,
                 Periods = _periods.ToList(),
                 Sections = _sections.ToList(),
                 SectionSummaries = _summaries.ToList()
@@ -145,6 +149,52 @@ public sealed class InMemoryReportStore
             return string.IsNullOrWhiteSpace(periodId)
                 ? _summaries.ToList()
                 : _summaries.Where(summary => summary.PeriodId == periodId).ToList();
+        }
+    }
+
+    public Organization? GetOrganization()
+    {
+        lock (_lock)
+        {
+            return _organization;
+        }
+    }
+
+    public Organization CreateOrganization(CreateOrganizationRequest request)
+    {
+        lock (_lock)
+        {
+            var newOrganization = new Organization
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                LegalForm = request.LegalForm,
+                Country = request.Country,
+                Identifier = request.Identifier,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                CreatedBy = request.CreatedBy
+            };
+
+            _organization = newOrganization;
+            return newOrganization;
+        }
+    }
+
+    public Organization? UpdateOrganization(string id, UpdateOrganizationRequest request)
+    {
+        lock (_lock)
+        {
+            if (_organization == null || _organization.Id != id)
+            {
+                return null;
+            }
+
+            _organization.Name = request.Name;
+            _organization.LegalForm = request.LegalForm;
+            _organization.Country = request.Country;
+            _organization.Identifier = request.Identifier;
+
+            return _organization;
         }
     }
 
