@@ -7,6 +7,7 @@ public sealed class InMemoryReportStore
     private readonly List<ReportingPeriod> _periods = new();
     private readonly List<ReportSection> _sections = new();
     private readonly List<SectionSummary> _summaries = new();
+    private readonly List<OrganizationalUnit> _organizationalUnits = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -45,7 +46,8 @@ public sealed class InMemoryReportStore
                 Organization = _organization,
                 Periods = _periods.ToList(),
                 Sections = _sections.ToList(),
-                SectionSummaries = _summaries.ToList()
+                SectionSummaries = _summaries.ToList(),
+                OrganizationalUnits = _organizationalUnits.ToList()
             };
         }
     }
@@ -54,6 +56,12 @@ public sealed class InMemoryReportStore
     {
         lock (_lock)
         {
+            // Check if organizational structure exists
+            if (_organizationalUnits.Count == 0)
+            {
+                return (false, "Organizational structure must be defined before creating reporting periods. Please add at least one organizational unit.", null);
+            }
+
             // Validate date range: start date must be before end date
             if (!DateTime.TryParse(request.StartDate, out var startDate) || 
                 !DateTime.TryParse(request.EndDate, out var endDate))
@@ -150,7 +158,8 @@ public sealed class InMemoryReportStore
                 Organization = _organization,
                 Periods = _periods.ToList(),
                 Sections = _sections.ToList(),
-                SectionSummaries = _summaries.ToList()
+                SectionSummaries = _summaries.ToList(),
+                OrganizationalUnits = _organizationalUnits.ToList()
             };
 
             return (true, null, snapshot);
@@ -229,6 +238,136 @@ public sealed class InMemoryReportStore
 
             return _organization;
         }
+    }
+
+    public IReadOnlyList<OrganizationalUnit> GetOrganizationalUnits()
+    {
+        lock (_lock)
+        {
+            return _organizationalUnits.ToList();
+        }
+    }
+
+    public OrganizationalUnit? GetOrganizationalUnit(string id)
+    {
+        lock (_lock)
+        {
+            return _organizationalUnits.FirstOrDefault(u => u.Id == id);
+        }
+    }
+
+    public OrganizationalUnit CreateOrganizationalUnit(CreateOrganizationalUnitRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate parent exists if parentId is provided
+            if (!string.IsNullOrWhiteSpace(request.ParentId))
+            {
+                var parent = _organizationalUnits.FirstOrDefault(u => u.Id == request.ParentId);
+                if (parent == null)
+                {
+                    throw new InvalidOperationException($"Parent unit with ID '{request.ParentId}' not found.");
+                }
+            }
+
+            var newUnit = new OrganizationalUnit
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                ParentId = request.ParentId,
+                Description = request.Description,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                CreatedBy = request.CreatedBy
+            };
+
+            _organizationalUnits.Add(newUnit);
+            return newUnit;
+        }
+    }
+
+    public OrganizationalUnit? UpdateOrganizationalUnit(string id, UpdateOrganizationalUnitRequest request)
+    {
+        lock (_lock)
+        {
+            var unit = _organizationalUnits.FirstOrDefault(u => u.Id == id);
+            if (unit == null)
+            {
+                return null;
+            }
+
+            // Validate parent exists if parentId is provided
+            if (!string.IsNullOrWhiteSpace(request.ParentId))
+            {
+                if (request.ParentId == id)
+                {
+                    throw new InvalidOperationException("An organizational unit cannot be its own parent.");
+                }
+
+                var parent = _organizationalUnits.FirstOrDefault(u => u.Id == request.ParentId);
+                if (parent == null)
+                {
+                    throw new InvalidOperationException($"Parent unit with ID '{request.ParentId}' not found.");
+                }
+
+                // Check for circular reference
+                if (WouldCreateCircularReference(id, request.ParentId))
+                {
+                    throw new InvalidOperationException("Setting this parent would create a circular reference in the organizational structure.");
+                }
+            }
+
+            unit.Name = request.Name;
+            unit.ParentId = request.ParentId;
+            unit.Description = request.Description;
+
+            return unit;
+        }
+    }
+
+    public bool DeleteOrganizationalUnit(string id)
+    {
+        lock (_lock)
+        {
+            var unit = _organizationalUnits.FirstOrDefault(u => u.Id == id);
+            if (unit == null)
+            {
+                return false;
+            }
+
+            // Check if any children depend on this unit
+            var hasChildren = _organizationalUnits.Any(u => u.ParentId == id);
+            if (hasChildren)
+            {
+                throw new InvalidOperationException("Cannot delete an organizational unit that has child units. Delete or reassign children first.");
+            }
+
+            _organizationalUnits.Remove(unit);
+            return true;
+        }
+    }
+
+    private bool WouldCreateCircularReference(string unitId, string newParentId)
+    {
+        var visited = new HashSet<string>();
+        var current = newParentId;
+
+        while (!string.IsNullOrWhiteSpace(current))
+        {
+            if (current == unitId)
+            {
+                return true; // Circular reference detected
+            }
+
+            if (!visited.Add(current))
+            {
+                return true; // Already visited, circular reference
+            }
+
+            var parent = _organizationalUnits.FirstOrDefault(u => u.Id == current);
+            current = parent?.ParentId;
+        }
+
+        return false;
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);

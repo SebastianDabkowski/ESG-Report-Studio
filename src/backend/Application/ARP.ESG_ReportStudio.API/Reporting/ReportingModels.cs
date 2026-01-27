@@ -57,4 +57,5 @@ public sealed class ReportingDataSnapshot
     public IReadOnlyList<ReportingPeriod> Periods { get; set; } = Array.Empty<ReportingPeriod>();
     public IReadOnlyList<ReportSection> Sections { get; set; } = Array.Empty<ReportSection>();
     public IReadOnlyList<SectionSummary> SectionSummaries { get; set; } = Array.Empty<SectionSummary>();
+    public IReadOnlyList<OrganizationalUnit> OrganizationalUnits { get; set; } = Array.Empty<OrganizationalUnit>();
 }
