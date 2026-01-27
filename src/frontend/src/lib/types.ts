@@ -8,7 +8,7 @@ export type Classification = 'fact' | 'declaration' | 'plan'
 
 export type ContentType = 'narrative' | 'metric' | 'evidence' | 'assumption' | 'gap'
 
-export type ReportVariant = 'simplified' | 'extended'
+export type ReportingMode = 'simplified' | 'extended'
 
 export type ReportScope = 'single-company' | 'group'
 
@@ -37,7 +37,7 @@ export interface ReportingPeriod {
   name: string
   startDate: string
   endDate: string
-  variant: ReportVariant
+  reportingMode: ReportingMode
   reportScope: ReportScope
   status: 'active' | 'closed'
   createdAt: string

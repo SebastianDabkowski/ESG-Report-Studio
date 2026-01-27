@@ -103,7 +103,7 @@ public sealed class InMemoryReportStore
                 Name = request.Name,
                 StartDate = request.StartDate,
                 EndDate = request.EndDate,
-                Variant = request.Variant,
+                ReportingMode = request.ReportingMode,
                 ReportScope = request.ReportScope,
                 Status = "active",
                 CreatedAt = DateTime.UtcNow.ToString("O"),
@@ -113,7 +113,7 @@ public sealed class InMemoryReportStore
 
             _periods.Add(newPeriod);
 
-            var templates = request.Variant == "extended" ? _extendedTemplates : _simplifiedTemplates;
+            var templates = request.ReportingMode == "extended" ? _extendedTemplates : _simplifiedTemplates;
             var order = 0;
 
             foreach (var template in templates)
