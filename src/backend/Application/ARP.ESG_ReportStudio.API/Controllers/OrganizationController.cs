@@ -43,6 +43,18 @@ public sealed class OrganizationController : ControllerBase
             return BadRequest("Input fields exceed maximum length.");
         }
 
+        // Validate coverage type
+        if (request.CoverageType != "full" && request.CoverageType != "limited")
+        {
+            return BadRequest("Coverage type must be either 'full' or 'limited'.");
+        }
+
+        // Validate coverage: if limited, justification is required
+        if (request.CoverageType == "limited" && string.IsNullOrWhiteSpace(request.CoverageJustification))
+        {
+            return BadRequest("Coverage justification is required when coverage type is limited.");
+        }
+
         var existingOrg = _store.GetOrganization();
         if (existingOrg != null)
         {
@@ -68,6 +80,18 @@ public sealed class OrganizationController : ControllerBase
             || request.Country.Length > 100 || request.Identifier.Length > 100)
         {
             return BadRequest("Input fields exceed maximum length.");
+        }
+
+        // Validate coverage type
+        if (request.CoverageType != "full" && request.CoverageType != "limited")
+        {
+            return BadRequest("Coverage type must be either 'full' or 'limited'.");
+        }
+
+        // Validate coverage: if limited, justification is required
+        if (request.CoverageType == "limited" && string.IsNullOrWhiteSpace(request.CoverageJustification))
+        {
+            return BadRequest("Coverage justification is required when coverage type is limited.");
         }
 
         var organization = _store.UpdateOrganization(id, request);

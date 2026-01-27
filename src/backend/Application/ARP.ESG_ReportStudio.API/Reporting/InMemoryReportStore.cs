@@ -214,7 +214,9 @@ public sealed class InMemoryReportStore
                 Country = request.Country,
                 Identifier = request.Identifier,
                 CreatedAt = DateTime.UtcNow.ToString("O"),
-                CreatedBy = request.CreatedBy
+                CreatedBy = request.CreatedBy,
+                CoverageType = request.CoverageType,
+                CoverageJustification = request.CoverageJustification
             };
 
             _organization = newOrganization;
@@ -235,6 +237,8 @@ public sealed class InMemoryReportStore
             _organization.LegalForm = request.LegalForm;
             _organization.Country = request.Country;
             _organization.Identifier = request.Identifier;
+            _organization.CoverageType = request.CoverageType;
+            _organization.CoverageJustification = request.CoverageJustification;
 
             return _organization;
         }

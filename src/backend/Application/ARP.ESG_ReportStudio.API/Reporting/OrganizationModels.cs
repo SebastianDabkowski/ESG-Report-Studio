@@ -9,6 +9,8 @@ public sealed class Organization
     public string Identifier { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
     public string CreatedBy { get; set; } = string.Empty;
+    public string CoverageType { get; set; } = "full";
+    public string? CoverageJustification { get; set; }
 }
 
 public sealed class CreateOrganizationRequest
@@ -18,6 +20,8 @@ public sealed class CreateOrganizationRequest
     public string Country { get; set; } = string.Empty;
     public string Identifier { get; set; } = string.Empty;
     public string CreatedBy { get; set; } = string.Empty;
+    public string CoverageType { get; set; } = "full";
+    public string? CoverageJustification { get; set; }
 }
 
 public sealed class UpdateOrganizationRequest
@@ -26,4 +30,6 @@ public sealed class UpdateOrganizationRequest
     public string LegalForm { get; set; } = string.Empty;
     public string Country { get; set; } = string.Empty;
     public string Identifier { get; set; } = string.Empty;
+    public string CoverageType { get; set; } = "full";
+    public string? CoverageJustification { get; set; }
 }

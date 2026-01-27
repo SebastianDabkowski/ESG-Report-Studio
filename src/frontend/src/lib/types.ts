@@ -28,6 +28,8 @@ export interface Organization {
   identifier: string
   createdAt: string
   createdBy: string
+  coverageType: 'full' | 'limited'
+  coverageJustification?: string
 }
 
 export interface ReportingPeriod {
