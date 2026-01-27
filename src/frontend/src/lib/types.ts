@@ -21,8 +21,11 @@ export interface User {
 export interface Organization {
   id: string
   name: string
-  description?: string
+  legalForm: string
+  country: string
+  identifier: string
   createdAt: string
+  createdBy: string
 }
 
 export interface ReportingPeriod {
