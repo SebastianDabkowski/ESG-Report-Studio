@@ -50,10 +50,40 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public ReportingDataSnapshot CreatePeriod(CreateReportingPeriodRequest request)
+    public (bool IsValid, string? ErrorMessage, ReportingDataSnapshot? Snapshot) ValidateAndCreatePeriod(CreateReportingPeriodRequest request)
     {
         lock (_lock)
         {
+            // Validate date range: start date must be before end date
+            if (!DateTime.TryParse(request.StartDate, out var startDate) || 
+                !DateTime.TryParse(request.EndDate, out var endDate))
+            {
+                return (false, "Invalid date format. Please provide valid dates.", null);
+            }
+
+            if (startDate >= endDate)
+            {
+                return (false, "Start date must be before end date.", null);
+            }
+
+            // Check for overlapping periods
+            foreach (var existingPeriod in _periods)
+            {
+                if (!DateTime.TryParse(existingPeriod.StartDate, out var existingStart) ||
+                    !DateTime.TryParse(existingPeriod.EndDate, out var existingEnd))
+                {
+                    continue;
+                }
+
+                // Check if periods overlap
+                // Period 1: [start1, end1], Period 2: [start2, end2]
+                // They overlap if: start1 < end2 AND start2 < end1
+                if (startDate < existingEnd && existingStart < endDate)
+                {
+                    return (false, $"Reporting period overlaps with existing period '{existingPeriod.Name}' ({existingPeriod.StartDate} - {existingPeriod.EndDate}).", null);
+                }
+            }
+
             foreach (var period in _periods)
             {
                 period.Status = "closed";
@@ -114,13 +144,15 @@ public sealed class InMemoryReportStore
                 });
             }
 
-            return new ReportingDataSnapshot
+            var snapshot = new ReportingDataSnapshot
             {
                 Organization = _organization,
                 Periods = _periods.ToList(),
                 Sections = _sections.ToList(),
                 SectionSummaries = _summaries.ToList()
             };
+
+            return (true, null, snapshot);
         }
     }
 

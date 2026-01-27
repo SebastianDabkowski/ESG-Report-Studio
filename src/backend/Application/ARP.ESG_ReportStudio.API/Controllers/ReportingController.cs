@@ -32,7 +32,13 @@ public sealed class ReportingController : ControllerBase
             return BadRequest("Name, dates, and owner info are required.");
         }
 
-        var snapshot = _store.CreatePeriod(request);
+        var (isValid, errorMessage, snapshot) = _store.ValidateAndCreatePeriod(request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
         return Ok(snapshot);
     }
 

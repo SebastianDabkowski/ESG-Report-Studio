@@ -35,8 +35,27 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    const message = await response.text()
-    throw new Error(message || 'Request failed')
+    let errorMessage = 'Request failed'
+    try {
+      const errorData = await response.json()
+      // Check if it's a structured error with 'error' field
+      if (errorData.error) {
+        errorMessage = errorData.error
+      } else if (typeof errorData === 'string') {
+        errorMessage = errorData
+      }
+    } catch {
+      // If JSON parsing fails, try to get text
+      try {
+        const text = await response.text()
+        if (text) {
+          errorMessage = text
+        }
+      } catch {
+        // Ignore and use default message
+      }
+    }
+    throw new Error(errorMessage)
   }
 
   return response.json() as Promise<T>
