@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Building } from '@phosphor-icons/react'
 import Dashboard from '@/components/Dashboard'
 import OrganizationView from '@/components/OrganizationView'
+import OrganizationalStructureView from '@/components/OrganizationalStructureView'
 import PeriodsView from '@/components/PeriodsView'
 import SectionsView from '@/components/SectionsView'
 import EvidenceView from '@/components/EvidenceView'
@@ -57,6 +58,7 @@ function App() {
           <TabsList className="bg-muted">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="organization">Organization</TabsTrigger>
+            <TabsTrigger value="structure">Structure</TabsTrigger>
             <TabsTrigger value="periods">Periods</TabsTrigger>
             <TabsTrigger value="sections">Sections</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
@@ -69,6 +71,10 @@ function App() {
 
           <TabsContent value="organization" className="space-y-6">
             <OrganizationView currentUser={currentUser} />
+          </TabsContent>
+
+          <TabsContent value="structure" className="space-y-6">
+            <OrganizationalStructureView currentUser={currentUser} />
           </TabsContent>
 
           <TabsContent value="periods" className="space-y-6">

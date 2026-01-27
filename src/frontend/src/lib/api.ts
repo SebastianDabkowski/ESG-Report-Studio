@@ -1,10 +1,11 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
   periods: ReportingPeriod[]
   sections: ReportSection[]
   sectionSummaries: SectionSummary[]
+  organizationalUnits: OrganizationalUnit[]
 }
 
 export interface CreateReportingPeriodPayload {
@@ -107,6 +108,47 @@ export function updateOrganization(id: string, payload: UpdateOrganizationPayloa
   return requestJson<Organization>(`organization/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload)
+  })
+}
+
+export interface CreateOrganizationalUnitPayload {
+  name: string
+  parentId?: string
+  description: string
+  createdBy: string
+}
+
+export interface UpdateOrganizationalUnitPayload {
+  name: string
+  parentId?: string
+  description: string
+}
+
+export function getOrganizationalUnits(): Promise<OrganizationalUnit[]> {
+  return requestJson<OrganizationalUnit[]>('organizational-units')
+}
+
+export function getOrganizationalUnit(id: string): Promise<OrganizationalUnit> {
+  return requestJson<OrganizationalUnit>(`organizational-units/${id}`)
+}
+
+export function createOrganizationalUnit(payload: CreateOrganizationalUnitPayload): Promise<OrganizationalUnit> {
+  return requestJson<OrganizationalUnit>('organizational-units', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function updateOrganizationalUnit(id: string, payload: UpdateOrganizationalUnitPayload): Promise<OrganizationalUnit> {
+  return requestJson<OrganizationalUnit>(`organizational-units/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export function deleteOrganizationalUnit(id: string): Promise<void> {
+  return requestJson<void>(`organizational-units/${id}`, {
+    method: 'DELETE'
   })
 }
 

@@ -131,3 +131,12 @@ export interface SectionSummary extends ReportSection {
   completenessPercentage: number
   ownerName: string
 }
+
+export interface OrganizationalUnit {
+  id: string
+  name: string
+  parentId?: string
+  description: string
+  createdAt: string
+  createdBy: string
+}
