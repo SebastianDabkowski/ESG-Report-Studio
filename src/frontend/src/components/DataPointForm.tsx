@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { WarningCircle } from '@phosphor-icons/react'
-import type { DataPoint, User } from '@/lib/types'
+import type { DataPoint, User, NarrativeSourceReference } from '@/lib/types'
+import { SourceReferencesManager } from './SourceReferencesManager'
 
 const dataPointSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -99,7 +100,7 @@ interface DataPointFormProps {
   ownerId: string
   availableUsers: User[]
   dataPoint?: DataPoint
-  onSubmit: (data: DataPointFormData & { contributorIds: string[] }) => void | Promise<void>
+  onSubmit: (data: DataPointFormData & { contributorIds: string[], sourceReferences: NarrativeSourceReference[] }) => void | Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
 }
@@ -114,6 +115,9 @@ export default function DataPointForm({
   isSubmitting = false 
 }: DataPointFormProps) {
   const [contributorIds, setContributorIds] = useState<string[]>(dataPoint?.contributorIds || [])
+  const [sourceReferences, setSourceReferences] = useState<NarrativeSourceReference[]>(
+    dataPoint?.sourceReferences || []
+  )
   
   const {
     register,
@@ -192,7 +196,7 @@ export default function DataPointForm({
   }
   
   const wrappedOnSubmit = (data: DataPointFormData) => {
-    onSubmit({ ...data, contributorIds })
+    onSubmit({ ...data, contributorIds, sourceReferences })
   }
 
   return (
@@ -512,6 +516,15 @@ export default function DataPointForm({
           </div>
           <p className="text-xs text-muted-foreground">Select users who will contribute to this data item</p>
         </div>
+      </div>
+
+      {/* Source References / Provenance */}
+      <div className="space-y-4 pt-4 border-t">
+        <SourceReferencesManager
+          sourceReferences={sourceReferences}
+          onChange={setSourceReferences}
+          disabled={isSubmitting}
+        />
       </div>
 
       {/* Blocker Status */}

@@ -1522,7 +1522,9 @@ public sealed class InMemoryReportStore
                 EstimateAuthor = request.InformationType?.Equals("estimate", StringComparison.OrdinalIgnoreCase) == true 
                     ? request.OwnerId : null,
                 EstimateCreatedAt = request.InformationType?.Equals("estimate", StringComparison.OrdinalIgnoreCase) == true 
-                    ? now : null
+                    ? now : null,
+                SourceReferences = request.SourceReferences ?? new List<NarrativeSourceReference>(),
+                ProvenanceNeedsReview = false
             };
 
             // Validate against validation rules
@@ -1892,6 +1894,15 @@ public sealed class InMemoryReportStore
             dataPoint.EstimateInputSources = request.EstimateInputSources ?? new List<EstimateInputSource>();
             dataPoint.EstimateInputs = request.EstimateInputs;
             // Note: EstimateAuthor and EstimateCreatedAt are intentionally NOT updated to preserve original audit trail
+            
+            // Update narrative provenance fields
+            // Check if source references have changed to determine if provenance needs review
+            var sourceRefsChanged = !AreSourceReferencesEqual(dataPoint.SourceReferences, request.SourceReferences);
+            if (sourceRefsChanged)
+            {
+                changes.Add(new FieldChange { Field = "SourceReferences", OldValue = $"{dataPoint.SourceReferences.Count} sources", NewValue = $"{request.SourceReferences?.Count ?? 0} sources" });
+            }
+            dataPoint.SourceReferences = request.SourceReferences ?? new List<NarrativeSourceReference>();
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -3945,6 +3956,113 @@ public sealed class InMemoryReportStore
         }
 
         return (true, null);
+    }
+
+    /// <summary>
+    /// Compares two lists of source references to determine if they are equal.
+    /// Used to detect changes in provenance that might require review.
+    /// </summary>
+    private bool AreSourceReferencesEqual(List<NarrativeSourceReference> list1, List<NarrativeSourceReference>? list2)
+    {
+        if (list2 == null)
+        {
+            return list1.Count == 0;
+        }
+        
+        if (list1.Count != list2.Count)
+        {
+            return false;
+        }
+        
+        // Simple comparison based on source reference and type
+        // For more sophisticated comparison, could use hashing
+        for (int i = 0; i < list1.Count; i++)
+        {
+            if (list1[i].SourceType != list2[i].SourceType ||
+                list1[i].SourceReference != list2[i].SourceReference)
+            {
+                return false;
+            }
+        }
+        
+        return true;
+    }
+
+    /// <summary>
+    /// Flags a data point's provenance for review when source data changes.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) FlagProvenanceForReview(string dataPointId, string reason, string flaggedBy)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.");
+            }
+            
+            dataPoint.ProvenanceNeedsReview = true;
+            dataPoint.ProvenanceReviewReason = reason;
+            dataPoint.ProvenanceFlaggedBy = flaggedBy;
+            dataPoint.ProvenanceFlaggedAt = DateTime.UtcNow.ToString("O");
+            dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Clears the provenance review flag after review is complete.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) ClearProvenanceReviewFlag(string dataPointId)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.");
+            }
+            
+            dataPoint.ProvenanceNeedsReview = false;
+            dataPoint.ProvenanceReviewReason = null;
+            dataPoint.ProvenanceFlaggedBy = null;
+            dataPoint.ProvenanceFlaggedAt = null;
+            dataPoint.ProvenanceLastVerified = DateTime.UtcNow.ToString("O");
+            dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Captures publication snapshot of source data for provenance tracking.
+    /// Generates a hash of all source references to detect future changes.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) CaptureProvenanceSnapshot(string dataPointId)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.");
+            }
+            
+            // Generate hash from source references
+            var hashContent = string.Join("|", dataPoint.SourceReferences
+                .OrderBy(sr => sr.SourceReference)
+                .Select(sr => $"{sr.SourceType}:{sr.SourceReference}:{sr.LastUpdated ?? ""}"));
+            
+            // Simple hash for demonstration - in production, use a proper hashing algorithm
+            dataPoint.PublicationSourceHash = Convert.ToBase64String(
+                System.Text.Encoding.UTF8.GetBytes(hashContent));
+            dataPoint.ProvenanceLastVerified = DateTime.UtcNow.ToString("O");
+            dataPoint.ProvenanceNeedsReview = false;
+            dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            return (true, null);
+        }
     }
 
     private (bool IsValid, string? ErrorMessage) EvaluateValidationRule(ValidationRule rule, DataPoint dataPoint)
