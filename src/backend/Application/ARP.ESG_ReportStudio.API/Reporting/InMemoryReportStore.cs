@@ -162,10 +162,13 @@ public sealed class InMemoryReportStore
                 .Where(s => !s.IsDeprecated)
                 .ToList();
 
+            // Codes for simplified mode sections
+            var simplifiedCodes = new[] { "ENV-001", "ENV-002", "SOC-001", "SOC-002", "GOV-001", "GOV-002" };
+
             // Determine which sections to include based on reporting mode
             var sectionsToInclude = request.ReportingMode == "extended" 
                 ? catalogSections 
-                : catalogSections.Where(s => _simplifiedTemplates.Any(t => t.Title == s.Title)).ToList();
+                : catalogSections.Where(s => simplifiedCodes.Contains(s.Code)).ToList();
 
             var order = 0;
 
@@ -528,6 +531,13 @@ public sealed class InMemoryReportStore
                 return (false, "Code is required.", null);
             }
 
+            // Validate category
+            var validCategories = new[] { "environmental", "social", "governance" };
+            if (!validCategories.Contains(request.Category, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"Category must be one of: {string.Join(", ", validCategories)}.", null);
+            }
+
             // Check if code already exists
             if (_sectionCatalog.Any(s => s.Code.Equals(request.Code, StringComparison.OrdinalIgnoreCase)))
             {
@@ -539,7 +549,7 @@ public sealed class InMemoryReportStore
                 Id = Guid.NewGuid().ToString(),
                 Title = request.Title,
                 Code = request.Code,
-                Category = request.Category,
+                Category = request.Category.ToLowerInvariant(),
                 Description = request.Description,
                 IsDeprecated = false,
                 CreatedAt = DateTime.UtcNow.ToString("O")
@@ -571,6 +581,13 @@ public sealed class InMemoryReportStore
                 return (false, "Code is required.", null);
             }
 
+            // Validate category
+            var validCategories = new[] { "environmental", "social", "governance" };
+            if (!validCategories.Contains(request.Category, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"Category must be one of: {string.Join(", ", validCategories)}.", null);
+            }
+
             // Check if code already exists (excluding current item)
             if (_sectionCatalog.Any(s => s.Id != id && s.Code.Equals(request.Code, StringComparison.OrdinalIgnoreCase)))
             {
@@ -579,7 +596,7 @@ public sealed class InMemoryReportStore
 
             item.Title = request.Title;
             item.Code = request.Code;
-            item.Category = request.Category;
+            item.Category = request.Category.ToLowerInvariant();
             item.Description = request.Description;
 
             return (true, null, item);

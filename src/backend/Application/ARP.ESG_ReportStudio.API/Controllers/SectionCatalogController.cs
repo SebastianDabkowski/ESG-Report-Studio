@@ -35,11 +35,6 @@ public sealed class SectionCatalogController : ControllerBase
     [HttpPost]
     public ActionResult<SectionCatalogItem> CreateSectionCatalogItem([FromBody] CreateSectionCatalogItemRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Code))
-        {
-            return BadRequest(new { error = "Title and code are required." });
-        }
-
         var (isValid, errorMessage, item) = _store.CreateSectionCatalogItem(request);
         
         if (!isValid)
@@ -53,15 +48,14 @@ public sealed class SectionCatalogController : ControllerBase
     [HttpPut("{id}")]
     public ActionResult<SectionCatalogItem> UpdateSectionCatalogItem(string id, [FromBody] UpdateSectionCatalogItemRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Code))
-        {
-            return BadRequest(new { error = "Title and code are required." });
-        }
-
         var (isValid, errorMessage, item) = _store.UpdateSectionCatalogItem(id, request);
         
         if (!isValid)
         {
+            if (errorMessage?.Contains("not found") == true)
+            {
+                return NotFound(new { error = errorMessage });
+            }
             return BadRequest(new { error = errorMessage });
         }
 
@@ -75,6 +69,10 @@ public sealed class SectionCatalogController : ControllerBase
         
         if (!isValid)
         {
+            if (errorMessage?.Contains("not found") == true)
+            {
+                return NotFound(new { error = errorMessage });
+            }
             return BadRequest(new { error = errorMessage });
         }
 

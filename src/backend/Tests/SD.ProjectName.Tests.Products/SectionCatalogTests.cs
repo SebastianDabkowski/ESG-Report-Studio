@@ -139,6 +139,29 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
+        public void CreateSectionCatalogItem_WithInvalidCategory_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            var request = new CreateSectionCatalogItemRequest
+            {
+                Title = "Test Section",
+                Code = "TEST-001",
+                Category = "invalid",
+                Description = "Test section"
+            };
+
+            // Act
+            var (isValid, errorMessage, item) = store.CreateSectionCatalogItem(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Category must be one of", errorMessage);
+            Assert.Null(item);
+        }
+
+        [Fact]
         public void UpdateSectionCatalogItem_WithValidData_ShouldSucceed()
         {
             // Arrange
