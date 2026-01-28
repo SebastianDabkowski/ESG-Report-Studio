@@ -10,9 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal } from '@phosphor-icons/react'
+import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, DataPoint, Gap, Classification, ContentType } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
+import { updateSectionOwner, getUsers } from '@/lib/api'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 interface SectionsViewProps {
   currentUser: User
@@ -28,6 +30,7 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isAddDataOpen, setIsAddDataOpen] = useState(false)
   const [isAddGapOpen, setIsAddGapOpen] = useState(false)
+  const [isChangeOwnerOpen, setIsChangeOwnerOpen] = useState(false)
   
   const [dataTitle, setDataTitle] = useState('')
   const [dataContent, setDataContent] = useState('')
@@ -37,6 +40,52 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
   const [gapTitle, setGapTitle] = useState('')
   const [gapDescription, setGapDescription] = useState('')
   const [gapImpact, setGapImpact] = useState<'low' | 'medium' | 'high'>('medium')
+  
+  const [newOwnerId, setNewOwnerId] = useState('')
+  const [ownerChangeNote, setOwnerChangeNote] = useState('')
+
+  const queryClient = useQueryClient()
+  
+  // Fetch users for owner selection
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: getUsers
+  })
+  
+  // Mutation for updating section owner
+  const updateOwnerMutation = useMutation({
+    mutationFn: ({ sectionId, ownerId, changeNote }: { sectionId: string; ownerId: string; changeNote?: string }) =>
+      updateSectionOwner(sectionId, {
+        ownerId,
+        updatedBy: currentUser.id,
+        changeNote
+      }),
+    onSuccess: (updatedSection) => {
+      // Update local state
+      setSections((current) => {
+        const updated = current || []
+        return updated.map(s => {
+          if (s.id === updatedSection.id) {
+            const newOwner = users.find(u => u.id === updatedSection.ownerId)
+            return { 
+              ...s, 
+              ownerId: updatedSection.ownerId,
+              ownerName: newOwner?.name || updatedSection.ownerId
+            }
+          }
+          return s
+        })
+      })
+      
+      // Invalidate queries to refresh audit log
+      queryClient.invalidateQueries({ queryKey: ['audit-log'] })
+      
+      // Close dialog and reset state
+      setIsChangeOwnerOpen(false)
+      setNewOwnerId('')
+      setOwnerChangeNote('')
+    }
+  })
 
   const activePeriod = periods?.find(p => p.status === 'active')
   const activeSections = sections?.filter(s => activePeriod && s.periodId === activePeriod.id) || []
@@ -147,6 +196,20 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
     })
   }
 
+  const handleChangeOwner = () => {
+    if (!selectedSection || !newOwnerId) return
+    
+    updateOwnerMutation.mutate({
+      sectionId: selectedSection.id,
+      ownerId: newOwnerId,
+      changeNote: ownerChangeNote || undefined
+    })
+  }
+
+  const canChangeOwner = (userRole: string) => {
+    return userRole === 'admin' || userRole === 'report-owner'
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -242,6 +305,29 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                     <span className="text-sm font-mono font-semibold">{selectedSection.completenessPercentage}%</span>
                   </div>
                   <Progress value={selectedSection.completenessPercentage} className="h-3 w-48" />
+                </div>
+
+                <div className="flex items-center justify-between p-3 border border-border rounded-lg bg-muted/30">
+                  <div className="flex items-center gap-2">
+                    <UserCircle size={20} className="text-muted-foreground" />
+                    <div>
+                      <span className="text-sm font-medium">Section Owner</span>
+                      <p className="text-sm text-muted-foreground">{selectedSection.ownerName}</p>
+                    </div>
+                  </div>
+                  {canChangeOwner(currentUser.role) && (
+                    <Button 
+                      size="sm" 
+                      variant="outline" 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setNewOwnerId(selectedSection.ownerId)
+                        setIsChangeOwnerOpen(true)
+                      }}
+                    >
+                      Change Owner
+                    </Button>
+                  )}
                 </div>
 
                 {selectedSection.completenessPercentage < 70 && (
@@ -469,6 +555,72 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
             <Button variant="outline" onClick={() => setIsAddGapOpen(false)}>Cancel</Button>
             <Button onClick={handleAddGap} disabled={!gapTitle || !gapDescription}>
               Document Gap
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isChangeOwnerOpen} onOpenChange={setIsChangeOwnerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Section Owner</DialogTitle>
+            <DialogDescription>
+              Assign a new owner to be accountable for this section. This change will be recorded in the audit log.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {selectedSection && (
+              <div className="p-3 border border-border rounded-lg bg-muted/30">
+                <p className="text-sm text-muted-foreground mb-1">Current Owner</p>
+                <p className="text-sm font-medium">{selectedSection.ownerName}</p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="new-owner">New Owner</Label>
+              <Select value={newOwnerId} onValueChange={setNewOwnerId}>
+                <SelectTrigger id="new-owner">
+                  <SelectValue placeholder="Select a user" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map(user => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} ({user.role})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="change-note">Change Note (Optional)</Label>
+              <Textarea
+                id="change-note"
+                placeholder="Reason for changing the owner..."
+                value={ownerChangeNote}
+                onChange={(e) => setOwnerChangeNote(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setIsChangeOwnerOpen(false)
+                setNewOwnerId('')
+                setOwnerChangeNote('')
+              }}
+            >
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleChangeOwner} 
+              disabled={!newOwnerId || updateOwnerMutation.isPending}
+            >
+              {updateOwnerMutation.isPending ? 'Updating...' : 'Update Owner'}
             </Button>
           </DialogFooter>
         </DialogContent>
