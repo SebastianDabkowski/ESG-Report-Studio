@@ -121,4 +121,11 @@ public sealed class ReportingController : ControllerBase
         
         return Ok(result);
     }
+
+    [HttpGet("responsibility-matrix")]
+    public ActionResult<ResponsibilityMatrix> GetResponsibilityMatrix([FromQuery] string? periodId, [FromQuery] string? ownerFilter)
+    {
+        var matrix = _store.GetResponsibilityMatrix(periodId, ownerFilter);
+        return Ok(matrix);
+    }
 }
