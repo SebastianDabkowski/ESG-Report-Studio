@@ -71,6 +71,27 @@ public sealed class UpdateReportingPeriodRequest
     public string ReportScope { get; set; } = "single-company";
 }
 
+/// <summary>
+/// Request to update the owner of a report section.
+/// </summary>
+public sealed class UpdateSectionOwnerRequest
+{
+    /// <summary>
+    /// User ID of the new owner.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person making the change (for audit logging).
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for the change.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
 public sealed class ReportingDataSnapshot
 {
     public Organization? Organization { get; set; }

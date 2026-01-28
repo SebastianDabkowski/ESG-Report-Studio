@@ -85,4 +85,22 @@ public sealed class ReportingController : ControllerBase
     {
         return Ok(_store.GetSnapshot());
     }
+
+    [HttpPut("sections/{id}/owner")]
+    public ActionResult<ReportSection> UpdateSectionOwner(string id, [FromBody] UpdateSectionOwnerRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.OwnerId) || string.IsNullOrWhiteSpace(request.UpdatedBy))
+        {
+            return BadRequest(new { error = "OwnerId and UpdatedBy are required." });
+        }
+
+        var (isValid, errorMessage, section) = _store.UpdateSectionOwner(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(section);
+    }
 }
