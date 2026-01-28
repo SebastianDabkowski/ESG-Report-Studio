@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ARP.ESG_ReportStudio.API.Reporting;
+using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
@@ -8,10 +9,12 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 public sealed class ReportingController : ControllerBase
 {
     private readonly InMemoryReportStore _store;
+    private readonly INotificationService _notificationService;
 
-    public ReportingController(InMemoryReportStore store)
+    public ReportingController(InMemoryReportStore store, INotificationService notificationService)
     {
         _store = store;
+        _notificationService = notificationService;
     }
 
     [HttpGet("periods")]
@@ -87,25 +90,44 @@ public sealed class ReportingController : ControllerBase
     }
 
     [HttpPut("sections/{id}/owner")]
-    public ActionResult<ReportSection> UpdateSectionOwner(string id, [FromBody] UpdateSectionOwnerRequest request)
+    public async Task<ActionResult<ReportSection>> UpdateSectionOwner(string id, [FromBody] UpdateSectionOwnerRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.UpdatedBy))
         {
             return BadRequest(new { error = "UpdatedBy is required." });
         }
 
-        var (isValid, errorMessage, section) = _store.UpdateSectionOwner(id, request);
+        var (isValid, errorMessage, result) = _store.UpdateSectionOwner(id, request);
         
         if (!isValid)
         {
             return BadRequest(new { error = errorMessage });
         }
 
-        return Ok(section);
+        // Send notifications after successful update
+        if (result != null && result.Section != null)
+        {
+            // Send removal notification to old owner if they exist and are different from new owner
+            if (result.OldOwner != null && result.ChangedBy != null && 
+                result.OldOwner.Id != result.NewOwner?.Id)
+            {
+                await _notificationService.SendSectionRemovedNotificationAsync(
+                    result.Section, result.OldOwner, result.ChangedBy, request.ChangeNote);
+            }
+            
+            // Send assignment notification to new owner if they exist
+            if (result.NewOwner != null && result.ChangedBy != null)
+            {
+                await _notificationService.SendSectionAssignedNotificationAsync(
+                    result.Section, result.NewOwner, result.ChangedBy, request.ChangeNote);
+            }
+        }
+
+        return Ok(result?.Section);
     }
 
     [HttpPost("sections/bulk-owner")]
-    public ActionResult<BulkUpdateSectionOwnerResult> UpdateSectionOwnersBulk([FromBody] BulkUpdateSectionOwnerRequest request)
+    public async Task<ActionResult<BulkUpdateSectionOwnerResult>> UpdateSectionOwnersBulk([FromBody] BulkUpdateSectionOwnerRequest request)
     {
         if (request.SectionIds == null || request.SectionIds.Count == 0)
         {
@@ -118,6 +140,31 @@ public sealed class ReportingController : ControllerBase
         }
 
         var result = _store.UpdateSectionOwnersBulk(request);
+        
+        // Send notifications for all successful updates
+        if (result.OwnerUpdates.Count > 0)
+        {
+            var changedBy = _store.GetUser(request.UpdatedBy);
+            if (changedBy != null)
+            {
+                foreach (var update in result.OwnerUpdates)
+                {
+                    // Send removal notification to old owner if they exist and are different from new owner
+                    if (update.OldOwner != null && update.OldOwner.Id != update.NewOwner?.Id)
+                    {
+                        await _notificationService.SendSectionRemovedNotificationAsync(
+                            update.Section, update.OldOwner, changedBy, request.ChangeNote);
+                    }
+                    
+                    // Send assignment notification to new owner
+                    if (update.NewOwner != null)
+                    {
+                        await _notificationService.SendSectionAssignedNotificationAsync(
+                            update.Section, update.NewOwner, changedBy, request.ChangeNote);
+                    }
+                }
+            }
+        }
         
         return Ok(result);
     }

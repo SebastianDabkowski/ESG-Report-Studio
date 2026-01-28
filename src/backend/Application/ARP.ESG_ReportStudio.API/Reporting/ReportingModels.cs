@@ -130,6 +130,17 @@ public sealed class BulkUpdateSectionOwnerRequest
 }
 
 /// <summary>
+/// Result of updating a section owner, including notification information.
+/// </summary>
+public sealed class UpdateSectionOwnerResult
+{
+    public ReportSection? Section { get; set; }
+    public User? OldOwner { get; set; }
+    public User? NewOwner { get; set; }
+    public User? ChangedBy { get; set; }
+}
+
+/// <summary>
 /// Result of a bulk section owner update operation.
 /// </summary>
 public sealed class BulkUpdateSectionOwnerResult
@@ -143,6 +154,21 @@ public sealed class BulkUpdateSectionOwnerResult
     /// Section IDs that were skipped due to permission or validation errors.
     /// </summary>
     public List<BulkUpdateFailure> SkippedSections { get; set; } = new();
+    
+    /// <summary>
+    /// Section owner updates for notification purposes.
+    /// </summary>
+    public List<SectionOwnerUpdate> OwnerUpdates { get; set; } = new();
+}
+
+/// <summary>
+/// Details about a section owner update for notification purposes.
+/// </summary>
+public sealed class SectionOwnerUpdate
+{
+    public ReportSection Section { get; set; } = null!;
+    public User? OldOwner { get; set; }
+    public User? NewOwner { get; set; }
 }
 
 /// <summary>
@@ -778,4 +804,70 @@ public sealed class CompletenessStats
     /// Completeness breakdown by organizational unit.
     /// </summary>
     public List<CompletenessBreakdown> ByOrganizationalUnit { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a notification sent to a user about ownership changes.
+/// </summary>
+public sealed class OwnerNotification
+{
+    /// <summary>
+    /// Unique notification identifier.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Recipient user ID.
+    /// </summary>
+    public string RecipientUserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of notification.
+    /// </summary>
+    public string NotificationType { get; set; } = string.Empty; // "section-assigned", "section-removed", "datapoint-assigned", "datapoint-removed"
+    
+    /// <summary>
+    /// ID of the entity this notification is about (section or data point ID).
+    /// </summary>
+    public string EntityId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of entity (ReportSection or DataPoint).
+    /// </summary>
+    public string EntityType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title of the section or data point.
+    /// </summary>
+    public string EntityTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Notification message.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who made the change.
+    /// </summary>
+    public string ChangedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user who made the change.
+    /// </summary>
+    public string ChangedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// When the notification was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the notification has been read.
+    /// </summary>
+    public bool IsRead { get; set; } = false;
+    
+    /// <summary>
+    /// Whether email was sent successfully.
+    /// </summary>
+    public bool EmailSent { get; set; } = false;
 }
