@@ -156,3 +156,20 @@ export interface OrganizationalUnit {
   createdAt: string
   createdBy: string
 }
+
+export interface CompletenessBreakdown {
+  id: string
+  name: string
+  missingCount: number
+  incompleteCount: number
+  completeCount: number
+  notApplicableCount: number
+  totalCount: number
+  completePercentage: number
+}
+
+export interface CompletenessStats {
+  overall: CompletenessBreakdown
+  byCategory: CompletenessBreakdown[]
+  byOrganizationalUnit: CompletenessBreakdown[]
+}

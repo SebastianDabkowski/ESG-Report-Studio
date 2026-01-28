@@ -480,3 +480,70 @@ public sealed class ReminderHistory
     public bool EmailSent { get; set; }
     public string? ErrorMessage { get; set; }
 }
+
+/// <summary>
+/// Represents completeness statistics for a specific category, organizational unit, or overall.
+/// </summary>
+public sealed class CompletenessBreakdown
+{
+    /// <summary>
+    /// Identifier (e.g., category name "environmental", "social", "governance" or organizational unit ID).
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display name for the breakdown dimension.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Number of data points with status "missing".
+    /// </summary>
+    public int MissingCount { get; set; }
+
+    /// <summary>
+    /// Number of data points with status "incomplete".
+    /// </summary>
+    public int IncompleteCount { get; set; }
+
+    /// <summary>
+    /// Number of data points with status "complete".
+    /// </summary>
+    public int CompleteCount { get; set; }
+
+    /// <summary>
+    /// Number of data points with status "not applicable".
+    /// </summary>
+    public int NotApplicableCount { get; set; }
+
+    /// <summary>
+    /// Total count of data points.
+    /// </summary>
+    public int TotalCount { get; set; }
+
+    /// <summary>
+    /// Percentage of complete data points.
+    /// </summary>
+    public double CompletePercentage { get; set; }
+}
+
+/// <summary>
+/// Aggregated completeness statistics for the dashboard.
+/// </summary>
+public sealed class CompletenessStats
+{
+    /// <summary>
+    /// Overall completeness breakdown.
+    /// </summary>
+    public CompletenessBreakdown Overall { get; set; } = new();
+
+    /// <summary>
+    /// Completeness breakdown by E/S/G category.
+    /// </summary>
+    public List<CompletenessBreakdown> ByCategory { get; set; } = new();
+
+    /// <summary>
+    /// Completeness breakdown by organizational unit.
+    /// </summary>
+    public List<CompletenessBreakdown> ByOrganizationalUnit { get; set; } = new();
+}

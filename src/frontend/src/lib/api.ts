@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -296,4 +296,21 @@ export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
   const path = queryString ? `audit-log?${queryString}` : 'audit-log'
   
   return requestJson<any[]>(path)
+}
+
+// Dashboard API
+export interface CompletenessStatsParams {
+  periodId?: string
+  category?: string
+  organizationalUnitId?: string
+}
+
+export async function getCompletenessStats(params?: CompletenessStatsParams): Promise<CompletenessStats> {
+  const queryParams = new URLSearchParams()
+  if (params?.periodId) queryParams.append('periodId', params.periodId)
+  if (params?.category) queryParams.append('category', params.category)
+  if (params?.organizationalUnitId) queryParams.append('organizationalUnitId', params.organizationalUnitId)
+  
+  const queryString = queryParams.toString()
+  return requestJson<CompletenessStats>(`dashboard/completeness-stats${queryString ? `?${queryString}` : ''}`)
 }

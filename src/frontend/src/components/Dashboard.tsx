@@ -1,10 +1,13 @@
+import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target } from '@phosphor-icons/react'
-import type { User, ReportingPeriod, SectionSummary, Gap } from '@/lib/types'
+import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle } from '@phosphor-icons/react'
+import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, formatDate } from '@/lib/helpers'
+import { getCompletenessStats } from '@/lib/api'
 
 interface DashboardProps {
   currentUser: User
@@ -14,6 +17,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [periods] = useKV<ReportingPeriod[]>('reporting-periods', [])
   const [sections] = useKV<SectionSummary[]>('section-summaries', [])
   const [gaps] = useKV<Gap[]>('gaps', [])
+  const [organizationalUnits] = useKV<OrganizationalUnit[]>('organizational-units', [])
+
+  const [completenessStats, setCompletenessStats] = useState<CompletenessStats | null>(null)
+  const [selectedCategory, setSelectedCategory] = useState<string>('all')
+  const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>('all')
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
 
   const activePeriod = (periods || []).find(p => p.status === 'active')
   const activeSections = (sections || []).filter(s => activePeriod && s.periodId === activePeriod.id)
@@ -31,6 +40,32 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     : 0
 
   const criticalGaps = (gaps || []).filter(g => !g.resolved && g.impact === 'high')
+
+  // Fetch completeness stats when filters change
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!activePeriod) {
+        setCompletenessStats(null)
+        return
+      }
+
+      setIsLoadingStats(true)
+      try {
+        const params: any = { periodId: activePeriod.id }
+        if (selectedCategory !== 'all') params.category = selectedCategory
+        if (selectedOrgUnit !== 'all') params.organizationalUnitId = selectedOrgUnit
+        
+        const stats = await getCompletenessStats(params)
+        setCompletenessStats(stats)
+      } catch (error) {
+        console.error('Failed to fetch completeness stats:', error)
+      } finally {
+        setIsLoadingStats(false)
+      }
+    }
+
+    fetchStats()
+  }, [activePeriod, selectedCategory, selectedOrgUnit])
 
   return (
     <div className="space-y-6">
@@ -183,6 +218,182 @@ export default function Dashboard({ currentUser }: DashboardProps) {
               </CardContent>
             </Card>
           </div>
+
+          {/* Completeness Dashboard */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between">
+                <div>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ChartBar size={20} weight="duotone" className="text-primary" />
+                    Completeness Overview
+                  </CardTitle>
+                  <CardDescription>Track data completeness by category and organizational unit</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      <SelectItem value="environmental">Environmental</SelectItem>
+                      <SelectItem value="social">Social</SelectItem>
+                      <SelectItem value="governance">Governance</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  {organizationalUnits && organizationalUnits.length > 0 && (
+                    <Select value={selectedOrgUnit} onValueChange={setSelectedOrgUnit}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="All Units" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Units</SelectItem>
+                        {organizationalUnits.map(unit => (
+                          <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {isLoadingStats ? (
+                <div className="text-center py-8 text-muted-foreground">Loading completeness data...</div>
+              ) : completenessStats ? (
+                <div className="space-y-6">
+                  {/* Overall Stats */}
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div className="bg-red-50 dark:bg-red-950/20 rounded-lg p-4 border border-red-200 dark:border-red-800">
+                      <div className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Missing</div>
+                      <div className="text-2xl font-bold text-red-900 dark:text-red-100">{completenessStats.overall.missingCount}</div>
+                      <div className="text-xs text-red-600 dark:text-red-500 mt-1">
+                        {completenessStats.overall.totalCount > 0 
+                          ? `${Math.round((completenessStats.overall.missingCount / completenessStats.overall.totalCount) * 100)}%`
+                          : '0%'}
+                      </div>
+                    </div>
+                    <div className="bg-amber-50 dark:bg-amber-950/20 rounded-lg p-4 border border-amber-200 dark:border-amber-800">
+                      <div className="text-xs font-medium text-amber-700 dark:text-amber-400 mb-1">Incomplete</div>
+                      <div className="text-2xl font-bold text-amber-900 dark:text-amber-100">{completenessStats.overall.incompleteCount}</div>
+                      <div className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                        {completenessStats.overall.totalCount > 0 
+                          ? `${Math.round((completenessStats.overall.incompleteCount / completenessStats.overall.totalCount) * 100)}%`
+                          : '0%'}
+                      </div>
+                    </div>
+                    <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-4 border border-green-200 dark:border-green-800">
+                      <div className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Complete</div>
+                      <div className="text-2xl font-bold text-green-900 dark:text-green-100">{completenessStats.overall.completeCount}</div>
+                      <div className="text-xs text-green-600 dark:text-green-500 mt-1">
+                        {completenessStats.overall.completePercentage.toFixed(1)}%
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-gray-950/20 rounded-lg p-4 border border-gray-200 dark:border-gray-800">
+                      <div className="text-xs font-medium text-gray-700 dark:text-gray-400 mb-1">Not Applicable</div>
+                      <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">{completenessStats.overall.notApplicableCount}</div>
+                      <div className="text-xs text-gray-600 dark:text-gray-500 mt-1">
+                        {completenessStats.overall.totalCount > 0 
+                          ? `${Math.round((completenessStats.overall.notApplicableCount / completenessStats.overall.totalCount) * 100)}%`
+                          : '0%'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* By Category */}
+                  {selectedOrgUnit === 'all' && completenessStats.byCategory.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm mb-3">By E/S/G Category</h4>
+                      <div className="space-y-3">
+                        {completenessStats.byCategory.map(cat => (
+                          <div key={cat.id} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <Circle 
+                                  size={12} 
+                                  weight="fill" 
+                                  className={
+                                    cat.id === 'environmental' ? 'text-green-500' :
+                                    cat.id === 'social' ? 'text-blue-500' :
+                                    'text-purple-500'
+                                  }
+                                />
+                                <span className="font-medium text-sm">{cat.name}</span>
+                              </div>
+                              <div className="text-sm font-semibold">{cat.completePercentage.toFixed(1)}% Complete</div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 text-xs">
+                              <div className="text-center">
+                                <div className="text-red-600 dark:text-red-400 font-semibold">{cat.missingCount}</div>
+                                <div className="text-muted-foreground">Missing</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-amber-600 dark:text-amber-400 font-semibold">{cat.incompleteCount}</div>
+                                <div className="text-muted-foreground">Incomplete</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-green-600 dark:text-green-400 font-semibold">{cat.completeCount}</div>
+                                <div className="text-muted-foreground">Complete</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-gray-600 dark:text-gray-400 font-semibold">{cat.notApplicableCount}</div>
+                                <div className="text-muted-foreground">N/A</div>
+                              </div>
+                            </div>
+                            {cat.totalCount > 0 && (
+                              <Progress value={cat.completePercentage} className="h-2 mt-3" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* By Organizational Unit */}
+                  {selectedCategory === 'all' && completenessStats.byOrganizationalUnit.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-sm mb-3">By Organizational Unit</h4>
+                      <div className="space-y-3">
+                        {completenessStats.byOrganizationalUnit.map(unit => (
+                          <div key={unit.id} className="border rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="font-medium text-sm">{unit.name}</span>
+                              <div className="text-sm font-semibold">{unit.completePercentage.toFixed(1)}% Complete</div>
+                            </div>
+                            <div className="grid grid-cols-4 gap-2 text-xs">
+                              <div className="text-center">
+                                <div className="text-red-600 dark:text-red-400 font-semibold">{unit.missingCount}</div>
+                                <div className="text-muted-foreground">Missing</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-amber-600 dark:text-amber-400 font-semibold">{unit.incompleteCount}</div>
+                                <div className="text-muted-foreground">Incomplete</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-green-600 dark:text-green-400 font-semibold">{unit.completeCount}</div>
+                                <div className="text-muted-foreground">Complete</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-gray-600 dark:text-gray-400 font-semibold">{unit.notApplicableCount}</div>
+                                <div className="text-muted-foreground">N/A</div>
+                              </div>
+                            </div>
+                            {unit.totalCount > 0 && (
+                              <Progress value={unit.completePercentage} className="h-2 mt-3" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">No completeness data available</div>
+              )}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
