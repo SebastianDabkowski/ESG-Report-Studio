@@ -95,4 +95,18 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    [HttpPost("{id}/status")]
+    public IActionResult UpdateDataPointStatus(string id, [FromBody] UpdateDataPointStatusRequest request)
+    {
+        var (isValid, validationError, dataPoint) = _store.UpdateDataPointStatus(id, request);
+        
+        if (!isValid)
+        {
+            // Wrap validation error for consistency with other endpoints
+            return BadRequest(new { error = validationError });
+        }
+
+        return Ok(dataPoint);
+    }
 }

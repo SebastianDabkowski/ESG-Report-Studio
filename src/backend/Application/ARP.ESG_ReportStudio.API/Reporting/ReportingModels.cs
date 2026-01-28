@@ -377,6 +377,59 @@ public sealed class RequestChangesRequest
 }
 
 /// <summary>
+/// Request to update the completeness status of a data point.
+/// </summary>
+public sealed class UpdateDataPointStatusRequest
+{
+    /// <summary>
+    /// The new completeness status. Must be one of: "missing", "incomplete", "complete", "not applicable".
+    /// </summary>
+    public string CompletenessStatus { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person making the change (for audit logging).
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for the change.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Represents a missing required field for completion.
+/// </summary>
+public sealed class MissingFieldDetail
+{
+    /// <summary>
+    /// Name of the missing field.
+    /// </summary>
+    public string Field { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of why this field is required.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result when a status update is blocked due to validation errors.
+/// </summary>
+public sealed class StatusValidationError
+{
+    /// <summary>
+    /// Overall error message.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of missing fields preventing the status change.
+    /// </summary>
+    public List<MissingFieldDetail> MissingFields { get; set; } = new();
+}
+
+/// <summary>
 /// Represents evidence supporting an ESG data point.
 /// </summary>
 public sealed class Evidence
