@@ -241,6 +241,8 @@ public sealed class UpdateDataPointRequest
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
+    public string? ChangeNote { get; set; }
+    public string? UpdatedBy { get; set; }
 }
 
 /// <summary>
@@ -373,4 +375,30 @@ public sealed class UpdateValidationRuleRequest
     public string? Parameters { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+}
+
+/// <summary>
+/// Represents a single field change in an audit log entry.
+/// </summary>
+public sealed class FieldChange
+{
+    public string Field { get; set; } = string.Empty;
+    public string OldValue { get; set; } = string.Empty;
+    public string NewValue { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents an immutable audit log entry for tracking changes.
+/// </summary>
+public sealed class AuditLogEntry
+{
+    public string Id { get; set; } = string.Empty;
+    public string Timestamp { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string Action { get; set; } = string.Empty;
+    public string EntityType { get; set; } = string.Empty;
+    public string EntityId { get; set; } = string.Empty;
+    public string? ChangeNote { get; set; }
+    public List<FieldChange> Changes { get; set; } = new();
 }
