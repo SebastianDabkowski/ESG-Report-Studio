@@ -1679,9 +1679,10 @@ public sealed class InMemoryReportStore
             }
             dataPoint.ConfidenceLevel = normalizedConfidenceLevel;
             
-            // Update estimate provenance fields
+            // Update estimate provenance fields (preserving EstimateAuthor and EstimateCreatedAt which are set at creation)
             dataPoint.EstimateInputSources = request.EstimateInputSources ?? new List<EstimateInputSource>();
             dataPoint.EstimateInputs = request.EstimateInputs;
+            // Note: EstimateAuthor and EstimateCreatedAt are intentionally NOT updated to preserve original audit trail
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
