@@ -95,7 +95,8 @@ namespace SD.ProjectName.Tests.Products
             var updateRequest = new UpdateOrganizationalUnitRequest
             {
                 Name = "Engineering Department",
-                Description = "New description"
+                Description = "New description",
+                UpdatedBy = "user1"
             };
 
             // Act
@@ -124,7 +125,8 @@ namespace SD.ProjectName.Tests.Products
             {
                 Name = "Engineering",
                 ParentId = created.Id,
-                Description = "Description"
+                Description = "Description",
+                UpdatedBy = "user1"
             };
 
             // Act & Assert
@@ -163,7 +165,8 @@ namespace SD.ProjectName.Tests.Products
             {
                 Name = "Parent",
                 ParentId = child.Id,
-                Description = "Parent unit"
+                Description = "Parent unit",
+                UpdatedBy = "user1"
             };
 
             // Act & Assert
@@ -210,7 +213,8 @@ namespace SD.ProjectName.Tests.Products
             {
                 Name = "Grandparent",
                 ParentId = child.Id,
-                Description = "Top level"
+                Description = "Top level",
+                UpdatedBy = "user1"
             };
 
             // Act & Assert
@@ -233,7 +237,7 @@ namespace SD.ProjectName.Tests.Products
             var created = store.CreateOrganizationalUnit(request);
 
             // Act
-            var deleted = store.DeleteOrganizationalUnit(created.Id);
+            var deleted = store.DeleteOrganizationalUnit(created.Id, "user1");
 
             // Assert
             Assert.True(deleted);
@@ -267,7 +271,7 @@ namespace SD.ProjectName.Tests.Products
 
             // Act & Assert
             var exception = Assert.Throws<InvalidOperationException>(() => 
-                store.DeleteOrganizationalUnit(parent.Id));
+                store.DeleteOrganizationalUnit(parent.Id, "user1"));
             Assert.Contains("has child units", exception.Message);
         }
 

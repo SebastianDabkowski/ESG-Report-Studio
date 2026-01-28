@@ -1042,6 +1042,18 @@ public sealed class InMemoryReportStore
             };
 
             _organizationalUnits.Add(newUnit);
+
+            // Log creation to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", OldValue = "", NewValue = request.Name },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = request.Description ?? "" },
+                new FieldChange { Field = "ParentId", OldValue = "", NewValue = request.ParentId ?? "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == request.CreatedBy);
+            var userName = user?.Name ?? request.CreatedBy;
+            CreateAuditLogEntry(request.CreatedBy, userName, "create", "OrganizationalUnit", newUnit.Id, changes, $"Created organizational unit '{request.Name}'");
+
             return newUnit;
         }
     }
@@ -1077,15 +1089,41 @@ public sealed class InMemoryReportStore
                 }
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (unit.Name != request.Name)
+            {
+                changes.Add(new FieldChange { Field = "Name", OldValue = unit.Name, NewValue = request.Name });
+            }
+
+            if (unit.Description != request.Description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = unit.Description ?? "", NewValue = request.Description ?? "" });
+            }
+
+            if (unit.ParentId != request.ParentId)
+            {
+                changes.Add(new FieldChange { Field = "ParentId", OldValue = unit.ParentId ?? "", NewValue = request.ParentId ?? "" });
+            }
+
             unit.Name = request.Name;
             unit.ParentId = request.ParentId;
             unit.Description = request.Description;
+
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
+                var userName = user?.Name ?? request.UpdatedBy;
+                CreateAuditLogEntry(request.UpdatedBy, userName, "update", "OrganizationalUnit", unit.Id, changes, $"Updated organizational unit '{request.Name}'");
+            }
 
             return unit;
         }
     }
 
-    public bool DeleteOrganizationalUnit(string id)
+    public bool DeleteOrganizationalUnit(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -1101,6 +1139,15 @@ public sealed class InMemoryReportStore
             {
                 throw new InvalidOperationException("Cannot delete an organizational unit that has child units. Delete or reassign children first.");
             }
+
+            // Log deletion to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", OldValue = unit.Name, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "OrganizationalUnit", unit.Id, changes, $"Deleted organizational unit '{unit.Name}'");
 
             _organizationalUnits.Remove(unit);
             return true;

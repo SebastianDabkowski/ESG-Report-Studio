@@ -426,24 +426,27 @@ namespace SD.ProjectName.Tests.Products
             Thread.Sleep(100);
             var afterSecondUpdate = DateTime.UtcNow;
 
-            // Act - Get all entries
-            var allEntries = store.GetAuditLog();
+            // Act - Get all entries for this data point
+            var allEntries = store.GetAuditLog(entityId: dataPoint.Id);
             Assert.Equal(2, allEntries.Count);
 
             // Filter by date range that should include only first update
             var onlyFirstUpdate = store.GetAuditLog(
+                entityId: dataPoint.Id,
                 startDate: beforeFirstUpdate.ToString("O"),
                 endDate: betweenUpdates.ToString("O")
             );
 
             // Filter by date range that should include only second update
             var onlySecondUpdate = store.GetAuditLog(
+                entityId: dataPoint.Id,
                 startDate: betweenUpdates.ToString("O"),
                 endDate: afterSecondUpdate.ToString("O")
             );
 
             // Filter by date range that includes both
             var bothUpdates = store.GetAuditLog(
+                entityId: dataPoint.Id,
                 startDate: beforeFirstUpdate.ToString("O"),
                 endDate: afterSecondUpdate.ToString("O")
             );
