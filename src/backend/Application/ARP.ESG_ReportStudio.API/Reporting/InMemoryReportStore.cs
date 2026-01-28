@@ -7263,4 +7263,397 @@ public sealed class InMemoryReportStore
     }
 
     #endregion
+
+    #region Consistency Validation
+
+    /// <summary>
+    /// Runs consistency validation on a reporting period.
+    /// Checks for missing required fields, invalid units, contradictory statements, and period coverage.
+    /// </summary>
+    public ValidationResult RunConsistencyValidation(RunValidationRequest request)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return new ValidationResult
+                {
+                    Status = "failed",
+                    PeriodId = request.PeriodId,
+                    PeriodName = "Unknown",
+                    ValidatedAt = DateTime.UtcNow.ToString("O"),
+                    ValidatedBy = request.ValidatedBy,
+                    ErrorCount = 1,
+                    CanPublish = false,
+                    Summary = "Reporting period not found.",
+                    Issues = new List<ValidationIssue>
+                    {
+                        new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "period-not-found",
+                            Severity = "error",
+                            Message = $"Reporting period with ID '{request.PeriodId}' not found.",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        }
+                    }
+                };
+            }
+
+            var issues = new List<ValidationIssue>();
+            var sections = _sections.Where(s => s.PeriodId == request.PeriodId).ToList();
+
+            // Run baseline validation rules
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("required-data"))
+            {
+                issues.AddRange(ValidateRequiredDataForEnabledSections(period, sections));
+            }
+
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("unit-normalization"))
+            {
+                issues.AddRange(ValidateUnitNormalization(period, sections));
+            }
+
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("period-coverage"))
+            {
+                issues.AddRange(ValidatePeriodCoverage(period, sections));
+            }
+
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("missing-fields"))
+            {
+                issues.AddRange(ValidateMissingRequiredFields(period, sections));
+            }
+
+            // Calculate counts by severity
+            var errorCount = issues.Count(i => i.Severity == "error");
+            var warningCount = issues.Count(i => i.Severity == "warning");
+            var infoCount = issues.Count(i => i.Severity == "info");
+
+            var status = errorCount > 0 ? "failed" : (warningCount > 0 ? "warning" : "passed");
+            var canPublish = errorCount == 0;
+
+            var summary = canPublish
+                ? $"Validation passed. {warningCount} warnings, {infoCount} informational messages."
+                : $"Validation failed with {errorCount} errors, {warningCount} warnings.";
+
+            return new ValidationResult
+            {
+                Status = status,
+                PeriodId = request.PeriodId,
+                PeriodName = period.Name,
+                ValidatedAt = DateTime.UtcNow.ToString("O"),
+                ValidatedBy = request.ValidatedBy,
+                Issues = issues,
+                ErrorCount = errorCount,
+                WarningCount = warningCount,
+                InfoCount = infoCount,
+                CanPublish = canPublish,
+                Summary = summary
+            };
+        }
+    }
+
+    /// <summary>
+    /// Validates that enabled sections have required data points.
+    /// </summary>
+    private List<ValidationIssue> ValidateRequiredDataForEnabledSections(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        foreach (var section in sections.Where(s => s.Status != "disabled"))
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            // Check if section has no data points at all
+            if (dataPoints.Count == 0)
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "missing-required-field",
+                    Severity = "error",
+                    Message = $"Section '{section.Title}' has no data points. Enabled sections must have at least one data point.",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
+                continue;
+            }
+
+            // Check for incomplete or missing data points
+            var incompleteDataPoints = dataPoints.Where(dp => 
+                dp.CompletenessStatus == "missing" || 
+                dp.CompletenessStatus == "incomplete").ToList();
+
+            if (incompleteDataPoints.Any())
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "missing-required-field",
+                    Severity = "warning",
+                    Message = $"Section '{section.Title}' has {incompleteDataPoints.Count} incomplete or missing data points.",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    AffectedDataPointIds = incompleteDataPoints.Select(dp => dp.Id).ToList(),
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+
+            // Check for data points that need review
+            var dataPointsNeedingReview = dataPoints.Where(dp => 
+                dp.ReviewStatus == "changes-requested" || 
+                dp.ProvenanceNeedsReview).ToList();
+
+            if (dataPointsNeedingReview.Any())
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "contradictory-statement",
+                    Severity = "error",
+                    Message = $"Section '{section.Title}' has {dataPointsNeedingReview.Count} data points requiring review or changes.",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    AffectedDataPointIds = dataPointsNeedingReview.Select(dp => dp.Id).ToList(),
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Validates unit consistency across data points.
+    /// </summary>
+    private List<ValidationIssue> ValidateUnitNormalization(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        foreach (var section in sections)
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            // Group data points by classification to check unit consistency
+            var dataPointsByClassification = dataPoints
+                .Where(dp => !string.IsNullOrWhiteSpace(dp.Classification) && !string.IsNullOrWhiteSpace(dp.Unit))
+                .GroupBy(dp => dp.Classification)
+                .Where(g => g.Count() > 1);
+
+            foreach (var group in dataPointsByClassification)
+            {
+                var units = group.Select(dp => dp.Unit).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                
+                if (units.Count > 1)
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "invalid-unit",
+                        Severity = "warning",
+                        Message = $"Section '{section.Title}': Data points with classification '{group.Key}' use inconsistent units: {string.Join(", ", units)}.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = group.Select(dp => dp.Id).ToList(),
+                        FieldName = "Unit",
+                        ExpectedValue = "Consistent units within classification",
+                        ActualValue = string.Join(", ", units),
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+            }
+
+            // Check for metric data points without units
+            var metricsWithoutUnits = dataPoints
+                .Where(dp => dp.Type == "metric" && 
+                             !string.IsNullOrWhiteSpace(dp.Value) && 
+                             string.IsNullOrWhiteSpace(dp.Unit))
+                .ToList();
+
+            if (metricsWithoutUnits.Any())
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "missing-required-field",
+                    Severity = "error",
+                    Message = $"Section '{section.Title}': {metricsWithoutUnits.Count} metric data points are missing units.",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    AffectedDataPointIds = metricsWithoutUnits.Select(dp => dp.Id).ToList(),
+                    FieldName = "Unit",
+                    ExpectedValue = "Valid unit for metric",
+                    ActualValue = "null or empty",
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Validates that data points fall within the reporting period.
+    /// </summary>
+    private List<ValidationIssue> ValidatePeriodCoverage(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        if (!DateTime.TryParse(period.StartDate, out var periodStart) ||
+            !DateTime.TryParse(period.EndDate, out var periodEnd))
+        {
+            return issues; // Skip if period dates are invalid
+        }
+
+        foreach (var section in sections)
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            foreach (var dataPoint in dataPoints.Where(dp => !string.IsNullOrWhiteSpace(dp.Value)))
+            {
+                // Try to parse the value as a date
+                if (DateTime.TryParse(dataPoint.Value, out var valueDate))
+                {
+                    if (valueDate < periodStart || valueDate > periodEnd)
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "period-coverage",
+                            Severity = "warning",
+                            Message = $"Data point '{dataPoint.Title}' has a date value ({dataPoint.Value}) outside the reporting period ({period.StartDate} to {period.EndDate}).",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "Value",
+                            ExpectedValue = $"Date within {period.StartDate} to {period.EndDate}",
+                            ActualValue = dataPoint.Value,
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+                }
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Validates that required fields are present in data points.
+    /// </summary>
+    private List<ValidationIssue> ValidateMissingRequiredFields(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        foreach (var section in sections)
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            foreach (var dataPoint in dataPoints)
+            {
+                // Check for missing owner
+                if (string.IsNullOrWhiteSpace(dataPoint.OwnerId))
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "missing-required-field",
+                        Severity = "warning",
+                        Message = $"Data point '{dataPoint.Title}' in section '{section.Title}' has no assigned owner.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = new List<string> { dataPoint.Id },
+                        FieldName = "OwnerId",
+                        ExpectedValue = "Valid user ID",
+                        ActualValue = "null or empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                // Check for missing evidence on approved data points
+                if (dataPoint.ReviewStatus == "approved" && dataPoint.EvidenceIds.Count == 0 && 
+                    dataPoint.InformationType != "estimate")
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "missing-required-field",
+                        Severity = "warning",
+                        Message = $"Approved data point '{dataPoint.Title}' in section '{section.Title}' has no supporting evidence.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = new List<string> { dataPoint.Id },
+                        FieldName = "EvidenceIds",
+                        ExpectedValue = "At least one evidence document",
+                        ActualValue = "empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                // Check for estimates without required fields
+                if (dataPoint.InformationType == "estimate")
+                {
+                    if (string.IsNullOrWhiteSpace(dataPoint.EstimateType))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "missing-required-field",
+                            Severity = "error",
+                            Message = $"Estimate data point '{dataPoint.Title}' is missing EstimateType.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "EstimateType",
+                            ExpectedValue = "point, range, proxy-based, or extrapolated",
+                            ActualValue = "null or empty",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+
+                    if (string.IsNullOrWhiteSpace(dataPoint.EstimateMethod))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "missing-required-field",
+                            Severity = "error",
+                            Message = $"Estimate data point '{dataPoint.Title}' is missing EstimateMethod.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "EstimateMethod",
+                            ExpectedValue = "Description of estimation methodology",
+                            ActualValue = "null or empty",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+
+                    if (string.IsNullOrWhiteSpace(dataPoint.ConfidenceLevel))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "missing-required-field",
+                            Severity = "error",
+                            Message = $"Estimate data point '{dataPoint.Title}' is missing ConfidenceLevel.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "ConfidenceLevel",
+                            ExpectedValue = "low, medium, or high",
+                            ActualValue = "null or empty",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+                }
+            }
+        }
+
+        return issues;
+    }
+
+    #endregion
 }

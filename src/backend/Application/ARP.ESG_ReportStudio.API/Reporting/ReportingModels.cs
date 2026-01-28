@@ -2700,3 +2700,232 @@ public sealed class FragmentMapping
     /// </summary>
     public string? SectionHeading { get; set; }
 }
+
+/// <summary>
+/// Represents a consistency validation issue detected during validation.
+/// Links to affected fragments and data records.
+/// </summary>
+public sealed class ValidationIssue
+{
+    /// <summary>
+    /// Unique identifier for this validation issue.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of validation rule that failed.
+    /// Examples: "missing-required-field", "invalid-unit", "contradictory-statement", "period-coverage"
+    /// </summary>
+    public string RuleType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Severity level of the issue.
+    /// Values: "error" (blocks publication), "warning" (requires attention), "info" (informational)
+    /// </summary>
+    public string Severity { get; set; } = "error";
+    
+    /// <summary>
+    /// Human-readable description of the issue.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the affected section, if applicable.
+    /// </summary>
+    public string? SectionId { get; set; }
+    
+    /// <summary>
+    /// Title of the affected section, if applicable.
+    /// </summary>
+    public string? SectionTitle { get; set; }
+    
+    /// <summary>
+    /// IDs of affected data points.
+    /// </summary>
+    public List<string> AffectedDataPointIds { get; set; } = new();
+    
+    /// <summary>
+    /// IDs of affected evidence records.
+    /// </summary>
+    public List<string> AffectedEvidenceIds { get; set; } = new();
+    
+    /// <summary>
+    /// Field name that has the issue (e.g., "Value", "Unit", "Content").
+    /// </summary>
+    public string? FieldName { get; set; }
+    
+    /// <summary>
+    /// Expected value or format.
+    /// </summary>
+    public string? ExpectedValue { get; set; }
+    
+    /// <summary>
+    /// Actual value that caused the issue.
+    /// </summary>
+    public string? ActualValue { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the issue was detected.
+    /// </summary>
+    public string DetectedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of a consistency validation run.
+/// </summary>
+public sealed class ValidationResult
+{
+    /// <summary>
+    /// Overall validation status.
+    /// Values: "passed", "failed", "warning"
+    /// </summary>
+    public string Status { get; set; } = "passed";
+    
+    /// <summary>
+    /// Reporting period ID that was validated.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the reporting period.
+    /// </summary>
+    public string PeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when validation was run.
+    /// </summary>
+    public string ValidatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who initiated the validation.
+    /// </summary>
+    public string ValidatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of all validation issues found.
+    /// </summary>
+    public List<ValidationIssue> Issues { get; set; } = new();
+    
+    /// <summary>
+    /// Count of error-level issues (blocks publication).
+    /// </summary>
+    public int ErrorCount { get; set; }
+    
+    /// <summary>
+    /// Count of warning-level issues.
+    /// </summary>
+    public int WarningCount { get; set; }
+    
+    /// <summary>
+    /// Count of info-level issues.
+    /// </summary>
+    public int InfoCount { get; set; }
+    
+    /// <summary>
+    /// Whether publication can proceed (true if ErrorCount == 0).
+    /// </summary>
+    public bool CanPublish { get; set; }
+    
+    /// <summary>
+    /// Summary message describing the validation result.
+    /// </summary>
+    public string Summary { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to run consistency validation on a reporting period.
+/// </summary>
+public sealed class RunValidationRequest
+{
+    /// <summary>
+    /// ID of the reporting period to validate.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person requesting validation.
+    /// </summary>
+    public string ValidatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional: Specific rule types to run. If empty, all rules are run.
+    /// </summary>
+    public List<string> RuleTypes { get; set; } = new();
+}
+
+/// <summary>
+/// Request to publish a reporting period with optional override.
+/// </summary>
+public sealed class PublishReportRequest
+{
+    /// <summary>
+    /// ID of the reporting period to publish.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person publishing.
+    /// </summary>
+    public string PublishedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether to override validation failures and publish anyway.
+    /// </summary>
+    public bool OverrideValidation { get; set; }
+    
+    /// <summary>
+    /// Justification required when OverrideValidation is true.
+    /// </summary>
+    public string? OverrideJustification { get; set; }
+}
+
+/// <summary>
+/// Result of a report publication attempt.
+/// </summary>
+public sealed class PublishReportResult
+{
+    /// <summary>
+    /// ID of the reporting period.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the reporting period.
+    /// </summary>
+    public string PeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when report was published.
+    /// </summary>
+    public string PublishedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who published the report.
+    /// </summary>
+    public string PublishedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether validation was overridden.
+    /// </summary>
+    public bool ValidationOverridden { get; set; }
+    
+    /// <summary>
+    /// Justification for overriding validation, if applicable.
+    /// </summary>
+    public string? OverrideJustification { get; set; }
+    
+    /// <summary>
+    /// Validation result at time of publication.
+    /// </summary>
+    public ValidationResult? ValidationResult { get; set; }
+    
+    /// <summary>
+    /// Publication status.
+    /// </summary>
+    public string Status { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Message describing the publication result.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+}
