@@ -488,5 +488,146 @@ namespace SD.ProjectName.Tests.Products
             Assert.Contains(latestEntry.Changes, c => c.Field == "EstimateMethod");
             Assert.Contains(latestEntry.Changes, c => c.Field == "ConfidenceLevel" && c.OldValue == "low" && c.NewValue == "medium");
         }
+
+        [Fact]
+        public void CreateDataPoint_WithEstimateProvenance_ShouldStoreAllProvenanceFields()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var estimateInputSources = new List<EstimateInputSource>
+            {
+                new EstimateInputSource
+                {
+                    SourceType = "internal-document",
+                    SourceReference = "DOC-2024-001",
+                    Description = "Energy meter readings from facility A"
+                },
+                new EstimateInputSource
+                {
+                    SourceType = "external-url",
+                    SourceReference = "https://example.com/emission-factors",
+                    Description = "National emission factors database"
+                }
+            };
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Estimated Scope 1 Emissions",
+                Content = "GHG emissions from direct sources",
+                OwnerId = "owner-1",
+                Source = "Calculation Model",
+                InformationType = "estimate",
+                Assumptions = "Based on emission factors and energy consumption",
+                EstimateType = "point",
+                EstimateMethod = "Energy consumption multiplied by emission factor",
+                ConfidenceLevel = "medium",
+                EstimateInputSources = estimateInputSources,
+                EstimateInputs = "Energy consumption: 1000 kWh, Emission factor: 0.5 kg CO2/kWh",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.True(isValid, errorMessage ?? "Should succeed");
+            Assert.NotNull(dataPoint);
+            
+            // Verify provenance fields are stored
+            Assert.Equal(2, dataPoint.EstimateInputSources.Count);
+            Assert.Equal("internal-document", dataPoint.EstimateInputSources[0].SourceType);
+            Assert.Equal("DOC-2024-001", dataPoint.EstimateInputSources[0].SourceReference);
+            Assert.Equal("Energy meter readings from facility A", dataPoint.EstimateInputSources[0].Description);
+            
+            Assert.Equal("external-url", dataPoint.EstimateInputSources[1].SourceType);
+            Assert.Equal("https://example.com/emission-factors", dataPoint.EstimateInputSources[1].SourceReference);
+            
+            Assert.Equal("Energy consumption: 1000 kWh, Emission factor: 0.5 kg CO2/kWh", dataPoint.EstimateInputs);
+            
+            // Verify author and timestamp are set
+            Assert.Equal("owner-1", dataPoint.EstimateAuthor);
+            Assert.NotNull(dataPoint.EstimateCreatedAt);
+            Assert.NotEmpty(dataPoint.EstimateCreatedAt);
+        }
+
+        [Fact]
+        public void UpdateDataPoint_WithEstimateProvenance_ShouldUpdateProvenanceFields()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            // Create initial data point
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Estimated Emissions",
+                Content = "GHG emissions estimate",
+                OwnerId = "owner-1",
+                Source = "Calculation Model",
+                InformationType = "estimate",
+                Assumptions = "Initial assumptions",
+                EstimateType = "point",
+                EstimateMethod = "Initial method",
+                ConfidenceLevel = "low",
+                EstimateInputs = "Initial inputs",
+                CompletenessStatus = "complete"
+            };
+
+            var (isValid, errorMessage, createdDataPoint) = store.CreateDataPoint(createRequest);
+            Assert.True(isValid);
+            Assert.NotNull(createdDataPoint);
+
+            // Update with new provenance data
+            var newInputSources = new List<EstimateInputSource>
+            {
+                new EstimateInputSource
+                {
+                    SourceType = "uploaded-evidence",
+                    SourceReference = "EVIDENCE-123",
+                    Description = "Updated meter readings"
+                }
+            };
+
+            var updateRequest = new UpdateDataPointRequest
+            {
+                Type = createdDataPoint.Type,
+                Title = createdDataPoint.Title,
+                Content = createdDataPoint.Content,
+                OwnerId = createdDataPoint.OwnerId,
+                Source = createdDataPoint.Source,
+                InformationType = createdDataPoint.InformationType,
+                Assumptions = createdDataPoint.Assumptions,
+                EstimateType = createdDataPoint.EstimateType,
+                EstimateMethod = "Updated method with better data",
+                ConfidenceLevel = "high",
+                EstimateInputSources = newInputSources,
+                EstimateInputs = "Updated inputs: Energy 1500 kWh, Factor 0.45 kg CO2/kWh",
+                CompletenessStatus = createdDataPoint.CompletenessStatus,
+                ContributorIds = new List<string>()
+            };
+
+            // Act
+            var (updateValid, updateError, updatedDataPoint) = store.UpdateDataPoint(createdDataPoint.Id, updateRequest);
+
+            // Assert
+            Assert.True(updateValid, updateError ?? "Should succeed");
+            Assert.NotNull(updatedDataPoint);
+            
+            // Verify provenance fields are updated
+            Assert.Single(updatedDataPoint.EstimateInputSources);
+            Assert.Equal("uploaded-evidence", updatedDataPoint.EstimateInputSources[0].SourceType);
+            Assert.Equal("EVIDENCE-123", updatedDataPoint.EstimateInputSources[0].SourceReference);
+            Assert.Equal("Updated inputs: Energy 1500 kWh, Factor 0.45 kg CO2/kWh", updatedDataPoint.EstimateInputs);
+            
+            // Author and created timestamp should remain unchanged
+            Assert.Equal(createdDataPoint.EstimateAuthor, updatedDataPoint.EstimateAuthor);
+            Assert.Equal(createdDataPoint.EstimateCreatedAt, updatedDataPoint.EstimateCreatedAt);
+        }
     }
 }
