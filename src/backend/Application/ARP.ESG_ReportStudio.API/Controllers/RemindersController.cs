@@ -44,6 +44,22 @@ public sealed class RemindersController : ControllerBase
         string periodId, 
         [FromBody] ReminderConfiguration config)
     {
+        // Validate configuration
+        if (config.DaysBeforeDeadline == null || !config.DaysBeforeDeadline.Any())
+        {
+            return BadRequest(new { error = "DaysBeforeDeadline must contain at least one value." });
+        }
+
+        if (config.DaysBeforeDeadline.Any(d => d < 0))
+        {
+            return BadRequest(new { error = "DaysBeforeDeadline values must be non-negative." });
+        }
+
+        if (config.CheckFrequencyHours <= 0)
+        {
+            return BadRequest(new { error = "CheckFrequencyHours must be a positive value." });
+        }
+
         config.PeriodId = periodId;
         var result = _store.CreateOrUpdateReminderConfiguration(periodId, config);
         return Ok(result);

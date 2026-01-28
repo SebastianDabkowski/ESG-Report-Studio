@@ -1765,11 +1765,21 @@ public sealed class InMemoryReportStore
             var existing = _reminderConfigurations.FirstOrDefault(rc => rc.PeriodId == periodId);
             if (existing != null)
             {
-                existing.Enabled = config.Enabled;
-                existing.DaysBeforeDeadline = config.DaysBeforeDeadline;
-                existing.CheckFrequencyHours = config.CheckFrequencyHours;
-                existing.UpdatedAt = DateTime.UtcNow.ToString("O");
-                return existing;
+                // Create a new configuration to ensure thread-safe reads
+                var updated = new ReminderConfiguration
+                {
+                    Id = existing.Id,
+                    PeriodId = periodId,
+                    Enabled = config.Enabled,
+                    DaysBeforeDeadline = new List<int>(config.DaysBeforeDeadline),
+                    CheckFrequencyHours = config.CheckFrequencyHours,
+                    CreatedAt = existing.CreatedAt,
+                    UpdatedAt = DateTime.UtcNow.ToString("O")
+                };
+                
+                _reminderConfigurations.Remove(existing);
+                _reminderConfigurations.Add(updated);
+                return updated;
             }
 
             var newConfig = new ReminderConfiguration
@@ -1777,7 +1787,7 @@ public sealed class InMemoryReportStore
                 Id = Guid.NewGuid().ToString(),
                 PeriodId = periodId,
                 Enabled = config.Enabled,
-                DaysBeforeDeadline = config.DaysBeforeDeadline,
+                DaysBeforeDeadline = new List<int>(config.DaysBeforeDeadline),
                 CheckFrequencyHours = config.CheckFrequencyHours,
                 CreatedAt = DateTime.UtcNow.ToString("O"),
                 UpdatedAt = DateTime.UtcNow.ToString("O")
