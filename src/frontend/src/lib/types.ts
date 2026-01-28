@@ -159,6 +159,21 @@ export interface Evidence {
   uploadedBy: string
   uploadedAt: string
   linkedDataPoints: string[]
+  // Chain-of-custody metadata
+  fileSize?: number
+  checksum?: string
+  contentType?: string
+  integrityStatus: string // 'valid', 'failed', 'not-checked'
+}
+
+export interface EvidenceAccessLog {
+  id: string
+  evidenceId: string
+  userId: string
+  userName: string
+  accessedAt: string
+  action: string // 'download', 'view', 'validate'
+  purpose?: string
 }
 
 export interface AssumptionSource {

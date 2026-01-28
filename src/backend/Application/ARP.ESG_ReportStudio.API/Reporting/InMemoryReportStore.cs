@@ -28,6 +28,7 @@ public sealed class InMemoryReportStore
     private readonly List<RemediationPlan> _remediationPlans = new();
     private readonly List<RemediationAction> _remediationActions = new();
     private readonly List<CompletionException> _completionExceptions = new();
+    private readonly List<EvidenceAccessLog> _evidenceAccessLog = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -2630,7 +2631,10 @@ public sealed class InMemoryReportStore
         string? fileName, 
         string? fileUrl, 
         string? sourceUrl,
-        string uploadedBy)
+        string uploadedBy,
+        long? fileSize = null,
+        string? checksum = null,
+        string? contentType = null)
     {
         lock (_lock)
         {
@@ -2689,7 +2693,11 @@ public sealed class InMemoryReportStore
                 SourceUrl = sourceUrl,
                 UploadedBy = uploadedBy,
                 UploadedAt = DateTime.UtcNow.ToString("O"),
-                LinkedDataPoints = new List<string>()
+                LinkedDataPoints = new List<string>(),
+                FileSize = fileSize,
+                Checksum = checksum,
+                ContentType = contentType,
+                IntegrityStatus = string.IsNullOrWhiteSpace(checksum) ? "not-checked" : "valid"
             };
 
             _evidence.Add(newEvidence);
@@ -2778,6 +2786,87 @@ public sealed class InMemoryReportStore
 
             _evidence.Remove(evidence);
             return true;
+        }
+    }
+
+    /// <summary>
+    /// Log evidence access for chain-of-custody tracking.
+    /// </summary>
+    public void LogEvidenceAccess(string evidenceId, string userId, string userName, string action, string? purpose = null)
+    {
+        lock (_lock)
+        {
+            var logEntry = new EvidenceAccessLog
+            {
+                Id = Guid.NewGuid().ToString(),
+                EvidenceId = evidenceId,
+                UserId = userId,
+                UserName = userName,
+                AccessedAt = DateTime.UtcNow.ToString("O"),
+                Action = action,
+                Purpose = purpose
+            };
+
+            _evidenceAccessLog.Add(logEntry);
+        }
+    }
+
+    /// <summary>
+    /// Get access log for a specific evidence item or all evidence.
+    /// </summary>
+    public IReadOnlyList<EvidenceAccessLog> GetEvidenceAccessLog(string? evidenceId = null)
+    {
+        lock (_lock)
+        {
+            return evidenceId == null
+                ? _evidenceAccessLog.OrderByDescending(log => log.AccessedAt).ToList()
+                : _evidenceAccessLog.Where(log => log.EvidenceId == evidenceId)
+                    .OrderByDescending(log => log.AccessedAt).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Validate evidence file integrity using checksum.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage) ValidateEvidenceIntegrity(string evidenceId, string providedChecksum)
+    {
+        lock (_lock)
+        {
+            var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+            if (evidence == null)
+            {
+                return (false, $"Evidence with ID '{evidenceId}' not found.");
+            }
+
+            if (string.IsNullOrWhiteSpace(evidence.Checksum))
+            {
+                return (false, "Evidence does not have a checksum for validation.");
+            }
+
+            bool isValid = string.Equals(evidence.Checksum, providedChecksum, StringComparison.OrdinalIgnoreCase);
+            
+            // Update integrity status
+            evidence.IntegrityStatus = isValid ? "valid" : "failed";
+
+            return (isValid, isValid ? null : "Checksum mismatch. File integrity validation failed.");
+        }
+    }
+
+    /// <summary>
+    /// Check if evidence can be published (integrity must be valid or not-checked, not failed).
+    /// </summary>
+    public bool CanPublishEvidence(string evidenceId)
+    {
+        lock (_lock)
+        {
+            var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+            if (evidence == null)
+            {
+                return false;
+            }
+
+            // Block publication if integrity check failed
+            return evidence.IntegrityStatus != "failed";
         }
     }
 

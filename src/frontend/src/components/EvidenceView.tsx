@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useKV } from '@github/spark/hooks'
-import { PaperclipHorizontal, FileText } from '@phosphor-icons/react'
+import { PaperclipHorizontal, FileText, ShieldCheck, ShieldWarning, Question } from '@phosphor-icons/react'
 import type { User, Evidence, ReportSection } from '@/lib/types'
 import { formatDateTime } from '@/lib/helpers'
 
@@ -16,6 +16,39 @@ export default function EvidenceView({ currentUser }: EvidenceViewProps) {
   const getSectionTitle = (sectionId: string) => {
     const section = sections?.find(s => s.id === sectionId)
     return section?.title || 'Unknown Section'
+  }
+
+  const getIntegrityBadge = (status: string) => {
+    switch (status) {
+      case 'valid':
+        return (
+          <Badge variant="outline" className="text-green-600 border-green-600">
+            <ShieldCheck size={14} className="mr-1" />
+            Valid
+          </Badge>
+        )
+      case 'failed':
+        return (
+          <Badge variant="outline" className="text-red-600 border-red-600">
+            <ShieldWarning size={14} className="mr-1" />
+            Failed
+          </Badge>
+        )
+      default:
+        return (
+          <Badge variant="outline" className="text-gray-600">
+            <Question size={14} className="mr-1" />
+            Not Checked
+          </Badge>
+        )
+    }
+  }
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'N/A'
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
   return (
@@ -44,17 +77,33 @@ export default function EvidenceView({ currentUser }: EvidenceViewProps) {
                       {item.description || 'No description provided'}
                     </CardDescription>
                   </div>
-                  <Badge variant="outline" className="flex-shrink-0">
-                    {getSectionTitle(item.sectionId)}
-                  </Badge>
+                  <div className="flex flex-col gap-2 flex-shrink-0">
+                    <Badge variant="outline">
+                      {getSectionTitle(item.sectionId)}
+                    </Badge>
+                    {getIntegrityBadge(item.integrityStatus)}
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  {item.fileName && <span>File: {item.fileName}</span>}
-                  {item.sourceUrl && <span>URL: {item.sourceUrl}</span>}
-                  <span>Uploaded: {formatDateTime(item.uploadedAt)}</span>
-                  <span>{item.linkedDataPoints.length} linked data points</span>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    {item.fileName && <span>File: {item.fileName}</span>}
+                    {item.sourceUrl && <span>URL: {item.sourceUrl}</span>}
+                    <span>Uploaded: {formatDateTime(item.uploadedAt)}</span>
+                    <span>{item.linkedDataPoints.length} linked data points</span>
+                  </div>
+                  {item.fileSize && (
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span>Size: {formatFileSize(item.fileSize)}</span>
+                      {item.contentType && <span>Type: {item.contentType}</span>}
+                      {item.checksum && (
+                        <span className="font-mono" title={item.checksum}>
+                          Checksum: {item.checksum.substring(0, 16)}...
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
