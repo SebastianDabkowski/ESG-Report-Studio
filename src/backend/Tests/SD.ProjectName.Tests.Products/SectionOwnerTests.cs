@@ -624,5 +624,301 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("Report owners can only change section ownership for their own reporting periods.", errorMessage);
             Assert.Null(section);
         }
+        
+        [Fact]
+        public void BulkUpdateSectionOwner_WithValidSections_ShouldSucceed()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            var sectionIds = snapshot!.Sections.Select(s => s.Id).ToList();
+            
+            // Act
+            var bulkRequest = new BulkUpdateSectionOwnerRequest
+            {
+                SectionIds = sectionIds,
+                OwnerId = "user-3",
+                UpdatedBy = "user-2", // admin
+                ChangeNote = "Bulk assignment for Q1"
+            };
+            var result = store.UpdateSectionOwnersBulk(bulkRequest);
+            
+            // Assert
+            Assert.Equal(sectionIds.Count, result.UpdatedSections.Count);
+            Assert.Empty(result.SkippedSections);
+            Assert.All(result.UpdatedSections, s => Assert.Equal("user-3", s.OwnerId));
+        }
+        
+        [Fact]
+        public void BulkUpdateSectionOwner_WithMixedPermissions_ShouldUpdateOnlyAuthorized()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            // Create a period owned by user-1
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            var sectionIds = snapshot!.Sections.Select(s => s.Id).ToList();
+            
+            // Take first 3 sections
+            var selectedSectionIds = sectionIds.Take(3).ToList();
+            
+            // Add one non-existent section ID
+            selectedSectionIds.Add("non-existent-section");
+            
+            // Act - user-1 (report-owner) tries to bulk update, but one section doesn't exist
+            var bulkRequest = new BulkUpdateSectionOwnerRequest
+            {
+                SectionIds = selectedSectionIds,
+                OwnerId = "user-3",
+                UpdatedBy = "user-1",
+                ChangeNote = "Bulk assignment attempt"
+            };
+            var result = store.UpdateSectionOwnersBulk(bulkRequest);
+            
+            // Assert
+            // 3 valid sections should be updated, 1 should be skipped (not found)
+            Assert.Equal(3, result.UpdatedSections.Count);
+            Assert.Single(result.SkippedSections);
+            
+            // Verify the skipped section is the non-existent one
+            Assert.Equal("non-existent-section", result.SkippedSections[0].SectionId);
+            Assert.Equal("Section not found.", result.SkippedSections[0].Reason);
+        }
+        
+        [Fact]
+        public void BulkUpdateSectionOwner_WithNonExistentOwner_ShouldSkipAll()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            var sectionIds = snapshot!.Sections.Select(s => s.Id).ToList();
+            
+            // Act
+            var bulkRequest = new BulkUpdateSectionOwnerRequest
+            {
+                SectionIds = sectionIds,
+                OwnerId = "non-existent-user",
+                UpdatedBy = "user-2",
+                ChangeNote = "Bulk assignment"
+            };
+            var result = store.UpdateSectionOwnersBulk(bulkRequest);
+            
+            // Assert
+            Assert.Empty(result.UpdatedSections);
+            Assert.Equal(sectionIds.Count, result.SkippedSections.Count);
+            Assert.All(result.SkippedSections, f => Assert.Equal("Owner user not found.", f.Reason));
+        }
+        
+        [Fact]
+        public void BulkUpdateSectionOwner_WithUnauthorizedUser_ShouldSkipAll()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            var sectionIds = snapshot!.Sections.Select(s => s.Id).ToList();
+            
+            // Act - user-3 is a contributor, not authorized
+            var bulkRequest = new BulkUpdateSectionOwnerRequest
+            {
+                SectionIds = sectionIds,
+                OwnerId = "user-4",
+                UpdatedBy = "user-3",
+                ChangeNote = "Bulk assignment"
+            };
+            var result = store.UpdateSectionOwnersBulk(bulkRequest);
+            
+            // Assert
+            Assert.Empty(result.UpdatedSections);
+            Assert.Equal(sectionIds.Count, result.SkippedSections.Count);
+            Assert.All(result.SkippedSections, f => 
+                Assert.Equal("Only administrators or report owners can change section ownership.", f.Reason));
+        }
+        
+        [Fact]
+        public void BulkUpdateSectionOwner_ShouldCreateAuditLogEntries()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            var sectionIds = snapshot!.Sections.Take(2).Select(s => s.Id).ToList();
+            
+            // Act
+            var bulkRequest = new BulkUpdateSectionOwnerRequest
+            {
+                SectionIds = sectionIds,
+                OwnerId = "user-3",
+                UpdatedBy = "user-2",
+                ChangeNote = "Bulk assignment for Q1"
+            };
+            var result = store.UpdateSectionOwnersBulk(bulkRequest);
+            
+            // Assert - Verify audit log entries created for each updated section
+            foreach (var sectionId in sectionIds)
+            {
+                var auditLog = store.GetAuditLog(entityType: "ReportSection", entityId: sectionId);
+                Assert.NotEmpty(auditLog);
+                
+                var entry = auditLog.First();
+                Assert.Equal("BulkUpdateSectionOwner", entry.Action);
+                Assert.Equal("user-2", entry.UserId);
+                Assert.Equal("Admin User", entry.UserName);
+                Assert.Equal("Bulk assignment for Q1", entry.ChangeNote);
+                Assert.Single(entry.Changes);
+                
+                var change = entry.Changes.First();
+                Assert.Equal("OwnerId", change.Field);
+                Assert.Contains("John Smith", change.NewValue);
+                Assert.Contains("user-3", change.NewValue);
+            }
+        }
     }
 }

@@ -189,6 +189,30 @@ export function updateSectionOwner(sectionId: string, payload: UpdateSectionOwne
   })
 }
 
+export interface BulkUpdateSectionOwnerPayload {
+  sectionIds: string[]
+  ownerId: string
+  updatedBy: string
+  changeNote?: string
+}
+
+export interface BulkUpdateFailure {
+  sectionId: string
+  reason: string
+}
+
+export interface BulkUpdateSectionOwnerResult {
+  updatedSections: ReportSection[]
+  skippedSections: BulkUpdateFailure[]
+}
+
+export function bulkUpdateSectionOwner(payload: BulkUpdateSectionOwnerPayload): Promise<BulkUpdateSectionOwnerResult> {
+  return requestJson<BulkUpdateSectionOwnerResult>('sections/bulk-owner', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 // User API methods
 export function getUsers(): Promise<User[]> {
   return requestJson<User[]>('users')

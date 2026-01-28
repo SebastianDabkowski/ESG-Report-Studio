@@ -103,4 +103,22 @@ public sealed class ReportingController : ControllerBase
 
         return Ok(section);
     }
+
+    [HttpPost("sections/bulk-owner")]
+    public ActionResult<BulkUpdateSectionOwnerResult> UpdateSectionOwnersBulk([FromBody] BulkUpdateSectionOwnerRequest request)
+    {
+        if (request.SectionIds == null || request.SectionIds.Count == 0)
+        {
+            return BadRequest(new { error = "SectionIds are required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.OwnerId) || string.IsNullOrWhiteSpace(request.UpdatedBy))
+        {
+            return BadRequest(new { error = "OwnerId and UpdatedBy are required." });
+        }
+
+        var result = _store.UpdateSectionOwnersBulk(request);
+        
+        return Ok(result);
+    }
 }
