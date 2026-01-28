@@ -26,7 +26,7 @@ import {
   UploadSimple
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, getClassificationColor } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
 
 interface DataCollectionWorkspaceProps {
   currentUser: UserType
@@ -542,9 +542,11 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                         </span>
                       </div>
                     )}
-                    <div className="flex justify-between">
+                    <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Completeness:</span>
-                      <span className="font-medium capitalize">{selectedDataItem.completenessStatus}</span>
+                      <Badge className={`${getCompletenessStatusColor(selectedDataItem.completenessStatus)} capitalize border`}>
+                        {selectedDataItem.completenessStatus}
+                      </Badge>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Created:</span>

@@ -4,6 +4,8 @@ export type SectionStatus = 'draft' | 'in-review' | 'approved'
 
 export type CompletenessLevel = 'empty' | 'partial' | 'complete'
 
+export type CompletenessStatus = 'missing' | 'incomplete' | 'complete' | 'not applicable'
+
 export type Classification = 'fact' | 'declaration' | 'plan'
 
 export type ContentType = 'narrative' | 'metric' | 'evidence' | 'assumption' | 'gap'
@@ -71,7 +73,7 @@ export interface DataPoint {
   source: string
   informationType: string
   assumptions?: string
-  completenessStatus: string
+  completenessStatus: CompletenessStatus
   createdAt: string
   updatedAt: string
   evidenceIds: string[]

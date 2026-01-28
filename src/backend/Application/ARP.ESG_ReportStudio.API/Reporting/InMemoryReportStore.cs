@@ -648,6 +648,35 @@ public sealed class InMemoryReportStore
         }
     }
 
+    /// <summary>
+    /// Calculates the completeness status based on data point fields and evidence.
+    /// </summary>
+    /// <param name="dataPoint">The data point to evaluate.</param>
+    /// <returns>Completeness status: "missing", "incomplete", "complete", or "not applicable".</returns>
+    private string CalculateCompletenessStatus(DataPoint dataPoint)
+    {
+        // A data point that exists has at least title and content, so it's never "missing" here
+        // Missing status would apply at a higher level when no data point exists at all
+        
+        // Check if all required metadata is present
+        bool hasSource = !string.IsNullOrWhiteSpace(dataPoint.Source);
+        bool hasInformationType = !string.IsNullOrWhiteSpace(dataPoint.InformationType);
+        bool hasTitle = !string.IsNullOrWhiteSpace(dataPoint.Title);
+        bool hasContent = !string.IsNullOrWhiteSpace(dataPoint.Content);
+        
+        // Check if evidence is linked (at least one evidence ID)
+        bool hasEvidence = dataPoint.EvidenceIds != null && dataPoint.EvidenceIds.Count > 0;
+        
+        // Complete: has all required fields AND evidence
+        if (hasTitle && hasContent && hasSource && hasInformationType && hasEvidence)
+        {
+            return "complete";
+        }
+        
+        // Incomplete: has basic data but missing required metadata or evidence
+        return "incomplete";
+    }
+
     public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) CreateDataPoint(CreateDataPointRequest request)
     {
         lock (_lock)
@@ -698,16 +727,29 @@ public sealed class InMemoryReportStore
                 return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
             }
 
-            if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
+            // Auto-calculate completeness status if not provided or if it's empty
+            string completenessStatus = request.CompletenessStatus;
+            if (string.IsNullOrWhiteSpace(completenessStatus))
             {
-                return (false, "CompletenessStatus is required.", null);
+                // Create temporary data point to calculate status
+                var tempDataPoint = new DataPoint
+                {
+                    Title = request.Title,
+                    Content = request.Content,
+                    Source = request.Source,
+                    InformationType = request.InformationType,
+                    EvidenceIds = new List<string>()
+                };
+                completenessStatus = CalculateCompletenessStatus(tempDataPoint);
             }
-
-            // Validate completenessStatus enum
-            var validCompletenessStatuses = new[] { "complete", "partial", "incomplete" };
-            if (!validCompletenessStatuses.Contains(request.CompletenessStatus, StringComparer.OrdinalIgnoreCase))
+            else
             {
-                return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                // Validate completenessStatus enum if provided
+                var validCompletenessStatuses = new[] { "missing", "incomplete", "complete", "not applicable" };
+                if (!validCompletenessStatuses.Contains(completenessStatus, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                }
             }
 
             // Validate section exists
@@ -732,7 +774,7 @@ public sealed class InMemoryReportStore
                 Source = request.Source,
                 InformationType = request.InformationType,
                 Assumptions = request.Assumptions,
-                CompletenessStatus = request.CompletenessStatus,
+                CompletenessStatus = completenessStatus,
                 CreatedAt = now,
                 UpdatedAt = now,
                 EvidenceIds = new List<string>()
@@ -789,16 +831,29 @@ public sealed class InMemoryReportStore
                 return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
             }
 
-            if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
+            // Auto-calculate completeness status if not provided or if it's empty
+            string completenessStatus = request.CompletenessStatus;
+            if (string.IsNullOrWhiteSpace(completenessStatus))
             {
-                return (false, "CompletenessStatus is required.", null);
+                // Create temporary data point to calculate status (keeping existing evidence IDs)
+                var tempDataPoint = new DataPoint
+                {
+                    Title = request.Title,
+                    Content = request.Content,
+                    Source = request.Source,
+                    InformationType = request.InformationType,
+                    EvidenceIds = dataPoint.EvidenceIds
+                };
+                completenessStatus = CalculateCompletenessStatus(tempDataPoint);
             }
-
-            // Validate completenessStatus enum
-            var validCompletenessStatuses = new[] { "complete", "partial", "incomplete" };
-            if (!validCompletenessStatuses.Contains(request.CompletenessStatus, StringComparer.OrdinalIgnoreCase))
+            else
             {
-                return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                // Validate completenessStatus enum if provided
+                var validCompletenessStatuses = new[] { "missing", "incomplete", "complete", "not applicable" };
+                if (!validCompletenessStatuses.Contains(completenessStatus, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                }
             }
 
             dataPoint.Type = request.Type;
@@ -810,7 +865,7 @@ public sealed class InMemoryReportStore
             dataPoint.Source = request.Source;
             dataPoint.InformationType = request.InformationType;
             dataPoint.Assumptions = request.Assumptions;
-            dataPoint.CompletenessStatus = request.CompletenessStatus;
+            dataPoint.CompletenessStatus = completenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
 
             return (true, null, dataPoint);

@@ -192,7 +192,7 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
-        public void CreateDataPoint_WithoutCompletenessStatus_ShouldFail()
+        public void CreateDataPoint_WithoutCompletenessStatus_ShouldAutoCalculate()
         {
             // Arrange
             var store = new InMemoryReportStore();
@@ -213,10 +213,108 @@ namespace SD.ProjectName.Tests.Products
             // Act
             var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
 
+            // Assert - Should succeed and auto-calculate status as "incomplete" (no evidence)
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(dataPoint);
+            Assert.Equal("incomplete", dataPoint.CompletenessStatus);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithInvalidCompletenessStatus_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Some content",
+                OwnerId = "owner-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "partial" // Invalid - not one of the allowed values
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
             // Assert
             Assert.False(isValid);
-            Assert.Equal("CompletenessStatus is required.", errorMessage);
+            Assert.Contains("CompletenessStatus must be one of", errorMessage);
             Assert.Null(dataPoint);
+        }
+
+        [Fact]
+        public void UpdateDataPoint_WithoutCompletenessStatus_ShouldAutoCalculate()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Original Title",
+                Content = "Original content",
+                OwnerId = "owner-1",
+                Source = "Original Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
+
+            var updateRequest = new UpdateDataPointRequest
+            {
+                Title = "Updated Title",
+                Content = "Updated content",
+                Source = "Updated Source",
+                InformationType = "fact",
+                CompletenessStatus = "" // Empty - should auto-calculate
+            };
+
+            // Act
+            var (isValid, errorMessage, updatedDataPoint) = store.UpdateDataPoint(createdDataPoint!.Id, updateRequest);
+
+            // Assert - Should succeed and auto-calculate as incomplete (no evidence)
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(updatedDataPoint);
+            Assert.Equal("incomplete", updatedDataPoint.CompletenessStatus);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithNotApplicableStatus_ShouldSucceed()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Some content",
+                OwnerId = "owner-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "not applicable"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(dataPoint);
+            Assert.Equal("not applicable", dataPoint.CompletenessStatus);
         }
 
         [Fact]
@@ -235,7 +333,7 @@ namespace SD.ProjectName.Tests.Products
                 OwnerId = "owner-1",
                 Source = "Original Source",
                 InformationType = "fact",
-                CompletenessStatus = "partial"
+                CompletenessStatus = "incomplete"
             };
 
             var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
@@ -282,7 +380,7 @@ namespace SD.ProjectName.Tests.Products
                 OwnerId = "owner-1",
                 Source = "Original Source",
                 InformationType = "fact",
-                CompletenessStatus = "partial"
+                CompletenessStatus = "incomplete"
             };
 
             var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
@@ -414,7 +512,7 @@ namespace SD.ProjectName.Tests.Products
                 OwnerId = "owner-1",
                 Source = "Original Source",
                 InformationType = "fact",
-                CompletenessStatus = "partial"
+                CompletenessStatus = "incomplete"
             };
 
             var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);

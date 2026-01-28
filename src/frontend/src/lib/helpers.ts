@@ -1,4 +1,4 @@
-import { CompletenessLevel, SectionStatus, Classification, UserRole } from './types'
+import { CompletenessLevel, CompletenessStatus, SectionStatus, Classification, UserRole } from './types'
 
 export function getStatusColor(status: SectionStatus): string {
   switch (status) {
@@ -30,6 +30,19 @@ export function getCompletenessColor(level: CompletenessLevel): string {
       return 'bg-warning'
     case 'empty':
       return 'bg-muted-foreground'
+  }
+}
+
+export function getCompletenessStatusColor(status: CompletenessStatus): string {
+  switch (status) {
+    case 'complete':
+      return 'bg-green-100 text-green-800 border-green-300'
+    case 'incomplete':
+      return 'bg-amber-100 text-amber-800 border-amber-300'
+    case 'missing':
+      return 'bg-red-100 text-red-800 border-red-300'
+    case 'not applicable':
+      return 'bg-gray-100 text-gray-800 border-gray-300'
   }
 }
 
