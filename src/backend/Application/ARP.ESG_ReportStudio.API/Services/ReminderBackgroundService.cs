@@ -1,7 +1,7 @@
 namespace ARP.ESG_ReportStudio.API.Services;
 
 /// <summary>
-/// Background service that periodically checks for incomplete data points and sends reminders.
+/// Background service that periodically checks for incomplete data points, sends reminders, and escalates overdue items.
 /// </summary>
 public sealed class ReminderBackgroundService : BackgroundService
 {
@@ -29,10 +29,11 @@ public sealed class ReminderBackgroundService : BackgroundService
             try
             {
                 await ProcessRemindersAsync(stoppingToken);
+                await ProcessEscalationsAsync(stoppingToken);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error processing reminders");
+                _logger.LogError(ex, "Error processing reminders and escalations");
             }
 
             // Wait for the next check
@@ -49,5 +50,14 @@ public sealed class ReminderBackgroundService : BackgroundService
         var reminderService = scope.ServiceProvider.GetRequiredService<ReminderService>();
         
         await reminderService.ProcessRemindersAsync(cancellationToken);
+    }
+
+    private async Task ProcessEscalationsAsync(CancellationToken cancellationToken)
+    {
+        // Create a scope to get scoped services
+        using var scope = _serviceProvider.CreateScope();
+        var escalationService = scope.ServiceProvider.GetRequiredService<IEscalationService>();
+        
+        await escalationService.ProcessEscalationsAsync(cancellationToken);
     }
 }

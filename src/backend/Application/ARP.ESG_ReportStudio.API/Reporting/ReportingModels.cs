@@ -871,3 +871,105 @@ public sealed class OwnerNotification
     /// </summary>
     public bool EmailSent { get; set; } = false;
 }
+
+/// <summary>
+/// Configuration for escalating overdue items per reporting period.
+/// </summary>
+public sealed class EscalationConfiguration
+{
+    /// <summary>
+    /// Unique configuration identifier.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting period this configuration applies to.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether escalation is enabled for this period.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
+    /// Days after deadline to escalate (e.g., [3, 7] means escalate at 3 and 7 days overdue).
+    /// </summary>
+    public List<int> DaysAfterDeadline { get; set; } = new() { 3, 7 };
+    
+    /// <summary>
+    /// When the configuration was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// When the configuration was last updated.
+    /// </summary>
+    public string UpdatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Tracks escalation history for overdue data points.
+/// </summary>
+public sealed class EscalationHistory
+{
+    /// <summary>
+    /// Unique escalation record identifier.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Data point that was escalated.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner who was notified.
+    /// </summary>
+    public string OwnerUserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner email address.
+    /// </summary>
+    public string OwnerEmail { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Administrator/approver who was notified.
+    /// </summary>
+    public string? EscalatedToUserId { get; set; }
+    
+    /// <summary>
+    /// Administrator/approver email address.
+    /// </summary>
+    public string? EscalatedToEmail { get; set; }
+    
+    /// <summary>
+    /// When the escalation notification was sent.
+    /// </summary>
+    public string SentAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Number of days the item was overdue when escalated.
+    /// </summary>
+    public int DaysOverdue { get; set; }
+    
+    /// <summary>
+    /// The deadline that was missed.
+    /// </summary>
+    public string DeadlineDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether email to owner was sent successfully.
+    /// </summary>
+    public bool OwnerEmailSent { get; set; }
+    
+    /// <summary>
+    /// Whether email to administrator was sent successfully.
+    /// </summary>
+    public bool AdminEmailSent { get; set; }
+    
+    /// <summary>
+    /// Error message if email sending failed.
+    /// </summary>
+    public string? ErrorMessage { get; set; }
+}
