@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix, ReadinessReport } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -444,4 +444,23 @@ export async function getResponsibilityMatrix(params?: ResponsibilityMatrixParam
   
   const queryString = queryParams.toString()
   return requestJson<ResponsibilityMatrix>(`responsibility-matrix${queryString ? `?${queryString}` : ''}`)
+}
+
+// Readiness Report API
+export interface ReadinessReportParams {
+  periodId?: string
+  sectionId?: string
+  ownerId?: string
+  category?: string
+}
+
+export async function getReadinessReport(params?: ReadinessReportParams): Promise<ReadinessReport> {
+  const queryParams = new URLSearchParams()
+  if (params?.periodId) queryParams.append('periodId', params.periodId)
+  if (params?.sectionId) queryParams.append('sectionId', params.sectionId)
+  if (params?.ownerId) queryParams.append('ownerId', params.ownerId)
+  if (params?.category) queryParams.append('category', params.category)
+  
+  const queryString = queryParams.toString()
+  return requestJson<ReadinessReport>(`readiness/report${queryString ? `?${queryString}` : ''}`)
 }

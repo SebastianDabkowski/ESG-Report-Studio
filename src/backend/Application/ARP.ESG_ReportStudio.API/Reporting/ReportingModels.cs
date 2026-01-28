@@ -973,3 +973,126 @@ public sealed class EscalationHistory
     /// </summary>
     public string? ErrorMessage { get; set; }
 }
+
+/// <summary>
+/// Readiness report showing ownership completeness and data completion metrics.
+/// </summary>
+public sealed class ReadinessReport
+{
+    /// <summary>
+    /// Reporting period ID for this report.
+    /// </summary>
+    public string? PeriodId { get; set; }
+
+    /// <summary>
+    /// Overall readiness metrics.
+    /// </summary>
+    public ReadinessMetrics Metrics { get; set; } = new();
+
+    /// <summary>
+    /// List of items (sections/data points) with their readiness status.
+    /// </summary>
+    public List<ReadinessItem> Items { get; set; } = new();
+}
+
+/// <summary>
+/// Metrics for readiness reporting.
+/// </summary>
+public sealed class ReadinessMetrics
+{
+    /// <summary>
+    /// Percentage of items (sections/data points) that have owners assigned (0-100).
+    /// </summary>
+    public int OwnershipPercentage { get; set; }
+
+    /// <summary>
+    /// Percentage of items that are completed (0-100).
+    /// </summary>
+    public int CompletionPercentage { get; set; }
+
+    /// <summary>
+    /// Count of items that are blocked.
+    /// </summary>
+    public int BlockedCount { get; set; }
+
+    /// <summary>
+    /// Count of items that are overdue.
+    /// </summary>
+    public int OverdueCount { get; set; }
+
+    /// <summary>
+    /// Total number of items in the report.
+    /// </summary>
+    public int TotalItems { get; set; }
+
+    /// <summary>
+    /// Number of items with owners.
+    /// </summary>
+    public int ItemsWithOwners { get; set; }
+
+    /// <summary>
+    /// Number of completed items.
+    /// </summary>
+    public int CompletedItems { get; set; }
+}
+
+/// <summary>
+/// Individual item in the readiness report.
+/// </summary>
+public sealed class ReadinessItem
+{
+    /// <summary>
+    /// Item ID (section or data point ID).
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Item type: "section" or "datapoint".
+    /// </summary>
+    public string Type { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Item title.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ESG category: "environmental", "social", or "governance".
+    /// </summary>
+    public string Category { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Owner ID (empty if unassigned).
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Owner name (empty if unassigned).
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Progress status: "not-started", "in-progress", "blocked", "completed".
+    /// </summary>
+    public string ProgressStatus { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Whether the item is blocked.
+    /// </summary>
+    public bool IsBlocked { get; set; }
+
+    /// <summary>
+    /// Whether the item is overdue.
+    /// </summary>
+    public bool IsOverdue { get; set; }
+
+    /// <summary>
+    /// Deadline for the item (ISO 8601).
+    /// </summary>
+    public string? Deadline { get; set; }
+
+    /// <summary>
+    /// Completeness percentage (0-100).
+    /// </summary>
+    public int CompletenessPercentage { get; set; }
+}

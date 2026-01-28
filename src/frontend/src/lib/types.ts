@@ -226,3 +226,33 @@ export interface ResponsibilityMatrix {
   unassignedSections: number
   periodId?: string
 }
+
+export interface ReadinessMetrics {
+  ownershipPercentage: number
+  completionPercentage: number
+  blockedCount: number
+  overdueCount: number
+  totalItems: number
+  itemsWithOwners: number
+  completedItems: number
+}
+
+export interface ReadinessItem {
+  id: string
+  type: 'section' | 'datapoint'
+  title: string
+  category: 'environmental' | 'social' | 'governance'
+  ownerId: string
+  ownerName: string
+  progressStatus: ProgressStatus
+  isBlocked: boolean
+  isOverdue: boolean
+  deadline?: string
+  completenessPercentage: number
+}
+
+export interface ReadinessReport {
+  periodId?: string
+  metrics: ReadinessMetrics
+  items: ReadinessItem[]
+}

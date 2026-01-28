@@ -11,6 +11,7 @@ import DataCollectionWorkspace from '@/components/DataCollectionWorkspace'
 import EvidenceView from '@/components/EvidenceView'
 import AuditTrailView from '@/components/AuditTrailView'
 import ResponsibilityMatrixView from '@/components/ResponsibilityMatrixView'
+import ReadinessReportView from '@/components/ReadinessReportView'
 import { useKV } from '@github/spark/hooks'
 import type { User } from '@/lib/types'
 
@@ -67,6 +68,7 @@ function App() {
             <TabsTrigger value="data-collection">Data Collection</TabsTrigger>
             <TabsTrigger value="sections">Sections</TabsTrigger>
             <TabsTrigger value="accountability">Accountability</TabsTrigger>
+            <TabsTrigger value="readiness">Readiness</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
             <TabsTrigger value="audit">Audit Trail</TabsTrigger>
           </TabsList>
@@ -101,6 +103,10 @@ function App() {
 
           <TabsContent value="accountability" className="space-y-6">
             <ResponsibilityMatrixView currentUser={currentUser} />
+          </TabsContent>
+
+          <TabsContent value="readiness" className="space-y-6">
+            <ReadinessReportView currentUser={currentUser} />
           </TabsContent>
 
           <TabsContent value="evidence" className="space-y-6">
