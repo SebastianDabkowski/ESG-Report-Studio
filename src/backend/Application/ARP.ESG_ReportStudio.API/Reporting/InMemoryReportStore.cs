@@ -927,7 +927,7 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(completenessStatus))
             {
                 // Create temporary data point to calculate status (keeping existing evidence IDs)
-                var tempDataPoint = new DataPoint
+                var statusCalculationDataPoint = new DataPoint
                 {
                     Title = request.Title,
                     Content = request.Content,
@@ -935,7 +935,7 @@ public sealed class InMemoryReportStore
                     InformationType = request.InformationType,
                     EvidenceIds = dataPoint.EvidenceIds
                 };
-                completenessStatus = CalculateCompletenessStatus(tempDataPoint);
+                completenessStatus = CalculateCompletenessStatus(statusCalculationDataPoint);
             }
             else
             {
@@ -947,6 +947,36 @@ public sealed class InMemoryReportStore
                 }
             }
 
+            // Create a temporary copy for validation before modifying the actual data point
+            var tempDataPoint = new DataPoint
+            {
+                Id = dataPoint.Id,
+                SectionId = dataPoint.SectionId,
+                Type = request.Type,
+                Classification = request.Classification,
+                Title = request.Title,
+                Content = request.Content,
+                Value = request.Value,
+                Unit = request.Unit,
+                OwnerId = request.OwnerId,
+                ContributorIds = request.ContributorIds ?? new List<string>(),
+                Source = request.Source,
+                InformationType = request.InformationType,
+                Assumptions = request.Assumptions,
+                CompletenessStatus = completenessStatus,
+                CreatedAt = dataPoint.CreatedAt,
+                UpdatedAt = DateTime.UtcNow.ToString("O"),
+                EvidenceIds = dataPoint.EvidenceIds
+            };
+
+            // Validate against validation rules before applying changes
+            var (isValidAgainstRules, ruleErrorMessage) = ValidateDataPointAgainstRules(tempDataPoint);
+            if (!isValidAgainstRules)
+            {
+                return (false, ruleErrorMessage, null);
+            }
+
+            // Only update the actual data point if validation passes
             dataPoint.Type = request.Type;
             dataPoint.Classification = request.Classification;
             dataPoint.Title = request.Title;
@@ -960,13 +990,6 @@ public sealed class InMemoryReportStore
             dataPoint.Assumptions = request.Assumptions;
             dataPoint.CompletenessStatus = completenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
-
-            // Validate against validation rules
-            var (isValidAgainstRules, ruleErrorMessage) = ValidateDataPointAgainstRules(dataPoint);
-            if (!isValidAgainstRules)
-            {
-                return (false, ruleErrorMessage, null);
-            }
 
             return (true, null, dataPoint);
         }
