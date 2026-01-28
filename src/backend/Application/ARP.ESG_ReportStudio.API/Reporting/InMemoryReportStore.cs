@@ -13,6 +13,7 @@ public sealed class InMemoryReportStore
     private readonly List<Evidence> _evidence = new();
     private readonly List<Assumption> _assumptions = new();
     private readonly List<Gap> _gaps = new();
+    private readonly List<User> _users = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -43,6 +44,22 @@ public sealed class InMemoryReportStore
 
         // Initialize the catalog with default sections
         InitializeDefaultCatalog();
+        
+        // Initialize sample users
+        InitializeSampleUsers();
+    }
+
+    private void InitializeSampleUsers()
+    {
+        _users.AddRange(new[]
+        {
+            new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner" },
+            new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin" },
+            new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor" },
+            new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor" },
+            new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor" },
+            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" }
+        });
     }
 
     private void InitializeDefaultCatalog()
@@ -630,13 +647,23 @@ public sealed class InMemoryReportStore
     }
 
     // DataPoint Management
-    public IReadOnlyList<DataPoint> GetDataPoints(string? sectionId = null)
+    public IReadOnlyList<DataPoint> GetDataPoints(string? sectionId = null, string? assignedUserId = null)
     {
         lock (_lock)
         {
-            return sectionId == null 
-                ? _dataPoints.ToList()
-                : _dataPoints.Where(d => d.SectionId == sectionId).ToList();
+            var query = _dataPoints.AsEnumerable();
+            
+            if (sectionId != null)
+            {
+                query = query.Where(d => d.SectionId == sectionId);
+            }
+            
+            if (assignedUserId != null)
+            {
+                query = query.Where(d => d.OwnerId == assignedUserId || d.ContributorIds.Contains(assignedUserId));
+            }
+            
+            return query.ToList();
         }
     }
 
@@ -700,6 +727,31 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(request.OwnerId))
             {
                 return (false, "OwnerId is required.", null);
+            }
+
+            // Validate owner exists
+            var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+            if (owner == null)
+            {
+                return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+            }
+
+            // Validate contributors exist and are not the owner
+            if (request.ContributorIds != null && request.ContributorIds.Any())
+            {
+                if (request.ContributorIds.Contains(request.OwnerId))
+                {
+                    return (false, "Owner cannot also be listed as a contributor.", null);
+                }
+
+                foreach (var contributorId in request.ContributorIds)
+                {
+                    var contributor = _users.FirstOrDefault(u => u.Id == contributorId);
+                    if (contributor == null)
+                    {
+                        return (false, $"Contributor with ID '{contributorId}' not found.", null);
+                    }
+                }
             }
 
             // Validate required metadata fields
@@ -771,6 +823,7 @@ public sealed class InMemoryReportStore
                 Value = request.Value,
                 Unit = request.Unit,
                 OwnerId = request.OwnerId,
+                ContributorIds = request.ContributorIds ?? new List<string>(),
                 Source = request.Source,
                 InformationType = request.InformationType,
                 Assumptions = request.Assumptions,
@@ -804,6 +857,36 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(request.Content))
             {
                 return (false, "Content is required.", null);
+            }
+
+            // Validate owner exists
+            if (!string.IsNullOrWhiteSpace(request.OwnerId))
+            {
+                var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+                if (owner == null)
+                {
+                    return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+                }
+            }
+
+            // Validate contributors exist and are not the owner
+            if (request.ContributorIds != null && request.ContributorIds.Any())
+            {
+                var ownerId = !string.IsNullOrWhiteSpace(request.OwnerId) ? request.OwnerId : dataPoint.OwnerId;
+                
+                if (request.ContributorIds.Contains(ownerId))
+                {
+                    return (false, "Owner cannot also be listed as a contributor.", null);
+                }
+
+                foreach (var contributorId in request.ContributorIds)
+                {
+                    var contributor = _users.FirstOrDefault(u => u.Id == contributorId);
+                    if (contributor == null)
+                    {
+                        return (false, $"Contributor with ID '{contributorId}' not found.", null);
+                    }
+                }
             }
 
             // Validate required metadata fields
@@ -862,6 +945,8 @@ public sealed class InMemoryReportStore
             dataPoint.Content = request.Content;
             dataPoint.Value = request.Value;
             dataPoint.Unit = request.Unit;
+            dataPoint.OwnerId = request.OwnerId;
+            dataPoint.ContributorIds = request.ContributorIds ?? new List<string>();
             dataPoint.Source = request.Source;
             dataPoint.InformationType = request.InformationType;
             dataPoint.Assumptions = request.Assumptions;
@@ -1061,6 +1146,23 @@ public sealed class InMemoryReportStore
 
             _evidence.Remove(evidence);
             return true;
+        }
+    }
+
+    // User management methods
+    public IReadOnlyList<User> GetUsers()
+    {
+        lock (_lock)
+        {
+            return _users.ToList();
+        }
+    }
+
+    public User? GetUser(string id)
+    {
+        lock (_lock)
+        {
+            return _users.FirstOrDefault(u => u.Id == id);
         }
     }
 
