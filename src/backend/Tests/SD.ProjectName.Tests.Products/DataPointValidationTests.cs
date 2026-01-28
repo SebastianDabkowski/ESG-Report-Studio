@@ -429,7 +429,7 @@ namespace SD.ProjectName.Tests.Products
             var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
 
             // Act
-            var deleted = store.DeleteDataPoint(createdDataPoint!.Id);
+            var deleted = store.DeleteDataPoint(createdDataPoint!.Id, "owner-1");
 
             // Assert
             Assert.True(deleted);

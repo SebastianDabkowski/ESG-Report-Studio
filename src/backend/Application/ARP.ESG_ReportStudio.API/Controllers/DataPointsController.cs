@@ -98,9 +98,14 @@ public sealed class DataPointsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public ActionResult DeleteDataPoint(string id)
+    public ActionResult DeleteDataPoint(string id, [FromQuery] string deletedBy)
     {
-        var deleted = _store.DeleteDataPoint(id);
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest(new { error = "deletedBy query parameter is required." });
+        }
+
+        var deleted = _store.DeleteDataPoint(id, deletedBy);
         if (!deleted)
         {
             return NotFound(new { error = $"DataPoint with ID '{id}' not found." });

@@ -261,5 +261,85 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("link", linkEntry.Action);
             Assert.Equal("user-2", linkEntry.UserId);
         }
+
+        [Fact]
+        public void DeleteDataPoint_ShouldLogAuditEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "complete"
+            });
+
+            // Assert creation succeeded
+            Assert.True(isValid, $"CreateDataPoint failed: {errorMessage}");
+            Assert.NotNull(dataPoint);
+
+            // Act
+            var deleted = store.DeleteDataPoint(dataPoint!.Id, "user-2");
+
+            // Assert
+            Assert.True(deleted);
+
+            var auditLog = store.GetAuditLog(entityType: "DataPoint", entityId: dataPoint.Id);
+            Assert.Single(auditLog); // only delete (create doesn't log)
+            
+            var deleteEntry = auditLog[0];
+            Assert.Equal("delete", deleteEntry.Action);
+            Assert.Equal("user-2", deleteEntry.UserId);
+            Assert.Contains("Deleted data point", deleteEntry.ChangeNote);
+        }
+
+        [Fact]
+        public void DeleteAssumption_ShouldLogAuditEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (isValid, errorMessage, assumption) = store.CreateAssumption(
+                sectionId,
+                "Test Assumption",
+                "Test description",
+                "operational",
+                "2024-01-01",
+                "2024-12-31",
+                "Test methodology",
+                "Test limitations",
+                new System.Collections.Generic.List<string>(),
+                null,
+                new System.Collections.Generic.List<AssumptionSource>(),
+                "user-1"
+            );
+
+            // Assert creation succeeded
+            Assert.True(isValid, $"CreateAssumption failed: {errorMessage}");
+            Assert.NotNull(assumption);
+
+            // Act
+            var (deleteValid, deleteError) = store.DeleteAssumption(assumption!.Id, "user-2");
+
+            // Assert
+            Assert.True(deleteValid);
+
+            var auditLog = store.GetAuditLog(entityType: "Assumption", entityId: assumption.Id);
+            Assert.Single(auditLog); // only delete (create doesn't log)
+            
+            var deleteEntry = auditLog[0];
+            Assert.Equal("delete", deleteEntry.Action);
+            Assert.Equal("user-2", deleteEntry.UserId);
+            Assert.Contains("Deleted assumption", deleteEntry.ChangeNote);
+        }
     }
 }

@@ -1974,7 +1974,7 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public bool DeleteDataPoint(string id)
+    public bool DeleteDataPoint(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -1983,6 +1983,15 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            // Create audit log entry before deletion
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = dataPoint.Title ?? "", NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "DataPoint", dataPoint.Id, changes, $"Deleted data point '{dataPoint.Title}'");
 
             _dataPoints.Remove(dataPoint);
             return true;
@@ -3396,7 +3405,7 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public (bool IsValid, string? ErrorMessage) DeleteAssumption(string id)
+    public (bool IsValid, string? ErrorMessage) DeleteAssumption(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -3412,6 +3421,16 @@ public sealed class InMemoryReportStore
             {
                 return (false, "Cannot delete assumption as it is used as a replacement for other assumptions.");
             }
+
+            // Create audit log entry before deletion
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = assumption.Title ?? "", NewValue = "" },
+                new FieldChange { Field = "Status", OldValue = assumption.Status ?? "", NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "Assumption", assumption.Id, changes, $"Deleted assumption '{assumption.Title}'");
 
             _assumptions.Remove(assumption);
             return (true, null);
