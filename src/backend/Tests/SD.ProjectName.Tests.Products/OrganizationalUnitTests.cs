@@ -276,6 +276,19 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
+            
+            // Create organization but no organizational units
+            store.CreateOrganization(new CreateOrganizationRequest
+            {
+                Name = "Test Organization",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "test-user",
+                CoverageType = "full",
+                CoverageJustification = "Test coverage"
+            });
+            
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -302,7 +315,19 @@ namespace SD.ProjectName.Tests.Products
             // Arrange
             var store = new InMemoryReportStore();
             
-            // Create organizational unit first
+            // Create organization first
+            store.CreateOrganization(new CreateOrganizationRequest
+            {
+                Name = "Test Organization",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "test-user",
+                CoverageType = "full",
+                CoverageJustification = "Test coverage"
+            });
+            
+            // Create organizational unit
             var unitRequest = new CreateOrganizationalUnitRequest
             {
                 Name = "Main Office",

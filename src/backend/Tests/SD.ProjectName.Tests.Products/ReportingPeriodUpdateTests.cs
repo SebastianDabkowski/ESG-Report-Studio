@@ -4,6 +4,21 @@ namespace SD.ProjectName.Tests.Products
 {
     public class ReportingPeriodUpdateTests
     {
+        private static void CreateTestOrganization(InMemoryReportStore store)
+        {
+            // Create a default organization to satisfy the validation requirement
+            store.CreateOrganization(new CreateOrganizationRequest
+            {
+                Name = "Test Organization",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "test-user",
+                CoverageType = "full",
+                CoverageJustification = "Test coverage"
+            });
+        }
+
         private static void CreateTestOrganizationalUnit(InMemoryReportStore store)
         {
             // Create a default organizational unit to satisfy the validation requirement
@@ -15,9 +30,16 @@ namespace SD.ProjectName.Tests.Products
             });
         }
 
+        private static void CreateTestConfiguration(InMemoryReportStore store)
+        {
+            // Create both organization and organizational unit
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+        }
+
         private static string CreateTestPeriod(InMemoryReportStore store)
         {
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -127,7 +149,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             
             // Create two non-overlapping periods
             var firstRequest = new CreateReportingPeriodRequest

@@ -56,6 +56,12 @@ public sealed class InMemoryReportStore
     {
         lock (_lock)
         {
+            // Check if organization exists
+            if (_organization == null)
+            {
+                return (false, "Organization must be configured before creating reporting periods.", null);
+            }
+
             // Check if organizational structure exists
             if (_organizationalUnits.Count == 0)
             {
