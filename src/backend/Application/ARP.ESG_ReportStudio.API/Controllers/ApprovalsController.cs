@@ -39,7 +39,8 @@ public sealed class ApprovalsController : ControllerBase
         }
 
         // Get the reporting period for notification context
-        var period = _store.GetReportingPeriod(request.PeriodId);
+        var periods = _store.GetPeriods();
+        var period = periods.FirstOrDefault(p => p.Id == request.PeriodId);
         if (period == null)
         {
             return BadRequest(new { error = "Reporting period not found" });
@@ -94,7 +95,8 @@ public sealed class ApprovalsController : ControllerBase
         }
 
         // Get the reporting period
-        var period = _store.GetReportingPeriod(approvalRequest.PeriodId);
+        var periods = _store.GetPeriods();
+        var period = periods.FirstOrDefault(p => p.Id == approvalRequest.PeriodId);
         if (period == null)
         {
             return BadRequest(new { error = "Reporting period not found" });

@@ -8080,7 +8080,7 @@ public sealed class InMemoryReportStore
                 UserId = request.RequestedBy,
                 UserName = requester.Name,
                 Timestamp = DateTime.UtcNow.ToString("O"),
-                Details = $"Approval request created for period '{period.Name}' with {approvers.Count} approver(s)"
+                ChangeNote = $"Approval request created for period '{period.Name}' with {approvers.Count} approver(s)"
             });
 
             return (true, null, approvalRequest);
@@ -8156,7 +8156,7 @@ public sealed class InMemoryReportStore
                 UserId = request.DecidedBy,
                 UserName = approver.Name,
                 Timestamp = DateTime.UtcNow.ToString("O"),
-                Details = $"Approval {record.Status} for approval request {record.ApprovalRequestId}"
+                ChangeNote = $"Approval {record.Status} for approval request {record.ApprovalRequestId}"
             });
 
             return (true, null, record);
