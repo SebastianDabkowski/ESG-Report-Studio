@@ -109,4 +109,25 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    [HttpPost("{id}/notes")]
+    public ActionResult<DataPointNote> CreateNote(string id, [FromBody] CreateDataPointNoteRequest request)
+    {
+        try
+        {
+            var note = _store.CreateDataPointNote(id, request);
+            return Ok(note);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id}/notes")]
+    public ActionResult<List<DataPointNote>> GetNotes(string id)
+    {
+        var notes = _store.GetDataPointNotes(id);
+        return Ok(notes);
+    }
 }

@@ -297,6 +297,9 @@ public sealed class DataPoint
     public string UpdatedAt { get; set; } = string.Empty;
     public List<string> EvidenceIds { get; set; } = new();
     public string? Deadline { get; set; }
+    public bool IsBlocked { get; set; }
+    public string? BlockerReason { get; set; }
+    public string? BlockerDueDate { get; set; }
 }
 
 /// <summary>
@@ -319,6 +322,9 @@ public sealed class CreateDataPointRequest
     public string CompletenessStatus { get; set; } = string.Empty;
     public string ReviewStatus { get; set; } = "draft";
     public string? Deadline { get; set; }
+    public bool IsBlocked { get; set; }
+    public string? BlockerReason { get; set; }
+    public string? BlockerDueDate { get; set; }
 }
 
 /// <summary>
@@ -342,6 +348,9 @@ public sealed class UpdateDataPointRequest
     public string? ChangeNote { get; set; }
     public string? UpdatedBy { get; set; }
     public string? Deadline { get; set; }
+    public bool IsBlocked { get; set; }
+    public string? BlockerReason { get; set; }
+    public string? BlockerDueDate { get; set; }
 }
 
 /// <summary>
@@ -395,6 +404,29 @@ public sealed class UpdateDataPointStatusRequest
     /// Optional note explaining the reason for the change.
     /// </summary>
     public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Represents a note or comment on a data point for internal accountability tracking.
+/// </summary>
+public sealed class DataPointNote
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedByName { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string UpdatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new note on a data point.
+/// </summary>
+public sealed class CreateDataPointNoteRequest
+{
+    public string Content { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
 }
 
 /// <summary>
