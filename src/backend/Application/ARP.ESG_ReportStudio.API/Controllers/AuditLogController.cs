@@ -53,7 +53,9 @@ public sealed class AuditLogController : ControllerBase
         var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate);
         
         var csv = new StringBuilder();
-        csv.AppendLine("Timestamp,User ID,User Name,Action,Entity Type,Entity ID,Change Note,Field,Old Value,New Value");
+        // Add UTF-8 BOM for better Excel compatibility
+        csv.Append('\ufeff');
+        csv.AppendLine("\"Timestamp\",\"User ID\",\"User Name\",\"Action\",\"Entity Type\",\"Entity ID\",\"Change Note\",\"Field\",\"Old Value\",\"New Value\"");
         
         foreach (var entry in entries)
         {
@@ -61,12 +63,12 @@ public sealed class AuditLogController : ControllerBase
             {
                 foreach (var change in entry.Changes)
                 {
-                    csv.AppendLine($"\"{entry.Timestamp}\",\"{EscapeCsv(entry.UserId)}\",\"{EscapeCsv(entry.UserName)}\",\"{EscapeCsv(entry.Action)}\",\"{EscapeCsv(entry.EntityType)}\",\"{EscapeCsv(entry.EntityId)}\",\"{EscapeCsv(entry.ChangeNote ?? "")}\",\"{EscapeCsv(change.Field)}\",\"{EscapeCsv(change.OldValue ?? "")}\",\"{EscapeCsv(change.NewValue ?? "")}\"");
+                    csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},{FormatCsvField(change.Field)},{FormatCsvField(change.OldValue ?? "")},{FormatCsvField(change.NewValue ?? "")}");
                 }
             }
             else
             {
-                csv.AppendLine($"\"{entry.Timestamp}\",\"{EscapeCsv(entry.UserId)}\",\"{EscapeCsv(entry.UserName)}\",\"{EscapeCsv(entry.Action)}\",\"{EscapeCsv(entry.EntityType)}\",\"{EscapeCsv(entry.EntityId)}\",\"{EscapeCsv(entry.ChangeNote ?? "")}\",\"\",\"\",\"\"");
+                csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},\"\",\"\",\"\"");
             }
         }
         
@@ -101,11 +103,15 @@ public sealed class AuditLogController : ControllerBase
         return File(bytes, "application/json", fileName);
     }
 
-    private static string EscapeCsv(string? value)
+    private static string FormatCsvField(string? value)
     {
         if (string.IsNullOrEmpty(value))
-            return string.Empty;
+            return "\"\"";
         
-        return value.Replace("\"", "\"\"");
+        // Escape double quotes by doubling them
+        var escaped = value.Replace("\"", "\"\"");
+        
+        // Always wrap in quotes for consistency and to handle special characters
+        return $"\"{escaped}\"";
     }
 }

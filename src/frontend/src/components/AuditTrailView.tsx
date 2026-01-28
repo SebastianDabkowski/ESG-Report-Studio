@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ClockCounterClockwise, FunnelSimple, DownloadSimple, FileCsv, FileCode } from '@phosphor-icons/react'
+import { ClockCounterClockwise, FunnelSimple, FileCsv, FileCode } from '@phosphor-icons/react'
 import type { AuditLogEntry, User } from '@/lib/types'
 import { formatDateTime } from '@/lib/helpers'
 import { useState, useEffect } from 'react'
@@ -12,6 +12,7 @@ import { getAuditLog, getUsers, exportAuditLogCsv, exportAuditLogJson, type Audi
 
 export default function AuditTrailView() {
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
+  const [allAuditLog, setAllAuditLog] = useState<AuditLogEntry[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -26,13 +27,14 @@ export default function AuditTrailView() {
   const [filterStartDate, setFilterStartDate] = useState<string>('')
   const [filterEndDate, setFilterEndDate] = useState<string>('')
 
-  // Extract unique actions and entity types from audit log
-  const uniqueActions = Array.from(new Set(auditLog.map(e => e.action))).sort()
-  const uniqueEntityTypes = Array.from(new Set(auditLog.map(e => e.entityType))).sort()
+  // Extract unique actions and entity types from all audit log data (not filtered)
+  const uniqueActions = Array.from(new Set(allAuditLog.map(e => e.action))).sort()
+  const uniqueEntityTypes = Array.from(new Set(allAuditLog.map(e => e.entityType))).sort()
 
   useEffect(() => {
     loadData()
     loadUsers()
+    loadAllData()
   }, [filters])
 
   async function loadData() {
@@ -45,6 +47,16 @@ export default function AuditTrailView() {
       setError(err instanceof Error ? err.message : 'Failed to load audit log')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadAllData() {
+    try {
+      // Load unfiltered data for filter dropdowns
+      const data = await getAuditLog()
+      setAllAuditLog(data)
+    } catch (err) {
+      console.error('Failed to load all audit log data:', err)
     }
   }
 
@@ -80,9 +92,11 @@ export default function AuditTrailView() {
   async function handleExportCsv() {
     try {
       setExporting(true)
+      setError(null)
       await exportAuditLogCsv(filters)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export CSV')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to export CSV'
+      setError(`Export failed: ${errorMsg}. Please try again or contact support if the issue persists.`)
     } finally {
       setExporting(false)
     }
@@ -91,9 +105,11 @@ export default function AuditTrailView() {
   async function handleExportJson() {
     try {
       setExporting(true)
+      setError(null)
       await exportAuditLogJson(filters)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to export JSON')
+      const errorMsg = err instanceof Error ? err.message : 'Failed to export JSON'
+      setError(`Export failed: ${errorMsg}. Please try again or contact support if the issue persists.`)
     } finally {
       setExporting(false)
     }
