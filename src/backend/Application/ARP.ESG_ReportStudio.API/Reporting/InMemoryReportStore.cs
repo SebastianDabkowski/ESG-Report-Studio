@@ -20,6 +20,8 @@ public sealed class InMemoryReportStore
     private readonly List<ReminderHistory> _reminderHistory = new();
     private readonly List<DataPointNote> _dataPointNotes = new();
     private readonly List<OwnerNotification> _notifications = new();
+    private readonly List<EscalationConfiguration> _escalationConfigurations = new();
+    private readonly List<EscalationHistory> _escalationHistory = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -2325,6 +2327,105 @@ public sealed class InMemoryReportStore
                 query = query.Where(rh => rh.RecipientUserId == userId);
 
             return query.OrderByDescending(rh => rh.SentAt).ToList();
+        }
+    }
+
+    // Escalation Configuration and History Management
+
+    /// <summary>
+    /// Gets the escalation configuration for a specific reporting period.
+    /// </summary>
+    public EscalationConfiguration? GetEscalationConfiguration(string periodId)
+    {
+        lock (_lock)
+        {
+            return _escalationConfigurations.FirstOrDefault(ec => ec.PeriodId == periodId);
+        }
+    }
+
+    /// <summary>
+    /// Creates or updates an escalation configuration for a period.
+    /// </summary>
+    public EscalationConfiguration CreateOrUpdateEscalationConfiguration(string periodId, EscalationConfiguration config)
+    {
+        lock (_lock)
+        {
+            var existing = _escalationConfigurations.FirstOrDefault(ec => ec.PeriodId == periodId);
+            if (existing != null)
+            {
+                var updated = new EscalationConfiguration
+                {
+                    Id = existing.Id,
+                    PeriodId = periodId,
+                    Enabled = config.Enabled,
+                    DaysAfterDeadline = new List<int>(config.DaysAfterDeadline),
+                    CreatedAt = existing.CreatedAt,
+                    UpdatedAt = DateTime.UtcNow.ToString("O")
+                };
+                
+                _escalationConfigurations.Remove(existing);
+                _escalationConfigurations.Add(updated);
+                return updated;
+            }
+
+            var newConfig = new EscalationConfiguration
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = periodId,
+                Enabled = config.Enabled,
+                DaysAfterDeadline = new List<int>(config.DaysAfterDeadline),
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                UpdatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _escalationConfigurations.Add(newConfig);
+            return newConfig;
+        }
+    }
+
+    /// <summary>
+    /// Records an escalation event.
+    /// </summary>
+    public void RecordEscalationSent(EscalationHistory history)
+    {
+        lock (_lock)
+        {
+            _escalationHistory.Add(history);
+        }
+    }
+
+    /// <summary>
+    /// Checks if an escalation has already been sent today for a specific data point and overdue days.
+    /// </summary>
+    public bool HasEscalationBeenSentToday(string dataPointId, int daysOverdue)
+    {
+        lock (_lock)
+        {
+            var today = DateTime.UtcNow.Date;
+            return _escalationHistory.Any(eh =>
+                eh.DataPointId == dataPointId &&
+                eh.DaysOverdue == daysOverdue &&
+                DateTime.TryParse(eh.SentAt, out var sentDate) &&
+                sentDate.Date == today);
+        }
+    }
+
+    /// <summary>
+    /// Gets escalation history for data points and/or users.
+    /// </summary>
+    public IReadOnlyList<EscalationHistory> GetEscalationHistory(string? dataPointId = null, string? userId = null)
+    {
+        lock (_lock)
+        {
+            var query = _escalationHistory.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(dataPointId))
+                query = query.Where(eh => eh.DataPointId == dataPointId);
+
+            if (!string.IsNullOrEmpty(userId))
+                query = query.Where(eh => eh.OwnerUserId == userId || eh.EscalatedToUserId == userId);
+
+            return query.OrderByDescending(eh => eh.SentAt).ToList();
         }
     }
 

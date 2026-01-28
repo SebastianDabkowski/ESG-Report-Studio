@@ -11,6 +11,7 @@ builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.INotificationServic
 // Add reminder services
 builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Services.IEmailService, ARP.ESG_ReportStudio.API.Services.MockEmailService>();
 builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.ReminderService>();
+builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IEscalationService, ARP.ESG_ReportStudio.API.Services.EscalationService>();
 builder.Services.AddHostedService<ARP.ESG_ReportStudio.API.Services.ReminderBackgroundService>();
 
 builder.Services.AddCors(options =>
