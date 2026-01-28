@@ -11,6 +11,7 @@ import { useKV } from '@github/spark/hooks'
 import DataPointForm from '@/components/DataPointForm'
 import DataPointEvidenceManager from '@/components/DataPointEvidenceManager'
 import EvidenceUploadForm from '@/components/EvidenceUploadForm'
+import ImportDataDialog from '@/components/ImportDataDialog'
 import { 
   Leaf, 
   Users, 
@@ -23,11 +24,12 @@ import {
   User,
   FileText,
   Plus,
-  UploadSimple
+  UploadSimple,
+  FileArrowDown
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
-import { getUsers } from '@/lib/api'
+import { getUsers, getDataPoints } from '@/lib/api'
 import { useEffect } from 'react'
 
 interface DataCollectionWorkspaceProps {
@@ -46,6 +48,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [isEvidenceUploadOpen, setIsEvidenceUploadOpen] = useState(false)
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
   const [editingDataPoint, setEditingDataPoint] = useState<DataPoint | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
@@ -235,6 +238,16 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     if (!dataPoint || !dataPoint.evidenceIds.length) return []
     
     return evidence?.filter(e => dataPoint.evidenceIds.includes(e.id)) || []
+  }
+
+  const handleImportComplete = async () => {
+    // Refresh data points from the API after import
+    try {
+      const refreshedDataPoints = await getDataPoints()
+      setDataPoints(refreshedDataPoints)
+    } catch (error) {
+      console.error('Failed to refresh data points after import:', error)
+    }
   }
 
   const renderCategoryContent = (categorySections: SectionSummary[]) => {
@@ -468,6 +481,15 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
             >
               <User size={16} />
               {showMyItemsOnly ? 'Showing My Items' : 'Show My Items Only'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsImportDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <FileArrowDown size={16} />
+              Import from CSV
             </Button>
             {showMyItemsOnly && (
               <p className="text-sm text-muted-foreground">
@@ -725,6 +747,13 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Import Data Dialog */}
+      <ImportDataDialog
+        open={isImportDialogOpen}
+        onOpenChange={setIsImportDialogOpen}
+        onImportComplete={handleImportComplete}
+      />
     </div>
   )
 }
