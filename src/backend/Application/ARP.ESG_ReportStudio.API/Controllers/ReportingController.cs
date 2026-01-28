@@ -105,18 +105,17 @@ public sealed class ReportingController : ControllerBase
         }
 
         // Send notifications after successful update
-        if (result != null && result.Section != null)
+        if (result != null && result.Section != null && result.ChangedBy != null)
         {
             // Send removal notification to old owner if they exist and are different from new owner
-            if (result.OldOwner != null && result.ChangedBy != null && 
-                result.OldOwner.Id != result.NewOwner?.Id)
+            if (result.OldOwner != null && result.NewOwner?.Id != result.OldOwner.Id)
             {
                 await _notificationService.SendSectionRemovedNotificationAsync(
                     result.Section, result.OldOwner, result.ChangedBy, request.ChangeNote);
             }
             
-            // Send assignment notification to new owner if they exist
-            if (result.NewOwner != null && result.ChangedBy != null)
+            // Send assignment notification to new owner if they exist and are different from old owner
+            if (result.NewOwner != null && result.OldOwner?.Id != result.NewOwner.Id)
             {
                 await _notificationService.SendSectionAssignedNotificationAsync(
                     result.Section, result.NewOwner, result.ChangedBy, request.ChangeNote);
@@ -141,28 +140,33 @@ public sealed class ReportingController : ControllerBase
 
         var result = _store.UpdateSectionOwnersBulk(request);
         
-        // Send notifications for all successful updates
+        // Send notifications for all successful updates concurrently
         if (result.OwnerUpdates.Count > 0)
         {
             var changedBy = _store.GetUser(request.UpdatedBy);
             if (changedBy != null)
             {
+                var notificationTasks = new List<Task>();
+                
                 foreach (var update in result.OwnerUpdates)
                 {
                     // Send removal notification to old owner if they exist and are different from new owner
                     if (update.OldOwner != null && update.OldOwner.Id != update.NewOwner?.Id)
                     {
-                        await _notificationService.SendSectionRemovedNotificationAsync(
-                            update.Section, update.OldOwner, changedBy, request.ChangeNote);
+                        notificationTasks.Add(_notificationService.SendSectionRemovedNotificationAsync(
+                            update.Section, update.OldOwner, changedBy, request.ChangeNote));
                     }
                     
-                    // Send assignment notification to new owner
-                    if (update.NewOwner != null)
+                    // Send assignment notification to new owner if they exist and are different from old owner
+                    if (update.NewOwner != null && update.OldOwner?.Id != update.NewOwner.Id)
                     {
-                        await _notificationService.SendSectionAssignedNotificationAsync(
-                            update.Section, update.NewOwner, changedBy, request.ChangeNote);
+                        notificationTasks.Add(_notificationService.SendSectionAssignedNotificationAsync(
+                            update.Section, update.NewOwner, changedBy, request.ChangeNote));
                     }
                 }
+                
+                // Send all notifications concurrently
+                await Task.WhenAll(notificationTasks);
             }
         }
         

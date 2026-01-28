@@ -65,29 +65,28 @@ public sealed class DataPointsController : ControllerBase
             return BadRequest(new { error = errorMessage });
         }
 
-        // Send notifications if owner changed
-        if (dataPoint != null && !string.IsNullOrWhiteSpace(request.OwnerId))
+        // Send notifications only if owner changed (both old and new owners must exist)
+        if (dataPoint != null && 
+            !string.IsNullOrWhiteSpace(request.OwnerId) && 
+            !string.IsNullOrWhiteSpace(oldOwnerId) &&
+            oldOwnerId != request.OwnerId)
         {
-            var ownerChanged = oldOwnerId != request.OwnerId;
+            var updatedBy = _store.GetUser(request.UpdatedBy ?? string.Empty);
             
-            if (ownerChanged)
+            // Only send notifications if we can identify who made the change
+            if (updatedBy != null)
             {
-                var updatedBy = _store.GetUser(request.UpdatedBy ?? "unknown");
-                
-                // Send removal notification to old owner if they exist
-                if (!string.IsNullOrEmpty(oldOwnerId))
+                // Send removal notification to old owner
+                var oldOwner = _store.GetUser(oldOwnerId);
+                if (oldOwner != null)
                 {
-                    var oldOwner = _store.GetUser(oldOwnerId);
-                    if (oldOwner != null && updatedBy != null)
-                    {
-                        await _notificationService.SendDataPointRemovedNotificationAsync(
-                            dataPoint, oldOwner, updatedBy);
-                    }
+                    await _notificationService.SendDataPointRemovedNotificationAsync(
+                        dataPoint, oldOwner, updatedBy);
                 }
                 
                 // Send assignment notification to new owner
                 var newOwner = _store.GetUser(request.OwnerId);
-                if (newOwner != null && updatedBy != null)
+                if (newOwner != null)
                 {
                     await _notificationService.SendDataPointAssignedNotificationAsync(
                         dataPoint, newOwner, updatedBy);

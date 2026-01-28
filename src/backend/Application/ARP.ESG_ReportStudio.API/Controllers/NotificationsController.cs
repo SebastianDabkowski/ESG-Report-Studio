@@ -3,6 +3,11 @@ using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+/// <summary>
+/// Controller for managing user notifications.
+/// NOTE: This is an MVP implementation. In production, add authorization checks to ensure
+/// users can only access their own notifications.
+/// </summary>
 [ApiController]
 [Route("api/notifications")]
 public sealed class NotificationsController : ControllerBase
@@ -16,6 +21,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>
     /// Get all notifications for a user.
+    /// NOTE: In production, validate that the authenticated user matches userId or has admin privileges.
     /// </summary>
     /// <param name="userId">User ID to get notifications for</param>
     /// <param name="unreadOnly">If true, only return unread notifications</param>
@@ -36,6 +42,7 @@ public sealed class NotificationsController : ControllerBase
 
     /// <summary>
     /// Mark a notification as read.
+    /// NOTE: In production, validate that the authenticated user owns this notification.
     /// </summary>
     /// <param name="id">Notification ID</param>
     /// <returns>Success status</returns>
