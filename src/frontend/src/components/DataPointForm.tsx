@@ -27,7 +27,7 @@ const dataPointSchema = z.object({
   }),
 }).refine((data) => {
   // Require assumptions when informationType is 'estimate'
-  if (data.informationType === 'estimate' && !data.assumptions) {
+  if (data.informationType === 'estimate' && (!data.assumptions || !data.assumptions.trim())) {
     return false;
   }
   return true;

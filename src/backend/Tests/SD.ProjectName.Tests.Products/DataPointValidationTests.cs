@@ -261,6 +261,7 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("Updated Title", updatedDataPoint.Title);
             Assert.Equal("Updated Source", updatedDataPoint.Source);
             Assert.Equal("estimate", updatedDataPoint.InformationType);
+            Assert.Equal("These are test assumptions for the estimate", updatedDataPoint.Assumptions);
             Assert.Equal("complete", updatedDataPoint.CompletenessStatus);
             Assert.NotEqual(originalUpdatedAt, updatedDataPoint.UpdatedAt);
         }
@@ -462,6 +463,36 @@ namespace SD.ProjectName.Tests.Products
             // Assert
             Assert.False(isValid);
             Assert.Contains("InformationType must be one of: fact, estimate, declaration, plan", errorMessage);
+            Assert.Null(dataPoint);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithEstimateAndWhitespaceAssumptions_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "narrative",
+                Title = "Estimated Emissions",
+                Content = "Estimated GHG emissions for remote work",
+                OwnerId = "owner-1",
+                Source = "Calculation Model",
+                InformationType = "estimate",
+                Assumptions = "   ", // Whitespace only
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Assumptions field is required when InformationType is 'estimate'.", errorMessage);
             Assert.Null(dataPoint);
         }
     }
