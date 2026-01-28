@@ -639,7 +639,7 @@ namespace SD.ProjectName.Tests.Products
             Assert.NotNull(transitionEntry);
             Assert.Equal("user-1", transitionEntry.UserId);
             Assert.Equal("Sarah Chen", transitionEntry.UserName);
-            Assert.Contains("missing", transitionEntry.ChangeNote);
+            Assert.Contains("Q4 data delayed from supplier", transitionEntry.ChangeNote);
             Assert.Contains(transitionEntry.Changes, c => c.Field == "GapStatus");
         }
 
