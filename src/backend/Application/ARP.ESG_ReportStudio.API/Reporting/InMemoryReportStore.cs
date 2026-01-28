@@ -2750,11 +2750,24 @@ public sealed class InMemoryReportStore
             };
 
             _evidence.Add(newEvidence);
+
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "FileName", OldValue = "", NewValue = fileName ?? "" },
+                new FieldChange { Field = "FileSize", OldValue = "", NewValue = fileSize?.ToString() ?? "" },
+                new FieldChange { Field = "ContentType", OldValue = "", NewValue = contentType ?? "" },
+                new FieldChange { Field = "UploadedBy", OldValue = "", NewValue = uploadedBy }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == uploadedBy);
+            var userName = user?.Name ?? uploadedBy;
+            CreateAuditLogEntry(uploadedBy, userName, "create", "Evidence", newEvidence.Id, changes, $"Created evidence '{fileName ?? title}'");
+
             return (true, null, newEvidence);
         }
     }
 
-    public (bool IsValid, string? ErrorMessage) LinkEvidenceToDataPoint(string evidenceId, string dataPointId)
+    public (bool IsValid, string? ErrorMessage) LinkEvidenceToDataPoint(string evidenceId, string dataPointId, string linkedBy)
     {
         lock (_lock)
         {
@@ -2785,11 +2798,21 @@ public sealed class InMemoryReportStore
             evidence.LinkedDataPoints.Add(dataPointId);
             dataPoint.EvidenceIds.Add(evidenceId);
 
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "EvidenceId", OldValue = "", NewValue = evidenceId },
+                new FieldChange { Field = "DataPointId", OldValue = "", NewValue = dataPointId }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == linkedBy);
+            var userName = user?.Name ?? linkedBy;
+            CreateAuditLogEntry(linkedBy, userName, "link", "Evidence", evidenceId, changes, $"Linked evidence to data point {dataPointId}");
+
             return (true, null);
         }
     }
 
-    public (bool IsValid, string? ErrorMessage) UnlinkEvidenceFromDataPoint(string evidenceId, string dataPointId)
+    public (bool IsValid, string? ErrorMessage) UnlinkEvidenceFromDataPoint(string evidenceId, string dataPointId, string unlinkedBy)
     {
         lock (_lock)
         {
@@ -2809,11 +2832,21 @@ public sealed class InMemoryReportStore
             evidence.LinkedDataPoints.Remove(dataPointId);
             dataPoint.EvidenceIds.Remove(evidenceId);
 
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "EvidenceId", OldValue = evidenceId, NewValue = "" },
+                new FieldChange { Field = "DataPointId", OldValue = dataPointId, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == unlinkedBy);
+            var userName = user?.Name ?? unlinkedBy;
+            CreateAuditLogEntry(unlinkedBy, userName, "unlink", "Evidence", evidenceId, changes, $"Unlinked evidence from data point {dataPointId}");
+
             return (true, null);
         }
     }
 
-    public bool DeleteEvidence(string id)
+    public bool DeleteEvidence(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -2822,6 +2855,15 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            // Create audit log entry before deletion
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "FileName", OldValue = evidence.FileName ?? "", NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "Evidence", evidence.Id, changes, $"Deleted evidence '{evidence.FileName ?? evidence.Title}'");
 
             // Remove links from all data points
             foreach (var dataPointId in evidence.LinkedDataPoints.ToList())

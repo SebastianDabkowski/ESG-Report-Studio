@@ -1198,6 +1198,11 @@ public sealed class LinkEvidenceRequest
     /// ID of the data point to link to.
     /// </summary>
     public string DataPointId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the user performing the link/unlink operation.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
 }
 
 /// <summary>

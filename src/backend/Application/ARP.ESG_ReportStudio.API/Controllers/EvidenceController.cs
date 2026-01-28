@@ -174,7 +174,7 @@ public sealed class EvidenceController : ControllerBase
     [HttpPost("{evidenceId}/link")]
     public ActionResult LinkEvidenceToDataPoint(string evidenceId, [FromBody] LinkEvidenceRequest request)
     {
-        var (isValid, errorMessage) = _store.LinkEvidenceToDataPoint(evidenceId, request.DataPointId);
+        var (isValid, errorMessage) = _store.LinkEvidenceToDataPoint(evidenceId, request.DataPointId, request.UserId);
 
         if (!isValid)
         {
@@ -190,7 +190,7 @@ public sealed class EvidenceController : ControllerBase
     [HttpPost("{evidenceId}/unlink")]
     public ActionResult UnlinkEvidenceFromDataPoint(string evidenceId, [FromBody] LinkEvidenceRequest request)
     {
-        var (isValid, errorMessage) = _store.UnlinkEvidenceFromDataPoint(evidenceId, request.DataPointId);
+        var (isValid, errorMessage) = _store.UnlinkEvidenceFromDataPoint(evidenceId, request.DataPointId, request.UserId);
 
         if (!isValid)
         {
@@ -204,9 +204,14 @@ public sealed class EvidenceController : ControllerBase
     /// Delete an evidence item.
     /// </summary>
     [HttpDelete("{id}")]
-    public ActionResult DeleteEvidence(string id)
+    public ActionResult DeleteEvidence(string id, [FromQuery] string deletedBy)
     {
-        var deleted = _store.DeleteEvidence(id);
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest(new { error = "deletedBy query parameter is required." });
+        }
+
+        var deleted = _store.DeleteEvidence(id, deletedBy);
         if (!deleted)
         {
             return NotFound(new { error = $"Evidence with ID '{id}' not found." });
