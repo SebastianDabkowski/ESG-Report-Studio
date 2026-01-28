@@ -908,6 +908,26 @@ public sealed class Evidence
     public string UploadedBy { get; set; } = string.Empty;
     public string UploadedAt { get; set; } = string.Empty;
     public List<string> LinkedDataPoints { get; set; } = new();
+    
+    // Chain-of-custody metadata
+    public long? FileSize { get; set; }
+    public string? Checksum { get; set; } // SHA-256 hash
+    public string? ContentType { get; set; }
+    public string IntegrityStatus { get; set; } = "not-checked"; // 'valid', 'failed', 'not-checked'
+}
+
+/// <summary>
+/// Represents an access log entry for evidence file downloads.
+/// </summary>
+public sealed class EvidenceAccessLog
+{
+    public string Id { get; init; } = string.Empty;
+    public string EvidenceId { get; init; } = string.Empty;
+    public string UserId { get; init; } = string.Empty;
+    public string UserName { get; init; } = string.Empty;
+    public string AccessedAt { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty; // 'download', 'view', 'validate'
+    public string? Purpose { get; init; }
 }
 
 /// <summary>

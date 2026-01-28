@@ -107,6 +107,15 @@ public sealed class EvidenceController : ControllerBase
         // Sanitize filename
         var sanitizedFileName = SanitizeFileName(file.FileName);
         
+        // Calculate SHA-256 checksum
+        string checksum;
+        using (var stream = file.OpenReadStream())
+        using (var sha256 = System.Security.Cryptography.SHA256.Create())
+        {
+            var hashBytes = await sha256.ComputeHashAsync(stream);
+            checksum = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+        }
+        
         // For now, we'll create a mock file URL
         // In a real implementation, this would upload to Azure Blob Storage or similar
         var fileId = Guid.NewGuid();
@@ -119,7 +128,10 @@ public sealed class EvidenceController : ControllerBase
             sanitizedFileName,
             fileUrl,
             null, // sourceUrl
-            uploadedBy
+            uploadedBy,
+            file.Length, // fileSize
+            checksum,
+            file.ContentType
         );
 
         if (!isValid)
@@ -202,4 +214,106 @@ public sealed class EvidenceController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Download an evidence file with access logging.
+    /// </summary>
+    [HttpPost("{id}/download")]
+    public ActionResult DownloadEvidence(string id, [FromBody] DownloadEvidenceRequest request)
+    {
+        var evidence = _store.GetEvidenceById(id);
+        if (evidence == null)
+        {
+            return NotFound(new { error = $"Evidence with ID '{id}' not found." });
+        }
+
+        // Check if evidence can be published (integrity check)
+        if (!_store.CanPublishEvidence(id))
+        {
+            return BadRequest(new { 
+                error = "Evidence file failed integrity check and cannot be downloaded.",
+                integrityStatus = evidence.IntegrityStatus 
+            });
+        }
+
+        // Log the access
+        _store.LogEvidenceAccess(
+            id, 
+            request.UserId, 
+            request.UserName, 
+            "download", 
+            request.Purpose
+        );
+
+        // In a real implementation, this would return the actual file from storage
+        // For now, return the file URL
+        return Ok(new { 
+            fileUrl = evidence.FileUrl,
+            fileName = evidence.FileName,
+            message = "Access logged. In production, file would be streamed here."
+        });
+    }
+
+    /// <summary>
+    /// Validate evidence file integrity using checksum.
+    /// </summary>
+    [HttpPost("{id}/validate")]
+    public ActionResult ValidateEvidence(string id, [FromBody] ValidateEvidenceRequest request)
+    {
+        var evidence = _store.GetEvidenceById(id);
+        if (evidence == null)
+        {
+            return NotFound(new { error = $"Evidence with ID '{id}' not found." });
+        }
+
+        var (isValid, errorMessage) = _store.ValidateEvidenceIntegrity(id, request.Checksum);
+
+        // Log the validation attempt
+        _store.LogEvidenceAccess(
+            id,
+            request.UserId,
+            request.UserName,
+            "validate",
+            $"Integrity validation: {(isValid ? "passed" : "failed")}"
+        );
+
+        if (!isValid)
+        {
+            return BadRequest(new { 
+                error = errorMessage,
+                integrityStatus = "failed"
+            });
+        }
+
+        return Ok(new { 
+            message = "Evidence file integrity validated successfully.",
+            integrityStatus = "valid",
+            checksum = evidence.Checksum
+        });
+    }
+
+    /// <summary>
+    /// Get access log for evidence files.
+    /// </summary>
+    [HttpGet("access-log")]
+    public ActionResult<IReadOnlyList<EvidenceAccessLog>> GetAccessLog([FromQuery] string? evidenceId)
+    {
+        var logs = _store.GetEvidenceAccessLog(evidenceId);
+        return Ok(logs);
+    }
+}
+
+// Request models
+public sealed class DownloadEvidenceRequest
+{
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string? Purpose { get; set; }
+}
+
+public sealed class ValidateEvidenceRequest
+{
+    public string Checksum { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
 }
