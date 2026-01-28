@@ -2286,3 +2286,150 @@ public sealed class ResolveGapRequest
 {
     public string? ResolutionNote { get; set; }
 }
+
+/// <summary>
+/// Represents a decision made about report assumptions, simplifications, or boundaries.
+/// Follows ADR (Architecture Decision Record) structure to document context, decision, alternatives, and consequences.
+/// Supports versioning to maintain an audit trail of decision evolution.
+/// </summary>
+public sealed class Decision
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional section ID if the decision is specific to a section.
+    /// </summary>
+    public string? SectionId { get; set; }
+    
+    /// <summary>
+    /// Brief title summarizing the decision.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Context: Background and circumstances leading to the decision.
+    /// </summary>
+    public string Context { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Decision: The actual decision made and rationale.
+    /// </summary>
+    public string DecisionText { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Alternatives: Other options that were considered but not chosen.
+    /// </summary>
+    public string Alternatives { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Consequences: Expected impacts and implications of this decision.
+    /// </summary>
+    public string Consequences { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current status: 'active' (current decision), 'superseded' (replaced by newer version), 'deprecated' (no longer applicable).
+    /// </summary>
+    public string Status { get; set; } = "active";
+    
+    /// <summary>
+    /// Version number - increments with each update. Version 1 is the initial decision.
+    /// </summary>
+    public int Version { get; set; } = 1;
+    
+    /// <summary>
+    /// References to report fragments (data points, sections) that use this decision.
+    /// </summary>
+    public List<string> ReferencedByFragmentIds { get; set; } = new();
+    
+    /// <summary>
+    /// User who created this decision.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this decision was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who last updated this decision (null if never updated).
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this decision was last updated (null if never updated).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// Change note explaining what was updated in this version.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Represents a historical version of a decision (read-only).
+/// Prior versions are preserved for audit trail purposes.
+/// </summary>
+public sealed class DecisionVersion
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The decision ID this version belongs to.
+    /// </summary>
+    public string DecisionId { get; set; } = string.Empty;
+    
+    public int Version { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Context { get; set; } = string.Empty;
+    public string DecisionText { get; set; } = string.Empty;
+    public string Alternatives { get; set; } = string.Empty;
+    public string Consequences { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Request to create a new decision.
+/// </summary>
+public sealed class CreateDecisionRequest
+{
+    public string? SectionId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Context { get; set; } = string.Empty;
+    public string DecisionText { get; set; } = string.Empty;
+    public string Alternatives { get; set; } = string.Empty;
+    public string Consequences { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing decision. Creates a new version.
+/// </summary>
+public sealed class UpdateDecisionRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Context { get; set; } = string.Empty;
+    public string DecisionText { get; set; } = string.Empty;
+    public string Alternatives { get; set; } = string.Empty;
+    public string Consequences { get; set; } = string.Empty;
+    public string ChangeNote { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to link a decision to a report fragment.
+/// </summary>
+public sealed class LinkDecisionRequest
+{
+    public string FragmentId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to unlink a decision from a report fragment.
+/// </summary>
+public sealed class UnlinkDecisionRequest
+{
+    public string FragmentId { get; set; } = string.Empty;
+}

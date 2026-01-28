@@ -18,6 +18,7 @@ import ImportDataDialog from '@/components/ImportDataDialog'
 import { AssumptionsList } from '@/components/AssumptionsList'
 import { SimplificationsList } from '@/components/SimplificationsList'
 import { RemediationPlansList } from '@/components/RemediationPlansList'
+import DecisionsList from '@/components/DecisionsList'
 import { 
   Leaf, 
   Users, 
@@ -645,6 +646,11 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                 {/* Simplifications Section */}
                 <div className="pt-4 border-t">
                   <SimplificationsList sectionId={section.id} />
+                </div>
+
+                {/* Decision Log Section */}
+                <div className="pt-4 border-t">
+                  <DecisionsList sectionId={section.id} />
                 </div>
 
                 {/* Remediation Plans Section */}

@@ -924,3 +924,77 @@ export async function getGapsDashboard(
   
   return requestJson<import('@/lib/types').GapDashboardResponse>(url)
 }
+
+// ==================== Decisions ====================
+
+export async function getDecisions(sectionId?: string): Promise<import('@/lib/types').Decision[]> {
+  const url = sectionId ? `decisions?sectionId=${sectionId}` : 'decisions'
+  return requestJson<import('@/lib/types').Decision[]>(url)
+}
+
+export async function getDecisionById(id: string): Promise<import('@/lib/types').Decision> {
+  return requestJson<import('@/lib/types').Decision>(`decisions/${id}`)
+}
+
+export async function getDecisionVersionHistory(id: string): Promise<import('@/lib/types').DecisionVersion[]> {
+  return requestJson<import('@/lib/types').DecisionVersion[]>(`decisions/${id}/versions`)
+}
+
+export async function createDecision(
+  payload: import('@/lib/types').CreateDecisionRequest
+): Promise<import('@/lib/types').Decision> {
+  return requestJson<import('@/lib/types').Decision>('decisions', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateDecision(
+  id: string,
+  payload: import('@/lib/types').UpdateDecisionRequest
+): Promise<import('@/lib/types').Decision> {
+  return requestJson<import('@/lib/types').Decision>(`decisions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deprecateDecision(
+  id: string,
+  payload: import('@/lib/types').DeprecateDecisionRequest
+): Promise<import('@/lib/types').Decision> {
+  return requestJson<import('@/lib/types').Decision>(`decisions/${id}/deprecate`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function linkDecisionToFragment(
+  id: string,
+  payload: import('@/lib/types').LinkDecisionRequest
+): Promise<{ message: string }> {
+  return requestJson<{ message: string }>(`decisions/${id}/link`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function unlinkDecisionFromFragment(
+  id: string,
+  payload: import('@/lib/types').UnlinkDecisionRequest
+): Promise<{ message: string }> {
+  return requestJson<{ message: string }>(`decisions/${id}/unlink`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getDecisionsByFragment(fragmentId: string): Promise<import('@/lib/types').Decision[]> {
+  return requestJson<import('@/lib/types').Decision[]>(`decisions/fragment/${fragmentId}`)
+}
+
+export async function deleteDecision(id: string): Promise<{ message: string }> {
+  return requestJson<{ message: string }>(`decisions/${id}`, {
+    method: 'DELETE'
+  })
+}
