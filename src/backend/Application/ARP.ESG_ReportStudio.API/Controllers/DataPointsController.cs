@@ -208,4 +208,17 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    [HttpPost("{id}/transition-gap-status")]
+    public ActionResult<DataPoint> TransitionGapStatus(string id, [FromBody] TransitionGapStatusRequest request)
+    {
+        var (isValid, errorMessage, dataPoint) = _store.TransitionGapStatus(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
 }

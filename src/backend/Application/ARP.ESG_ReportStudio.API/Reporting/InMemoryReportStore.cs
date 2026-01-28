@@ -54,6 +54,14 @@ public sealed class InMemoryReportStore
         "high" 
     };
 
+    // Valid gap statuses for workflow tracking
+    private static readonly string[] ValidGapStatuses = new[] 
+    { 
+        "missing", 
+        "estimated", 
+        "provided" 
+    };
+
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
         new("Energy & Emissions", "environmental", "Energy consumption, GHG emissions, carbon footprint"),
@@ -2072,6 +2080,281 @@ public sealed class InMemoryReportStore
                 dataPoint.Id,
                 changes,
                 request.ChangeNote ?? $"Data previously flagged as: {previousCategory} - {previousReason}"
+            );
+
+            return (true, null, dataPoint);
+        }
+    }
+
+    /// <summary>
+    /// Checks if a user has permission to modify a data point.
+    /// Permission is granted if the user is:
+    /// - An admin
+    /// - The report owner (owner of the reporting period)
+    /// - The section owner
+    /// - The data point owner
+    /// </summary>
+    private bool HasDataPointModifyPermission(string userId, DataPoint dataPoint)
+    {
+        var user = _users.FirstOrDefault(u => u.Id == userId);
+        if (user == null) return false;
+
+        // Admin can do anything
+        if (user.Role.Equals("admin", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Data point owner can modify
+        if (dataPoint.OwnerId == userId)
+        {
+            return true;
+        }
+
+        // Section owner can modify
+        var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+        if (section != null && section.OwnerId == userId)
+        {
+            return true;
+        }
+
+        // Report owner (owner of the reporting period) can modify
+        if (section != null)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+            if (period != null && period.OwnerId == userId)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Transitions a data point's gap status through the workflow: Missing → Estimated → Provided.
+    /// Enforces workflow rules, preserves history, and validates permissions.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) TransitionGapStatus(
+        string id, 
+        TransitionGapStatusRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Validate user exists
+            var user = _users.FirstOrDefault(u => u.Id == request.TransitionedBy);
+            if (user == null)
+            {
+                return (false, $"User with ID '{request.TransitionedBy}' not found.", null);
+            }
+
+            // Check permissions
+            if (!HasDataPointModifyPermission(request.TransitionedBy, dataPoint))
+            {
+                // Log unauthorized attempt
+                CreateAuditLogEntry(
+                    request.TransitionedBy,
+                    user.Name,
+                    "transition-gap-status-denied",
+                    "DataPoint",
+                    dataPoint.Id,
+                    new List<FieldChange>(),
+                    $"Unauthorized attempt to transition gap status to '{request.TargetStatus}'. User lacks permission."
+                );
+                
+                return (false, "Permission denied. Only admins, report owners, section owners, or data point owners can change gap status.", null);
+            }
+
+            // Validate target status
+            if (!ValidGapStatuses.Contains(request.TargetStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"TargetStatus must be one of: {string.Join(", ", ValidGapStatuses)}.", null);
+            }
+
+            var normalizedTargetStatus = request.TargetStatus.ToLowerInvariant();
+            var currentStatus = dataPoint.GapStatus ?? "";
+
+            // Validate workflow transitions
+            // Missing → Estimated → Provided (can't skip states or go backward)
+            
+            // No-op if already in target status
+            if (currentStatus == normalizedTargetStatus)
+            {
+                return (false, $"DataPoint is already in '{normalizedTargetStatus}' status.", null);
+            }
+            
+            // Prevent backward transitions
+            if (currentStatus == "estimated" && normalizedTargetStatus == "missing")
+            {
+                return (false, "Cannot transition from 'estimated' back to 'missing'. Workflow must progress forward.", null);
+            }
+            if (currentStatus == "provided" && (normalizedTargetStatus == "missing" || normalizedTargetStatus == "estimated"))
+            {
+                return (false, "Cannot transition from 'provided' back to earlier states. Workflow must progress forward.", null);
+            }
+            
+            // Prevent skipping states - must follow the sequence: missing → estimated → provided
+            if (string.IsNullOrEmpty(currentStatus) || currentStatus == "missing")
+            {
+                // From empty/missing, can only go to missing (if empty) or estimated (if missing)
+                if (normalizedTargetStatus == "provided")
+                {
+                    return (false, "Cannot skip 'estimated' state. Must transition to 'estimated' before 'provided'.", null);
+                }
+            }
+            if (currentStatus == "missing" && normalizedTargetStatus == "estimated")
+            {
+                // This is valid - missing → estimated
+            }
+            else if (string.IsNullOrEmpty(currentStatus) && normalizedTargetStatus == "estimated")
+            {
+                // Cannot skip missing state - must explicitly mark as missing first
+                return (false, "Cannot skip 'missing' state. Must transition to 'missing' before 'estimated'.", null);
+            }
+
+            // Validate estimate fields when transitioning to "estimated"
+            if (normalizedTargetStatus == "estimated")
+            {
+                if (string.IsNullOrWhiteSpace(request.EstimateType))
+                {
+                    return (false, "EstimateType is required when transitioning to 'estimated' status.", null);
+                }
+                if (!ValidEstimateTypes.Contains(request.EstimateType, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"EstimateType must be one of: {string.Join(", ", ValidEstimateTypes)}.", null);
+                }
+                if (string.IsNullOrWhiteSpace(request.EstimateMethod))
+                {
+                    return (false, "EstimateMethod is required when transitioning to 'estimated' status.", null);
+                }
+                if (string.IsNullOrWhiteSpace(request.ConfidenceLevel))
+                {
+                    return (false, "ConfidenceLevel is required when transitioning to 'estimated' status.", null);
+                }
+                if (!ValidConfidenceLevels.Contains(request.ConfidenceLevel, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"ConfidenceLevel must be one of: {string.Join(", ", ValidConfidenceLevels)}.", null);
+                }
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "GapStatus", OldValue = currentStatus, NewValue = normalizedTargetStatus }
+            };
+
+            // Create snapshot when transitioning from "estimated" to "provided"
+            if (currentStatus == "estimated" && normalizedTargetStatus == "provided")
+            {
+                var estimateSnapshot = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    EstimateType = dataPoint.EstimateType,
+                    EstimateMethod = dataPoint.EstimateMethod,
+                    ConfidenceLevel = dataPoint.ConfidenceLevel,
+                    Assumptions = dataPoint.Assumptions,
+                    Value = dataPoint.Value,
+                    Unit = dataPoint.Unit,
+                    PreservedAt = now
+                });
+                
+                dataPoint.PreviousEstimateSnapshot = estimateSnapshot;
+                changes.Add(new FieldChange 
+                { 
+                    Field = "PreviousEstimateSnapshot", 
+                    OldValue = "", 
+                    NewValue = "Estimate preserved (see snapshot)" 
+                });
+            }
+
+            // Update gap status
+            dataPoint.GapStatus = normalizedTargetStatus;
+            dataPoint.UpdatedAt = now;
+
+            // Update related fields based on target status
+            if (normalizedTargetStatus == "missing")
+            {
+                // Ensure IsMissing flag is set
+                if (!dataPoint.IsMissing)
+                {
+                    changes.Add(new FieldChange { Field = "IsMissing", OldValue = "False", NewValue = "True" });
+                    dataPoint.IsMissing = true;
+                }
+                if (dataPoint.CompletenessStatus != "missing")
+                {
+                    changes.Add(new FieldChange { Field = "CompletenessStatus", OldValue = dataPoint.CompletenessStatus, NewValue = "missing" });
+                    dataPoint.CompletenessStatus = "missing";
+                }
+            }
+            else if (normalizedTargetStatus == "estimated")
+            {
+                // Apply estimate fields
+                if (request.EstimateType != null)
+                {
+                    changes.Add(new FieldChange { Field = "EstimateType", OldValue = dataPoint.EstimateType ?? "", NewValue = request.EstimateType });
+                    dataPoint.EstimateType = request.EstimateType.ToLowerInvariant();
+                }
+                if (request.EstimateMethod != null)
+                {
+                    changes.Add(new FieldChange { Field = "EstimateMethod", OldValue = dataPoint.EstimateMethod ?? "", NewValue = request.EstimateMethod });
+                    dataPoint.EstimateMethod = request.EstimateMethod;
+                }
+                if (request.ConfidenceLevel != null)
+                {
+                    changes.Add(new FieldChange { Field = "ConfidenceLevel", OldValue = dataPoint.ConfidenceLevel ?? "", NewValue = request.ConfidenceLevel });
+                    dataPoint.ConfidenceLevel = request.ConfidenceLevel.ToLowerInvariant();
+                }
+                
+                // Clear IsMissing flag
+                if (dataPoint.IsMissing)
+                {
+                    changes.Add(new FieldChange { Field = "IsMissing", OldValue = "True", NewValue = "False" });
+                    dataPoint.IsMissing = false;
+                }
+                
+                // Update information type and completeness
+                if (dataPoint.InformationType != "estimate")
+                {
+                    changes.Add(new FieldChange { Field = "InformationType", OldValue = dataPoint.InformationType, NewValue = "estimate" });
+                    dataPoint.InformationType = "estimate";
+                }
+                if (dataPoint.CompletenessStatus == "missing" || dataPoint.CompletenessStatus == "")
+                {
+                    changes.Add(new FieldChange { Field = "CompletenessStatus", OldValue = dataPoint.CompletenessStatus, NewValue = "incomplete" });
+                    dataPoint.CompletenessStatus = "incomplete";
+                }
+            }
+            else if (normalizedTargetStatus == "provided")
+            {
+                // Clear IsMissing flag
+                if (dataPoint.IsMissing)
+                {
+                    changes.Add(new FieldChange { Field = "IsMissing", OldValue = "True", NewValue = "False" });
+                    dataPoint.IsMissing = false;
+                }
+                
+                // Update completeness - data is now provided
+                if (dataPoint.CompletenessStatus != "complete")
+                {
+                    changes.Add(new FieldChange { Field = "CompletenessStatus", OldValue = dataPoint.CompletenessStatus, NewValue = "complete" });
+                    dataPoint.CompletenessStatus = "complete";
+                }
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                request.TransitionedBy,
+                user.Name,
+                "transition-gap-status",
+                "DataPoint",
+                dataPoint.Id,
+                changes,
+                request.ChangeNote ?? $"Gap status transitioned from '{currentStatus}' to '{normalizedTargetStatus}'"
             );
 
             return (true, null, dataPoint);

@@ -416,6 +416,18 @@ public sealed class DataPoint
     /// Confidence level in the accuracy of the estimate. Options: low, medium, high.
     /// </summary>
     public string? ConfidenceLevel { get; set; }
+    
+    /// <summary>
+    /// Gap closure workflow status. Options: "missing", "estimated", "provided".
+    /// Tracks the progression from missing data → estimate → verified source data.
+    /// </summary>
+    public string? GapStatus { get; set; }
+    
+    /// <summary>
+    /// Populated when transitioning from 'estimated' to 'provided' status.
+    /// Preserves the estimate details (EstimateType, EstimateMethod, ConfidenceLevel, etc.) for historical reference.
+    /// </summary>
+    public string? PreviousEstimateSnapshot { get; set; }
 }
 
 /// <summary>
@@ -588,6 +600,67 @@ public sealed class UnflagMissingDataRequest
     /// Optional note explaining why data is now available.
     /// </summary>
     public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Request to transition a data point's gap status (Missing → Estimated → Provided).
+/// </summary>
+public sealed class TransitionGapStatusRequest
+{
+    /// <summary>
+    /// User ID of the person transitioning the status.
+    /// </summary>
+    public string TransitionedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target gap status. Must be: "missing", "estimated", or "provided".
+    /// </summary>
+    public string TargetStatus { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Note explaining the status transition.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+    
+    /// <summary>
+    /// When transitioning to "estimated", provide estimate type.
+    /// Required when TargetStatus is "estimated".
+    /// </summary>
+    public string? EstimateType { get; set; }
+    
+    /// <summary>
+    /// When transitioning to "estimated", provide methodology.
+    /// Required when TargetStatus is "estimated".
+    /// </summary>
+    public string? EstimateMethod { get; set; }
+    
+    /// <summary>
+    /// When transitioning to "estimated", provide confidence level.
+    /// Required when TargetStatus is "estimated".
+    /// </summary>
+    public string? ConfidenceLevel { get; set; }
+}
+
+/// <summary>
+/// Represents a historical record of gap status transitions.
+/// Preserved in audit log for traceability.
+/// </summary>
+public sealed class GapStatusHistoryEntry
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string FromStatus { get; set; } = string.Empty;
+    public string ToStatus { get; set; } = string.Empty;
+    public string TransitionedBy { get; set; } = string.Empty;
+    public string TransitionedByName { get; set; } = string.Empty;
+    public string TransitionedAt { get; set; } = string.Empty;
+    public string? ChangeNote { get; set; }
+    
+    /// <summary>
+    /// Snapshot of estimate details if transitioning from "estimated" to "provided".
+    /// Preserves the previous estimate for historical reference.
+    /// </summary>
+    public string? EstimateSnapshot { get; set; }
 }
 
 /// <summary>
