@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { WarningCircle, CheckCircle } from '@phosphor-icons/react'
+import { MISSING_REASON_CATEGORIES } from '@/lib/missingDataConstants'
 import type { DataPoint, MissingReasonCategory } from '@/lib/types'
 
 interface MissingDataFlagProps {
@@ -93,40 +94,7 @@ export default function MissingDataFlag({
     }
   }
 
-  const categoryOptions: { value: MissingReasonCategory; label: string; description: string }[] = [
-    { 
-      value: 'not-measured', 
-      label: 'Not Measured', 
-      description: 'Data was not measured or tracked during the reporting period' 
-    },
-    { 
-      value: 'not-applicable', 
-      label: 'Not Applicable', 
-      description: 'This data point does not apply to our organization or operations' 
-    },
-    { 
-      value: 'unavailable-from-supplier', 
-      label: 'Unavailable from Supplier', 
-      description: 'Required data is not available from suppliers or third parties' 
-    },
-    { 
-      value: 'data-quality-issue', 
-      label: 'Data Quality Issue', 
-      description: 'Data exists but quality is insufficient for reporting' 
-    },
-    { 
-      value: 'system-limitation', 
-      label: 'System Limitation', 
-      description: 'Technical or process limitations prevent data collection' 
-    },
-    { 
-      value: 'other', 
-      label: 'Other', 
-      description: 'Another reason not covered by the above categories' 
-    }
-  ]
-
-  const selectedOption = categoryOptions.find(opt => opt.value === category)
+  const selectedOption = MISSING_REASON_CATEGORIES.find(opt => opt.value === category)
 
   // If already flagged, show unflag form
   if (dataPoint.isMissing) {
@@ -137,7 +105,7 @@ export default function MissingDataFlag({
           <AlertDescription>
             <div className="font-medium mb-2">Currently Flagged as Missing</div>
             <div className="text-sm">
-              <strong>Category:</strong> {selectedOption?.label || dataPoint.missingReasonCategory}
+              <strong>Category:</strong> {MISSING_REASON_CATEGORIES.find(opt => opt.value === dataPoint.missingReasonCategory)?.label || dataPoint.missingReasonCategory}
             </div>
             <div className="text-sm">
               <strong>Reason:</strong> {dataPoint.missingReason}
@@ -192,7 +160,7 @@ export default function MissingDataFlag({
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
           <SelectContent>
-            {categoryOptions.map((option) => (
+            {MISSING_REASON_CATEGORIES.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 <div>
                   <div className="font-medium">{option.label}</div>

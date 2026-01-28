@@ -1,5 +1,6 @@
 import { Warning } from '@phosphor-icons/react'
 import { Badge } from '@/components/ui/badge'
+import { MISSING_REASON_CATEGORY_LABELS } from '@/lib/missingDataConstants'
 import type { DataPoint } from '@/lib/types'
 
 interface MissingDataBadgeProps {
@@ -12,17 +13,8 @@ export default function MissingDataBadge({ dataPoint, showReason = false }: Miss
     return null
   }
 
-  const categoryLabels: Record<string, string> = {
-    'not-measured': 'Not Measured',
-    'not-applicable': 'Not Applicable',
-    'unavailable-from-supplier': 'Unavailable from Supplier',
-    'data-quality-issue': 'Data Quality Issue',
-    'system-limitation': 'System Limitation',
-    'other': 'Other'
-  }
-
   const categoryLabel = dataPoint.missingReasonCategory 
-    ? categoryLabels[dataPoint.missingReasonCategory] || dataPoint.missingReasonCategory
+    ? MISSING_REASON_CATEGORY_LABELS[dataPoint.missingReasonCategory] || dataPoint.missingReasonCategory
     : 'Missing'
 
   return (

@@ -23,6 +23,17 @@ public sealed class InMemoryReportStore
     private readonly List<EscalationConfiguration> _escalationConfigurations = new();
     private readonly List<EscalationHistory> _escalationHistory = new();
 
+    // Valid missing reason categories
+    private static readonly string[] ValidMissingReasonCategories = new[] 
+    { 
+        "not-measured", 
+        "not-applicable", 
+        "unavailable-from-supplier",
+        "data-quality-issue",
+        "system-limitation",
+        "other"
+    };
+
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
         new("Energy & Emissions", "environmental", "Energy consumption, GHG emissions, carbon footprint"),
@@ -1219,11 +1230,9 @@ public sealed class InMemoryReportStore
                     return (false, "MissingReasonCategory is required when IsMissing is true.", null);
                 }
                 
-                var validCategories = new[] { "not-measured", "not-applicable", "unavailable-from-supplier", 
-                                             "data-quality-issue", "system-limitation", "other" };
-                if (!validCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+                if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
                 {
-                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", validCategories)}.", null);
+                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
                 }
             }
             
@@ -1253,7 +1262,7 @@ public sealed class InMemoryReportStore
                 BlockerDueDate = request.BlockerDueDate,
                 IsMissing = request.IsMissing,
                 MissingReason = request.MissingReason,
-                MissingReasonCategory = request.MissingReasonCategory,
+                MissingReasonCategory = request.MissingReasonCategory?.ToLowerInvariant(),
                 MissingFlaggedBy = request.IsMissing ? "system" : null, // Will be set properly when flagged via API
                 MissingFlaggedAt = request.IsMissing ? now : null
             };
@@ -1536,11 +1545,9 @@ public sealed class InMemoryReportStore
                     return (false, "MissingReasonCategory is required when IsMissing is true.", null);
                 }
                 
-                var validCategories = new[] { "not-measured", "not-applicable", "unavailable-from-supplier", 
-                                             "data-quality-issue", "system-limitation", "other" };
-                if (!validCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+                if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
                 {
-                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", validCategories)}.", null);
+                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
                 }
             }
             
@@ -1567,6 +1574,13 @@ public sealed class InMemoryReportStore
             if (dataPoint.IsMissing != request.IsMissing)
             {
                 changes.Add(new FieldChange { Field = "IsMissing", OldValue = dataPoint.IsMissing.ToString(), NewValue = request.IsMissing.ToString() });
+                
+                // Clear audit fields when unflagging via UpdateDataPoint
+                if (!request.IsMissing)
+                {
+                    dataPoint.MissingFlaggedBy = null;
+                    dataPoint.MissingFlaggedAt = null;
+                }
             }
             dataPoint.IsMissing = request.IsMissing;
             
@@ -1576,11 +1590,12 @@ public sealed class InMemoryReportStore
             }
             dataPoint.MissingReason = request.MissingReason;
             
-            if (dataPoint.MissingReasonCategory != request.MissingReasonCategory)
+            var normalizedCategory = request.MissingReasonCategory?.ToLowerInvariant();
+            if (dataPoint.MissingReasonCategory != normalizedCategory)
             {
-                changes.Add(new FieldChange { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = request.MissingReasonCategory ?? "" });
+                changes.Add(new FieldChange { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = normalizedCategory ?? "" });
             }
-            dataPoint.MissingReasonCategory = request.MissingReasonCategory;
+            dataPoint.MissingReasonCategory = normalizedCategory;
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -1872,11 +1887,9 @@ public sealed class InMemoryReportStore
             }
 
             // Validate missing reason category
-            var validCategories = new[] { "not-measured", "not-applicable", "unavailable-from-supplier", 
-                                         "data-quality-issue", "system-limitation", "other" };
-            if (!validCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+            if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
             {
-                return (false, $"MissingReasonCategory must be one of: {string.Join(", ", validCategories)}.", null);
+                return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
             }
 
             // Validate reason is provided
@@ -1886,10 +1899,11 @@ public sealed class InMemoryReportStore
             }
 
             var now = DateTime.UtcNow.ToString("O");
+            var normalizedCategory = request.MissingReasonCategory.ToLowerInvariant();
             var changes = new List<FieldChange>
             {
                 new() { Field = "IsMissing", OldValue = dataPoint.IsMissing.ToString(), NewValue = "True" },
-                new() { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = request.MissingReasonCategory },
+                new() { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = normalizedCategory },
                 new() { Field = "MissingReason", OldValue = dataPoint.MissingReason ?? "", NewValue = request.MissingReason }
             };
 
@@ -1907,7 +1921,7 @@ public sealed class InMemoryReportStore
 
             dataPoint.IsMissing = true;
             dataPoint.MissingReason = request.MissingReason;
-            dataPoint.MissingReasonCategory = request.MissingReasonCategory;
+            dataPoint.MissingReasonCategory = normalizedCategory;
             dataPoint.MissingFlaggedBy = request.FlaggedBy;
             dataPoint.MissingFlaggedAt = now;
             dataPoint.UpdatedAt = now;
@@ -1920,7 +1934,7 @@ public sealed class InMemoryReportStore
                 "DataPoint",
                 dataPoint.Id,
                 changes,
-                $"Category: {request.MissingReasonCategory}. {request.MissingReason}"
+                $"Category: {normalizedCategory}. {request.MissingReason}"
             );
 
             return (true, null, dataPoint);
