@@ -729,6 +729,31 @@ public sealed class InMemoryReportStore
                 return (false, "OwnerId is required.", null);
             }
 
+            // Validate owner exists
+            var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+            if (owner == null)
+            {
+                return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+            }
+
+            // Validate contributors exist and are not the owner
+            if (request.ContributorIds != null && request.ContributorIds.Any())
+            {
+                if (request.ContributorIds.Contains(request.OwnerId))
+                {
+                    return (false, "Owner cannot also be listed as a contributor.", null);
+                }
+
+                foreach (var contributorId in request.ContributorIds)
+                {
+                    var contributor = _users.FirstOrDefault(u => u.Id == contributorId);
+                    if (contributor == null)
+                    {
+                        return (false, $"Contributor with ID '{contributorId}' not found.", null);
+                    }
+                }
+            }
+
             // Validate required metadata fields
             if (string.IsNullOrWhiteSpace(request.Source))
             {
@@ -832,6 +857,36 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(request.Content))
             {
                 return (false, "Content is required.", null);
+            }
+
+            // Validate owner exists
+            if (!string.IsNullOrWhiteSpace(request.OwnerId))
+            {
+                var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+                if (owner == null)
+                {
+                    return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+                }
+            }
+
+            // Validate contributors exist and are not the owner
+            if (request.ContributorIds != null && request.ContributorIds.Any())
+            {
+                var ownerId = !string.IsNullOrWhiteSpace(request.OwnerId) ? request.OwnerId : dataPoint.OwnerId;
+                
+                if (request.ContributorIds.Contains(ownerId))
+                {
+                    return (false, "Owner cannot also be listed as a contributor.", null);
+                }
+
+                foreach (var contributorId in request.ContributorIds)
+                {
+                    var contributor = _users.FirstOrDefault(u => u.Id == contributorId);
+                    if (contributor == null)
+                    {
+                        return (false, $"Contributor with ID '{contributorId}' not found.", null);
+                    }
+                }
             }
 
             // Validate required metadata fields

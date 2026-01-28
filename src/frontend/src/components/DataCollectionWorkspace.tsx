@@ -62,10 +62,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
       }
     }
     
-    if (!users || users.length === 0) {
-      fetchUsers()
-    }
-  }, [])
+    fetchUsers()
+  }, [setUsers])
 
   const activePeriod = periods?.find(p => p.status === 'active')
   const activeSections = sections?.filter(s => activePeriod && s.periodId === activePeriod.id) || []
@@ -75,7 +73,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     const sectionDataPoints = dataPoints?.filter(dp => dp.sectionId === sectionId) || []
     if (showMyItemsOnly) {
       return sectionDataPoints.filter(dp => 
-        dp.ownerId === currentUser.id || dp.contributorIds.includes(currentUser.id)
+        dp.ownerId === currentUser.id || (dp.contributorIds?.includes(currentUser.id) ?? false)
       )
     }
     return sectionDataPoints

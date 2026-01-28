@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -95,6 +95,14 @@ export default function DataPointForm({
 
   const selectedType = watch('type')
   const selectedInformationType = watch('informationType')
+  const selectedOwnerId = watch('ownerId')
+  
+  // Remove owner from contributors when owner changes
+  useEffect(() => {
+    if (selectedOwnerId && contributorIds.includes(selectedOwnerId)) {
+      setContributorIds(prev => prev.filter(id => id !== selectedOwnerId))
+    }
+  }, [selectedOwnerId, contributorIds])
   
   const handleToggleContributor = (userId: string) => {
     setContributorIds(prev =>
