@@ -6001,15 +6001,23 @@ public sealed class InMemoryReportStore
 
             _completionExceptions.Add(exception);
 
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "SectionId", OldValue = "", NewValue = request.SectionId },
+                new FieldChange { Field = "Title", OldValue = "", NewValue = request.Title },
+                new FieldChange { Field = "ExceptionType", OldValue = "", NewValue = normalizedExceptionType },
+                new FieldChange { Field = "Justification", OldValue = "", NewValue = request.Justification },
+                new FieldChange { Field = "RequestedBy", OldValue = "", NewValue = request.RequestedBy }
+            };
             var user = _users.FirstOrDefault(u => u.Id == request.RequestedBy);
             CreateAuditLogEntry(
                 request.RequestedBy,
                 user?.Name ?? request.RequestedBy,
-                "created",
+                "create",
                 "CompletionException",
                 exception.Id,
-                new List<FieldChange>(),
-                $"Created completion exception: {exception.Title} for section {section.Title}");
+                changes,
+                $"Created completion exception '{exception.Title}' for section {section.Title}");
 
             return (true, null, exception);
         }
@@ -6038,6 +6046,11 @@ public sealed class InMemoryReportStore
                 return (false, "Approver user ID is required.", null);
             }
 
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Status", OldValue = exception.Status, NewValue = "accepted" }
+            };
+
             exception.Status = "accepted";
             exception.ApprovedBy = request.ApprovedBy;
             exception.ApprovedAt = DateTime.UtcNow.ToString("o");
@@ -6047,11 +6060,11 @@ public sealed class InMemoryReportStore
             CreateAuditLogEntry(
                 request.ApprovedBy,
                 user?.Name ?? request.ApprovedBy,
-                "approved",
+                "approve",
                 "CompletionException",
                 exception.Id,
-                new List<FieldChange>(),
-                $"Approved completion exception: {exception.Title}");
+                changes,
+                $"Approved completion exception '{exception.Title}'");
 
             return (true, null, exception);
         }
@@ -6085,6 +6098,11 @@ public sealed class InMemoryReportStore
                 return (false, "Review comments are required when rejecting an exception.", null);
             }
 
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Status", OldValue = exception.Status, NewValue = "rejected" }
+            };
+
             exception.Status = "rejected";
             exception.RejectedBy = request.RejectedBy;
             exception.RejectedAt = DateTime.UtcNow.ToString("o");
@@ -6094,11 +6112,11 @@ public sealed class InMemoryReportStore
             CreateAuditLogEntry(
                 request.RejectedBy,
                 user?.Name ?? request.RejectedBy,
-                "rejected",
+                "reject",
                 "CompletionException",
                 exception.Id,
-                new List<FieldChange>(),
-                $"Rejected completion exception: {exception.Title}");
+                changes,
+                $"Rejected completion exception '{exception.Title}'");
 
             return (true, null, exception);
         }
@@ -6108,7 +6126,7 @@ public sealed class InMemoryReportStore
     /// Deletes a completion exception.
     /// Only pending exceptions should be deleted to preserve audit trail.
     /// </summary>
-    public bool DeleteCompletionException(string id)
+    public bool DeleteCompletionException(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -6123,6 +6141,20 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = exception.Title, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            CreateAuditLogEntry(
+                deletedBy,
+                user?.Name ?? deletedBy,
+                "delete",
+                "CompletionException",
+                exception.Id,
+                changes,
+                $"Deleted completion exception '{exception.Title}'");
 
             _completionExceptions.Remove(exception);
             return true;
@@ -6852,19 +6884,21 @@ public sealed class InMemoryReportStore
         {
             _decisions.Add(decision);
             
-            // Log audit event
-            _auditLog.Add(new AuditLogEntry
+            var changes = new List<FieldChange>
             {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = createdBy,
-                UserName = createdBy,
-                Action = "created",
-                EntityType = "decision",
-                EntityId = decision.Id,
-                ChangeNote = $"Created decision: {title}",
-                Changes = new List<FieldChange>()
-            });
+                new FieldChange { Field = "Title", OldValue = "", NewValue = title.Trim() },
+                new FieldChange { Field = "Context", OldValue = "", NewValue = context.Trim() },
+                new FieldChange { Field = "DecisionText", OldValue = "", NewValue = decisionText.Trim() }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == createdBy);
+            CreateAuditLogEntry(
+                createdBy,
+                user?.Name ?? createdBy,
+                "create",
+                "Decision",
+                decision.Id,
+                changes,
+                $"Created decision '{title.Trim()}'");
         }
 
         return (true, null, decision);
@@ -6911,6 +6945,34 @@ public sealed class InMemoryReportStore
                 return (false, "Only active decisions can be updated.", null);
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (decision.Title != title.Trim())
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = decision.Title, NewValue = title.Trim() });
+            }
+
+            if (decision.Context != context.Trim())
+            {
+                changes.Add(new FieldChange { Field = "Context", OldValue = decision.Context, NewValue = context.Trim() });
+            }
+
+            if (decision.DecisionText != decisionText.Trim())
+            {
+                changes.Add(new FieldChange { Field = "DecisionText", OldValue = decision.DecisionText, NewValue = decisionText.Trim() });
+            }
+
+            if (decision.Alternatives != alternatives.Trim())
+            {
+                changes.Add(new FieldChange { Field = "Alternatives", OldValue = decision.Alternatives, NewValue = alternatives.Trim() });
+            }
+
+            if (decision.Consequences != consequences.Trim())
+            {
+                changes.Add(new FieldChange { Field = "Consequences", OldValue = decision.Consequences, NewValue = consequences.Trim() });
+            }
+
             // Save current version to history (without changeNote - that's for the next version)
             var version = new DecisionVersion
             {
@@ -6940,19 +7002,19 @@ public sealed class InMemoryReportStore
             decision.UpdatedAt = DateTime.UtcNow.ToString("o");
             decision.ChangeNote = changeNote.Trim();
 
-            // Log audit event
-            _auditLog.Add(new AuditLogEntry
+            // Log audit event only if there were changes
+            if (changes.Count > 0)
             {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = updatedBy,
-                UserName = updatedBy,
-                Action = "updated",
-                EntityType = "decision",
-                EntityId = decision.Id,
-                ChangeNote = $"Updated decision to version {decision.Version}: {changeNote}",
-                Changes = new List<FieldChange>()
-            });
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                CreateAuditLogEntry(
+                    updatedBy,
+                    user?.Name ?? updatedBy,
+                    "update",
+                    "Decision",
+                    decision.Id,
+                    changes,
+                    $"Updated decision '{title.Trim()}' to version {decision.Version}: {changeNote.Trim()}");
+            }
 
             return (true, null, decision);
         }
@@ -7144,19 +7206,19 @@ public sealed class InMemoryReportStore
             // Also remove all versions
             _decisionVersions.RemoveAll(v => v.DecisionId == id);
 
-            // Log audit event
-            _auditLog.Add(new AuditLogEntry
+            var changes = new List<FieldChange>
             {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = userId,
-                UserName = userId,
-                Action = "deleted",
-                EntityType = "decision",
-                EntityId = id,
-                ChangeNote = "Deleted decision",
-                Changes = new List<FieldChange>()
-            });
+                new FieldChange { Field = "Title", OldValue = decision.Title, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            CreateAuditLogEntry(
+                userId,
+                user?.Name ?? userId,
+                "delete",
+                "Decision",
+                id,
+                changes,
+                $"Deleted decision '{decision.Title}'");
 
             return (true, null);
         }
