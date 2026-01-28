@@ -665,7 +665,7 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
-        public void CreateDataPoint_WithIncompleteStatusAndNoOwner_ShouldSucceed()
+        public void CreateDataPoint_WithIncompleteStatusAndOwner_ShouldSucceed()
         {
             // Arrange
             var store = new InMemoryReportStore();

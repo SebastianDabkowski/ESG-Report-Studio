@@ -977,7 +977,8 @@ public sealed class InMemoryReportStore
                     request.Content == dataPoint.Content &&
                     request.Value == dataPoint.Value &&
                     request.Unit == dataPoint.Unit &&
-                    request.OwnerId == dataPoint.OwnerId &&
+                    // Owner is unchanged if request is empty (preserve existing) or same as current
+                    (string.IsNullOrWhiteSpace(request.OwnerId) || request.OwnerId == dataPoint.OwnerId) &&
                     request.Source == dataPoint.Source &&
                     request.InformationType == dataPoint.InformationType &&
                     request.Assumptions == dataPoint.Assumptions &&
@@ -1060,13 +1061,15 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(completenessStatus))
             {
                 // Create temporary data point to calculate status (keeping existing evidence IDs)
+                // Use request OwnerId if provided, otherwise preserve existing owner
+                var effectiveOwnerId = !string.IsNullOrWhiteSpace(request.OwnerId) ? request.OwnerId : dataPoint.OwnerId;
                 var statusCalculationDataPoint = new DataPoint
                 {
                     Title = request.Title,
                     Content = request.Content,
                     Source = request.Source,
                     InformationType = request.InformationType,
-                    OwnerId = request.OwnerId,
+                    OwnerId = effectiveOwnerId,
                     EvidenceIds = dataPoint.EvidenceIds
                 };
                 completenessStatus = CalculateCompletenessStatus(statusCalculationDataPoint);
@@ -1140,7 +1143,8 @@ public sealed class InMemoryReportStore
             if (dataPoint.Unit != request.Unit)
                 changes.Add(new FieldChange { Field = "Unit", OldValue = dataPoint.Unit ?? "", NewValue = request.Unit ?? "" });
             
-            if (dataPoint.OwnerId != request.OwnerId)
+            // Only record owner change if explicitly provided and different
+            if (!string.IsNullOrWhiteSpace(request.OwnerId) && dataPoint.OwnerId != request.OwnerId)
                 changes.Add(new FieldChange { Field = "OwnerId", OldValue = dataPoint.OwnerId, NewValue = request.OwnerId });
             
             if (dataPoint.Source != request.Source)
