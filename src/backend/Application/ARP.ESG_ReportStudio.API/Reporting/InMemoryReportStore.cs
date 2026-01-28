@@ -426,6 +426,141 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public BulkUpdateSectionOwnerResult UpdateSectionOwnersBulk(BulkUpdateSectionOwnerRequest request)
+    {
+        lock (_lock)
+        {
+            var result = new BulkUpdateSectionOwnerResult();
+
+            // Validate the new owner exists
+            var newOwner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+            if (newOwner == null)
+            {
+                // If owner doesn't exist, all sections fail
+                foreach (var sectionId in request.SectionIds)
+                {
+                    result.SkippedSections.Add(new BulkUpdateFailure
+                    {
+                        SectionId = sectionId,
+                        Reason = "Owner user not found."
+                    });
+                }
+                return result;
+            }
+
+            // Validate the user making the change exists
+            var updatingUser = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
+            if (updatingUser == null)
+            {
+                // If updating user doesn't exist, all sections fail
+                foreach (var sectionId in request.SectionIds)
+                {
+                    result.SkippedSections.Add(new BulkUpdateFailure
+                    {
+                        SectionId = sectionId,
+                        Reason = "Updating user not found."
+                    });
+                }
+                return result;
+            }
+
+            // Process each section
+            foreach (var sectionId in request.SectionIds)
+            {
+                // Find the section
+                var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+                if (section == null)
+                {
+                    result.SkippedSections.Add(new BulkUpdateFailure
+                    {
+                        SectionId = sectionId,
+                        Reason = "Section not found."
+                    });
+                    continue;
+                }
+
+                // Check authorization: only admin or report-owner can change section ownership
+                bool isAuthorized = false;
+                string? authorizationError = null;
+
+                if (updatingUser.Role == "admin")
+                {
+                    // Admins can change ownership of any section
+                    isAuthorized = true;
+                }
+                else if (updatingUser.Role == "report-owner")
+                {
+                    // Report owners can only change ownership of sections in their own periods
+                    var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+                    if (period != null && period.OwnerId == updatingUser.Id)
+                    {
+                        isAuthorized = true;
+                    }
+                    else
+                    {
+                        authorizationError = "Report owners can only change section ownership for their own reporting periods.";
+                    }
+                }
+                else
+                {
+                    authorizationError = "Only administrators or report owners can change section ownership.";
+                }
+
+                if (!isAuthorized)
+                {
+                    result.SkippedSections.Add(new BulkUpdateFailure
+                    {
+                        SectionId = sectionId,
+                        Reason = authorizationError ?? "Not authorized."
+                    });
+                    continue;
+                }
+
+                // Capture old value for audit log
+                var oldOwnerId = section.OwnerId;
+                var oldOwner = _users.FirstOrDefault(u => u.Id == oldOwnerId);
+                var oldOwnerName = oldOwner?.Name ?? oldOwnerId;
+
+                // Update the section owner
+                section.OwnerId = request.OwnerId;
+
+                // Update the corresponding summary
+                var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+                if (summary != null)
+                {
+                    summary.OwnerId = request.OwnerId;
+                    summary.OwnerName = newOwner.Name;
+                }
+
+                // Create audit log entry
+                var changes = new List<FieldChange>
+                {
+                    new FieldChange
+                    {
+                        Field = "OwnerId",
+                        OldValue = $"{oldOwnerName} ({oldOwnerId})",
+                        NewValue = $"{newOwner.Name} ({newOwner.Id})"
+                    }
+                };
+
+                CreateAuditLogEntry(
+                    userId: request.UpdatedBy,
+                    userName: updatingUser.Name,
+                    action: "BulkUpdateSectionOwner",
+                    entityType: "ReportSection",
+                    entityId: sectionId,
+                    changes: changes,
+                    changeNote: request.ChangeNote
+                );
+
+                // Add to successful updates
+                result.UpdatedSections.Add(section);
+            }
+
+            return result;
+        }
+    }
+
     public Organization? GetOrganization()
     {
         lock (_lock)

@@ -92,6 +92,64 @@ public sealed class UpdateSectionOwnerRequest
     public string? ChangeNote { get; set; }
 }
 
+/// <summary>
+/// Request to update the owner of multiple report sections in bulk.
+/// </summary>
+public sealed class BulkUpdateSectionOwnerRequest
+{
+    /// <summary>
+    /// IDs of the sections to update.
+    /// </summary>
+    public List<string> SectionIds { get; set; } = new();
+    
+    /// <summary>
+    /// User ID of the new owner.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person making the change (for audit logging).
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for the change.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Result of a bulk section owner update operation.
+/// </summary>
+public sealed class BulkUpdateSectionOwnerResult
+{
+    /// <summary>
+    /// Sections that were successfully updated.
+    /// </summary>
+    public List<ReportSection> UpdatedSections { get; set; } = new();
+    
+    /// <summary>
+    /// Section IDs that were skipped due to permission or validation errors.
+    /// </summary>
+    public List<BulkUpdateFailure> SkippedSections { get; set; } = new();
+}
+
+/// <summary>
+/// Details about a section that failed to update in a bulk operation.
+/// </summary>
+public sealed class BulkUpdateFailure
+{
+    /// <summary>
+    /// ID of the section that failed to update.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason why the section was skipped.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+}
+
 public sealed class ReportingDataSnapshot
 {
     public Organization? Organization { get; set; }
