@@ -1244,6 +1244,7 @@ public sealed class UpdateValidationRuleRequest
     public string? Parameters { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public string UpdatedBy { get; set; } = string.Empty;
 }
 
 /// <summary>

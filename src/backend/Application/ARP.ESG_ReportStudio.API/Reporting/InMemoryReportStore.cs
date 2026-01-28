@@ -4046,6 +4046,18 @@ public sealed class InMemoryReportStore
             };
 
             _validationRules.Add(newRule);
+
+            // Log creation to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "RuleType", OldValue = "", NewValue = request.RuleType },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = request.ErrorMessage },
+                new FieldChange { Field = "SeverityLevel", OldValue = "", NewValue = "error" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == request.CreatedBy);
+            var userName = user?.Name ?? request.CreatedBy;
+            CreateAuditLogEntry(request.CreatedBy, userName, "create", "ValidationRule", newRule.Id, changes, $"Created validation rule '{request.ErrorMessage}'");
+
             return (true, null, newRule);
         }
     }
@@ -4071,6 +4083,11 @@ public sealed class InMemoryReportStore
                 return (false, "ErrorMessage is required.", null);
             }
 
+            if (string.IsNullOrWhiteSpace(request.UpdatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+
             // Validate rule type
             var validRuleTypes = new[] { "non-negative", "required-unit", "allowed-units", "value-within-period" };
             if (!validRuleTypes.Contains(request.RuleType, StringComparer.OrdinalIgnoreCase))
@@ -4078,17 +4095,44 @@ public sealed class InMemoryReportStore
                 return (false, $"RuleType must be one of: {string.Join(", ", validRuleTypes)}.", null);
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (rule.RuleType != request.RuleType)
+            {
+                changes.Add(new FieldChange { Field = "RuleType", OldValue = rule.RuleType, NewValue = request.RuleType });
+            }
+
+            if (rule.ErrorMessage != request.ErrorMessage)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = rule.ErrorMessage, NewValue = request.ErrorMessage });
+            }
+
+            if (rule.IsActive != request.IsActive)
+            {
+                changes.Add(new FieldChange { Field = "Enabled", OldValue = rule.IsActive.ToString(), NewValue = request.IsActive.ToString() });
+            }
+
+            // Update fields
             rule.RuleType = request.RuleType;
             rule.TargetField = request.TargetField;
             rule.Parameters = request.Parameters;
             rule.ErrorMessage = request.ErrorMessage;
             rule.IsActive = request.IsActive;
 
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
+                var userName = user?.Name ?? request.UpdatedBy;
+                CreateAuditLogEntry(request.UpdatedBy, userName, "update", "ValidationRule", rule.Id, changes, $"Updated validation rule '{request.ErrorMessage}'");
+            }
+
             return (true, null, rule);
         }
     }
 
-    public bool DeleteValidationRule(string id)
+    public bool DeleteValidationRule(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -4097,6 +4141,15 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            // Log deletion to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Description", OldValue = rule.ErrorMessage, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "ValidationRule", rule.Id, changes, $"Deleted validation rule '{rule.ErrorMessage}'");
 
             _validationRules.Remove(rule);
             return true;
