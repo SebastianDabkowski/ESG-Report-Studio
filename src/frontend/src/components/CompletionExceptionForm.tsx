@@ -1,7 +1,7 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -18,7 +18,15 @@ const exceptionSchema = z.object({
     errorMap: () => ({ message: 'Exception type is required' })
   }),
   justification: z.string().min(10, 'Justification must be at least 10 characters'),
-  expiresAt: z.string().optional()
+  expiresAt: z.string().optional().refine((date) => {
+    if (!date) return true // Optional field
+    const expirationDate = new Date(date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0) // Reset to start of day for comparison
+    return expirationDate >= today
+  }, {
+    message: 'Expiration date must be today or in the future'
+  })
 })
 
 type ExceptionFormData = z.infer<typeof exceptionSchema>
@@ -42,6 +50,16 @@ export function CompletionExceptionForm({
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [selectedType, setSelectedType] = useState<ExceptionType>('missing-data')
+  const successTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) {
+        clearTimeout(successTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const {
     register,
@@ -75,7 +93,7 @@ export function CompletionExceptionForm({
       })
 
       setSuccessMessage('Exception request created successfully')
-      setTimeout(() => {
+      successTimeoutRef.current = setTimeout(() => {
         onSuccess(exception)
       }, 500)
     } catch (error) {

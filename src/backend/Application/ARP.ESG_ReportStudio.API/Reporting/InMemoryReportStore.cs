@@ -4839,7 +4839,10 @@ public sealed class InMemoryReportStore
                 return (false, "Exception type is required.", null);
             }
 
-            if (!ValidExceptionTypes.Contains(request.ExceptionType, StringComparer.OrdinalIgnoreCase))
+            // Normalize exception type to lowercase for consistent storage
+            var normalizedExceptionType = request.ExceptionType.ToLowerInvariant();
+
+            if (!ValidExceptionTypes.Contains(normalizedExceptionType, StringComparer.OrdinalIgnoreCase))
             {
                 return (false, $"Exception type must be one of: {string.Join(", ", ValidExceptionTypes)}.", null);
             }
@@ -4847,6 +4850,11 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(request.Justification))
             {
                 return (false, "Justification is required.", null);
+            }
+
+            if (request.Justification.Length < 10)
+            {
+                return (false, "Justification must be at least 10 characters.", null);
             }
 
             if (string.IsNullOrWhiteSpace(request.SectionId))
@@ -4885,7 +4893,7 @@ public sealed class InMemoryReportStore
                 SectionId = request.SectionId,
                 DataPointId = request.DataPointId,
                 Title = request.Title,
-                ExceptionType = request.ExceptionType,
+                ExceptionType = normalizedExceptionType,
                 Justification = request.Justification,
                 Status = "pending",
                 RequestedBy = request.RequestedBy,
@@ -5000,6 +5008,7 @@ public sealed class InMemoryReportStore
 
     /// <summary>
     /// Deletes a completion exception.
+    /// Only pending exceptions should be deleted to preserve audit trail.
     /// </summary>
     public bool DeleteCompletionException(string id)
     {
@@ -5007,6 +5016,12 @@ public sealed class InMemoryReportStore
         {
             var exception = _completionExceptions.FirstOrDefault(e => e.Id == id);
             if (exception == null)
+            {
+                return false;
+            }
+
+            // Only allow deletion of pending exceptions to preserve audit trail
+            if (exception.Status != "pending")
             {
                 return false;
             }

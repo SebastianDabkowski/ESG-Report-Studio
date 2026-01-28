@@ -115,6 +115,7 @@ export function CompletionExceptionsList({
     } catch (err) {
       console.error('Error reviewing exception:', err)
       setError(err instanceof Error ? err.message : 'Failed to review exception')
+      // Keep dialog open to show error
     } finally {
       setIsSubmittingReview(false)
     }

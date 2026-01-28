@@ -120,12 +120,24 @@ public sealed class CompletionExceptionsController : ControllerBase
 
     /// <summary>
     /// Deletes a completion exception.
+    /// Only pending exceptions can be deleted to preserve audit trail.
     /// </summary>
     /// <param name="id">Exception ID.</param>
     /// <returns>No content on success.</returns>
     [HttpDelete("{id}")]
     public ActionResult DeleteCompletionException(string id)
     {
+        var exception = _store.GetCompletionException(id);
+        if (exception == null)
+        {
+            return NotFound(new { error = $"Completion exception with ID '{id}' not found." });
+        }
+
+        if (exception.Status != "pending")
+        {
+            return BadRequest(new { error = $"Cannot delete exception with status '{exception.Status}'. Only pending exceptions can be deleted." });
+        }
+
         var deleted = _store.DeleteCompletionException(id);
         if (!deleted)
         {

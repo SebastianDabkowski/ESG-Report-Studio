@@ -119,13 +119,14 @@ export function CompletionValidationReport({ periodId }: CompletionValidationRep
       </Card>
 
       {/* Sections Detail */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Sections Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Tabs defaultValue={sections[0]?.sectionId || 'none'}>
-            <TabsList className="w-full justify-start overflow-x-auto">
+      {sections.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sections Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue={sections[0].sectionId}>
+              <TabsList className="w-full justify-start overflow-x-auto">
               {sections.map((section) => (
                 <TabsTrigger key={section.sectionId} value={section.sectionId}>
                   {section.sectionTitle}
@@ -261,6 +262,16 @@ export function CompletionValidationReport({ periodId }: CompletionValidationRep
           </Tabs>
         </CardContent>
       </Card>
+      ) : (
+        <Card>
+          <CardContent className="py-12">
+            <div className="text-center text-gray-500">
+              <Info className="h-12 w-12 mx-auto mb-2 opacity-30" />
+              <p>No sections found for this reporting period.</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
