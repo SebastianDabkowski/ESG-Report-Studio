@@ -201,6 +201,16 @@ public sealed class InMemoryReportStore
                 : catalogSections.Where(s => simplifiedCodes.Contains(s.Code)).ToList();
 
             var order = 0;
+            
+            // Determine default owner for new sections
+            // If copying ownership, new sections start unassigned
+            // Otherwise, new sections get the period owner
+            var defaultOwnerId = string.IsNullOrWhiteSpace(request.CopyOwnershipFromPeriodId) 
+                ? request.OwnerId 
+                : string.Empty;
+            var defaultOwnerName = string.IsNullOrWhiteSpace(request.CopyOwnershipFromPeriodId)
+                ? request.OwnerName
+                : "Unassigned";
 
             foreach (var catalogItem in sectionsToInclude)
             {
@@ -211,7 +221,7 @@ public sealed class InMemoryReportStore
                     Title = catalogItem.Title,
                     Category = catalogItem.Category,
                     Description = catalogItem.Description,
-                    OwnerId = request.OwnerId,
+                    OwnerId = defaultOwnerId,
                     Status = "draft",
                     Completeness = "empty",
                     Order = order++,
@@ -237,7 +247,7 @@ public sealed class InMemoryReportStore
                     GapCount = 0,
                     AssumptionCount = 0,
                     CompletenessPercentage = 0,
-                    OwnerName = request.OwnerName
+                    OwnerName = defaultOwnerName
                 });
             }
 

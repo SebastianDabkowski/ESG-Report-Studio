@@ -136,7 +136,7 @@ namespace SD.ProjectName.Tests.Products
         }
         
         [Fact]
-        public void CreatePeriodFromExisting_ShouldKeepDefaultOwner_WhenNewSectionAdded()
+        public void CreatePeriodFromExisting_ShouldMarkNewSectionsAsUnassigned()
         {
             // Arrange
             var store = new InMemoryReportStore();
@@ -203,11 +203,19 @@ namespace SD.ProjectName.Tests.Products
             // Find sections in period 2 that are new (not in period 1)
             var newSections = snapshot2.Sections.Where(s => !period1Codes.Contains(s.CatalogCode)).ToList();
             
-            // New sections should have the default period owner
+            // New sections should be unassigned (empty OwnerId)
             Assert.NotEmpty(newSections);
             foreach (var newSection in newSections)
             {
-                Assert.Equal("user-2", newSection.OwnerId); // period owner
+                Assert.Equal(string.Empty, newSection.OwnerId); // unassigned
+            }
+            
+            // Corresponding summaries should also show as unassigned
+            foreach (var newSection in newSections)
+            {
+                var summary = snapshot2.SectionSummaries.First(s => s.Id == newSection.Id);
+                Assert.Equal(string.Empty, summary.OwnerId);
+                Assert.Equal("Unassigned", summary.OwnerName);
             }
             
             // Existing sections should have copied ownership from period 1

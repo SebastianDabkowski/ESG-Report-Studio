@@ -17,6 +17,7 @@ export interface CreateReportingPeriodPayload {
   ownerId: string
   ownerName: string
   organizationId?: string
+  copyOwnershipFromPeriodId?: string
 }
 
 export interface UpdateReportingPeriodPayload {
