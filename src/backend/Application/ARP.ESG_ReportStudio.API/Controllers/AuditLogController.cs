@@ -114,10 +114,11 @@ public sealed class AuditLogController : ControllerBase
     /// <summary>
     /// Get chronological timeline of changes for a specific entity.
     /// Returns audit log entries with before/after values for easy comparison.
+    /// Includes enriched metadata for report fragments (section name, evidence, comments).
     /// </summary>
-    /// <param name="entityType">Type of entity (e.g., "Gap", "Assumption", "DataPoint")</param>
+    /// <param name="entityType">Type of entity (e.g., "Gap", "Assumption", "DataPoint", "ReportSection")</param>
     /// <param name="entityId">ID of the specific entity</param>
-    /// <returns>Timeline of changes in chronological order (oldest first) with before/after values</returns>
+    /// <returns>Timeline of changes in chronological order (oldest first) with before/after values and metadata</returns>
     [HttpGet("timeline/{entityType}/{entityId}")]
     public ActionResult<object> GetEntityTimeline(string entityType, string entityId)
     {
@@ -127,6 +128,9 @@ public sealed class AuditLogController : ControllerBase
         {
             return NotFound(new { error = $"No audit history found for {entityType} with ID '{entityId}'." });
         }
+
+        // Get current entity metadata for context
+        var metadata = GetEntityMetadata(entityType, entityId);
 
         // Reverse to get chronological order (oldest first)
         var timeline = entries.Reverse().Select(entry => new
@@ -150,8 +154,215 @@ public sealed class AuditLogController : ControllerBase
             EntityType = entityType,
             EntityId = entityId,
             TotalChanges = timeline.Count,
+            Metadata = metadata,
             Timeline = timeline
         });
+    }
+
+    /// <summary>
+    /// Compare two versions of an entity by their audit log entry IDs.
+    /// Returns a side-by-side comparison showing what changed between the versions.
+    /// </summary>
+    /// <param name="entityType">Type of entity (e.g., "DataPoint", "Gap", "Assumption", "ReportSection")</param>
+    /// <param name="entityId">ID of the specific entity</param>
+    /// <param name="fromVersion">Audit log entry ID representing the earlier version</param>
+    /// <param name="toVersion">Audit log entry ID representing the later version</param>
+    /// <returns>Comparison showing field-by-field differences between the two versions</returns>
+    [HttpGet("compare/{entityType}/{entityId}")]
+    public ActionResult<object> CompareVersions(
+        string entityType, 
+        string entityId,
+        [FromQuery] string fromVersion,
+        [FromQuery] string toVersion)
+    {
+        var allEntries = _store.GetAuditLog(entityType: entityType, entityId: entityId);
+        
+        if (!allEntries.Any())
+        {
+            return NotFound(new { error = $"No audit history found for {entityType} with ID '{entityId}'." });
+        }
+
+        var fromEntry = allEntries.FirstOrDefault(e => e.Id == fromVersion);
+        var toEntry = allEntries.FirstOrDefault(e => e.Id == toVersion);
+
+        if (fromEntry == null)
+        {
+            return NotFound(new { error = $"Version '{fromVersion}' not found." });
+        }
+
+        if (toEntry == null)
+        {
+            return NotFound(new { error = $"Version '{toVersion}' not found." });
+        }
+
+        // Build a state map by replaying changes chronologically
+        var chronologicalEntries = allEntries.Reverse().ToList();
+        var fromIndex = chronologicalEntries.FindIndex(e => e.Id == fromVersion);
+        var toIndex = chronologicalEntries.FindIndex(e => e.Id == toVersion);
+
+        if (fromIndex == -1 || toIndex == -1)
+        {
+            return NotFound(new { error = "Version entries not found in chronological timeline." });
+        }
+
+        if (fromIndex > toIndex)
+        {
+            return BadRequest(new { error = "fromVersion must be earlier than toVersion." });
+        }
+
+        // Reconstruct state at fromVersion
+        var fromState = new Dictionary<string, string?>();
+        for (int i = 0; i <= fromIndex; i++)
+        {
+            foreach (var change in chronologicalEntries[i].Changes)
+            {
+                fromState[change.Field] = change.NewValue;
+            }
+        }
+
+        // Reconstruct state at toVersion
+        var toState = new Dictionary<string, string?>();
+        for (int i = 0; i <= toIndex; i++)
+        {
+            foreach (var change in chronologicalEntries[i].Changes)
+            {
+                toState[change.Field] = change.NewValue;
+            }
+        }
+
+        // Calculate differences
+        var allFields = fromState.Keys.Union(toState.Keys).OrderBy(f => f).ToList();
+        var differences = allFields.Select(field =>
+        {
+            var fromValue = fromState.TryGetValue(field, out var fv) ? fv : null;
+            var toValue = toState.TryGetValue(field, out var tv) ? tv : null;
+            
+            var changeType = (fromValue == null && toValue != null) ? "added" :
+                           (fromValue != null && toValue == null) ? "removed" :
+                           (fromValue != toValue) ? "modified" : "unchanged";
+
+            return new
+            {
+                Field = field,
+                FromValue = fromValue,
+                ToValue = toValue,
+                ChangeType = changeType
+            };
+        }).Where(d => d.ChangeType != "unchanged").ToList();
+
+        var metadata = GetEntityMetadata(entityType, entityId);
+
+        return Ok(new
+        {
+            EntityType = entityType,
+            EntityId = entityId,
+            FromVersion = new
+            {
+                Id = fromEntry.Id,
+                Timestamp = fromEntry.Timestamp,
+                UserId = fromEntry.UserId,
+                UserName = fromEntry.UserName,
+                Action = fromEntry.Action,
+                ChangeNote = fromEntry.ChangeNote
+            },
+            ToVersion = new
+            {
+                Id = toEntry.Id,
+                Timestamp = toEntry.Timestamp,
+                UserId = toEntry.UserId,
+                UserName = toEntry.UserName,
+                Action = toEntry.Action,
+                ChangeNote = toEntry.ChangeNote
+            },
+            Metadata = metadata,
+            Differences = differences
+        });
+    }
+
+    /// <summary>
+    /// Get metadata for an entity including section name, evidence links, and related data.
+    /// </summary>
+    private object? GetEntityMetadata(string entityType, string entityId)
+    {
+        return entityType switch
+        {
+            "DataPoint" => GetDataPointMetadata(entityId),
+            "ReportSection" => GetSectionMetadata(entityId),
+            "Gap" => GetGapMetadata(entityId),
+            "Assumption" => GetAssumptionMetadata(entityId),
+            _ => null
+        };
+    }
+
+    private object? GetDataPointMetadata(string dataPointId)
+    {
+        var dataPoint = _store.GetDataPoint(dataPointId);
+        if (dataPoint == null) return null;
+
+        var section = _store.GetSection(dataPoint.SectionId);
+        var evidence = _store.GetEvidenceForDataPoint(dataPointId);
+        var notes = _store.GetNotesForDataPoint(dataPointId);
+
+        return new
+        {
+            Title = dataPoint.Title,
+            SectionId = dataPoint.SectionId,
+            SectionName = section?.Title,
+            Type = dataPoint.Type,
+            EvidenceCount = evidence.Count,
+            Evidence = evidence.Select(e => new { e.Id, e.FileName, e.UploadedAt }).ToList(),
+            NotesCount = notes.Count,
+            Notes = notes.Select(n => new { n.Id, n.Content, n.CreatedAt, n.CreatedBy }).ToList()
+        };
+    }
+
+    private object? GetSectionMetadata(string sectionId)
+    {
+        var section = _store.GetSection(sectionId);
+        if (section == null) return null;
+
+        var dataPoints = _store.GetDataPointsForSection(sectionId);
+
+        return new
+        {
+            Title = section.Title,
+            Category = section.Category,
+            Status = section.Status,
+            OwnerId = section.OwnerId,
+            DataPointCount = dataPoints.Count
+        };
+    }
+
+    private object? GetGapMetadata(string gapId)
+    {
+        var gap = _store.GetGap(gapId);
+        if (gap == null) return null;
+
+        var section = _store.GetSection(gap.SectionId);
+
+        return new
+        {
+            Title = gap.Title,
+            SectionId = gap.SectionId,
+            SectionName = section?.Title,
+            Resolved = gap.Resolved,
+            Impact = gap.Impact
+        };
+    }
+
+    private object? GetAssumptionMetadata(string assumptionId)
+    {
+        var assumption = _store.GetAssumption(assumptionId);
+        if (assumption == null) return null;
+
+        return new
+        {
+            Title = assumption.Title,
+            Status = assumption.Status,
+            ValidityStartDate = assumption.ValidityStartDate,
+            ValidityEndDate = assumption.ValidityEndDate,
+            LinkedDataPointsCount = assumption.LinkedDataPointIds?.Count ?? 0
+        };
     }
 
     private static string FormatCsvField(string? value)

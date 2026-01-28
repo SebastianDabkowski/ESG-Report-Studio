@@ -648,6 +648,14 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public ReportSection? GetSection(string id)
+    {
+        lock (_lock)
+        {
+            return _sections.FirstOrDefault(s => s.Id == id);
+        }
+    }
+
     public IReadOnlyList<SectionSummary> GetSectionSummaries(string? periodId)
     {
         lock (_lock)
@@ -1269,6 +1277,11 @@ public sealed class InMemoryReportStore
             
             return query.ToList();
         }
+    }
+
+    public IReadOnlyList<DataPoint> GetDataPointsForSection(string sectionId)
+    {
+        return GetDataPoints(sectionId);
     }
 
     public DataPoint? GetDataPoint(string id)
@@ -2579,6 +2592,18 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public IReadOnlyList<Evidence> GetEvidenceForDataPoint(string dataPointId)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == dataPointId);
+            if (dataPoint == null || dataPoint.EvidenceIds == null || !dataPoint.EvidenceIds.Any())
+                return new List<Evidence>();
+
+            return _evidence.Where(e => dataPoint.EvidenceIds.Contains(e.Id)).ToList();
+        }
+    }
+
     public Evidence? GetEvidenceById(string id)
     {
         lock (_lock)
@@ -2762,6 +2787,11 @@ public sealed class InMemoryReportStore
         {
             return _assumptions.FirstOrDefault(a => a.Id == id);
         }
+    }
+
+    public Assumption? GetAssumption(string id)
+    {
+        return GetAssumptionById(id);
     }
 
     public (bool IsValid, string? ErrorMessage, Assumption? Assumption) CreateAssumption(
@@ -3204,6 +3234,11 @@ public sealed class InMemoryReportStore
         {
             return _gaps.FirstOrDefault(g => g.Id == id);
         }
+    }
+
+    public Gap? GetGap(string id)
+    {
+        return GetGapById(id);
     }
 
     public (bool IsValid, string? ErrorMessage, Gap? Gap) CreateGap(
@@ -4612,6 +4647,11 @@ public sealed class InMemoryReportStore
                 .OrderBy(n => n.CreatedAt)
                 .ToList();
         }
+    }
+
+    public List<DataPointNote> GetNotesForDataPoint(string dataPointId)
+    {
+        return GetDataPointNotes(dataPointId);
     }
 
     public DataPointNote? GetDataPointNote(string noteId)

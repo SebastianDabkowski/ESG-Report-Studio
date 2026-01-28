@@ -14,6 +14,7 @@ import ResponsibilityMatrixView from '@/components/ResponsibilityMatrixView'
 import ReadinessReportView from '@/components/ReadinessReportView'
 import GapsAndImprovementsView from '@/components/GapsAndImprovementsView'
 import GapsDashboard from '@/components/GapsDashboard'
+import HistoryDemoView from '@/components/HistoryDemoView'
 import { useKV } from '@github/spark/hooks'
 import type { User } from '@/lib/types'
 
@@ -75,6 +76,7 @@ function App() {
             <TabsTrigger value="gaps-improvements">Gaps & Improvements</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
             <TabsTrigger value="audit">Audit Trail</TabsTrigger>
+            <TabsTrigger value="history">Change History</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -127,6 +129,10 @@ function App() {
 
           <TabsContent value="audit" className="space-y-6">
             <AuditTrailView />
+          </TabsContent>
+
+          <TabsContent value="history" className="space-y-6">
+            <HistoryDemoView />
           </TabsContent>
         </Tabs>
       </main>
