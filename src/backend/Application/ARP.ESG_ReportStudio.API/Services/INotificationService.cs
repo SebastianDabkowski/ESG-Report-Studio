@@ -54,4 +54,32 @@ public interface INotificationService
         DataPoint dataPoint, 
         User previousOwner, 
         User changedBy);
+
+    /// <summary>
+    /// Sends a notification to approvers when approval is requested.
+    /// </summary>
+    /// <param name="approvalRequest">The approval request</param>
+    /// <param name="period">The reporting period</param>
+    /// <param name="requester">The user requesting approval</param>
+    /// <param name="approvers">List of users who need to approve</param>
+    Task SendApprovalRequestNotificationAsync(
+        ApprovalRequest approvalRequest,
+        ReportingPeriod period,
+        User requester,
+        List<User> approvers);
+
+    /// <summary>
+    /// Sends a notification when an approval decision is made.
+    /// </summary>
+    /// <param name="approvalRecord">The approval record with the decision</param>
+    /// <param name="approvalRequest">The parent approval request</param>
+    /// <param name="period">The reporting period</param>
+    /// <param name="approver">The user who made the decision</param>
+    /// <param name="requester">The user who requested the approval</param>
+    Task SendApprovalDecisionNotificationAsync(
+        ApprovalRecord approvalRecord,
+        ApprovalRequest approvalRequest,
+        ReportingPeriod period,
+        User approver,
+        User requester);
 }
