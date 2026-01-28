@@ -211,3 +211,18 @@ export interface CompletenessStats {
   byCategory: CompletenessBreakdown[]
   byOrganizationalUnit: CompletenessBreakdown[]
 }
+
+export interface OwnerAssignment {
+  ownerId: string
+  ownerName: string
+  ownerEmail: string
+  sections: SectionSummary[]
+  totalDataPoints: number
+}
+
+export interface ResponsibilityMatrix {
+  assignments: OwnerAssignment[]
+  totalSections: number
+  unassignedSections: number
+  periodId?: string
+}

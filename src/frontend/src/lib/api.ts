@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -387,4 +387,19 @@ export async function getCompletenessStats(params?: CompletenessStatsParams): Pr
   
   const queryString = queryParams.toString()
   return requestJson<CompletenessStats>(`dashboard/completeness-stats${queryString ? `?${queryString}` : ''}`)
+}
+
+// Responsibility Matrix API
+export interface ResponsibilityMatrixParams {
+  periodId?: string
+  ownerFilter?: string
+}
+
+export async function getResponsibilityMatrix(params?: ResponsibilityMatrixParams): Promise<ResponsibilityMatrix> {
+  const queryParams = new URLSearchParams()
+  if (params?.periodId) queryParams.append('periodId', params.periodId)
+  if (params?.ownerFilter) queryParams.append('ownerFilter', params.ownerFilter)
+  
+  const queryString = queryParams.toString()
+  return requestJson<ResponsibilityMatrix>(`responsibility-matrix${queryString ? `?${queryString}` : ''}`)
 }
