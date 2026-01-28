@@ -68,3 +68,31 @@ public sealed class ReportingDataSnapshot
     public IReadOnlyList<SectionSummary> SectionSummaries { get; set; } = Array.Empty<SectionSummary>();
     public IReadOnlyList<OrganizationalUnit> OrganizationalUnits { get; set; } = Array.Empty<OrganizationalUnit>();
 }
+
+public sealed class SectionCatalogItem
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Category { get; set; } = "environmental";
+    public string Description { get; set; } = string.Empty;
+    public bool IsDeprecated { get; set; }
+    public string CreatedAt { get; set; } = string.Empty;
+    public string? DeprecatedAt { get; set; }
+}
+
+public sealed class CreateSectionCatalogItemRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Category { get; set; } = "environmental";
+    public string Description { get; set; } = string.Empty;
+}
+
+public sealed class UpdateSectionCatalogItemRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Code { get; set; } = string.Empty;
+    public string Category { get; set; } = "environmental";
+    public string Description { get; set; } = string.Empty;
+}
