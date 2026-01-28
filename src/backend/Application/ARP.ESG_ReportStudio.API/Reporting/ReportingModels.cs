@@ -295,7 +295,7 @@ public sealed class CreateEvidenceRequest
     public string? Description { get; set; }
 
     /// <summary>
-    /// Optional URL to external source.
+    /// Optional URL to external source. Must use http or https protocol.
     /// </summary>
     public string? SourceUrl { get; set; }
 

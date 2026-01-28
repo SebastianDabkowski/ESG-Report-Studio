@@ -46,9 +46,10 @@ export default function DataPointEvidenceManager({
   }
 
   const handleLinkSelected = async () => {
-    for (const evidenceId of selectedEvidenceIds) {
-      await onLinkEvidence(evidenceId)
-    }
+    // Link all selected evidence items concurrently
+    await Promise.all(
+      Array.from(selectedEvidenceIds).map(evidenceId => onLinkEvidence(evidenceId))
+    )
     setSelectedEvidenceIds(new Set())
     setIsLinkDialogOpen(false)
   }

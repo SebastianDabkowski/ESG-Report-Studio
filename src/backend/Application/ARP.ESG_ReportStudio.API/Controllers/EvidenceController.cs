@@ -85,16 +85,38 @@ public sealed class EvidenceController : ControllerBase
             return BadRequest(new { error = "File size must not exceed 10MB." });
         }
 
+        // Validate file type by content type
+        var allowedContentTypes = new[]
+        {
+            "application/pdf",
+            "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "text/csv",
+            "image/png",
+            "image/jpeg",
+            "image/jpg"
+        };
+
+        if (!allowedContentTypes.Contains(file.ContentType, StringComparer.OrdinalIgnoreCase))
+        {
+            return BadRequest(new { error = "File type not allowed. Accepted formats: PDF, Word, Excel, CSV, PNG, JPEG." });
+        }
+
+        // Sanitize filename
+        var sanitizedFileName = SanitizeFileName(file.FileName);
+        
         // For now, we'll create a mock file URL
         // In a real implementation, this would upload to Azure Blob Storage or similar
-        var fileName = file.FileName;
-        var fileUrl = $"/api/evidence/files/{Guid.NewGuid()}/{fileName}";
+        var fileId = Guid.NewGuid();
+        var fileUrl = $"/api/evidence/files/{fileId}";
 
         var (isValid, errorMessage, evidence) = _store.CreateEvidence(
             sectionId,
             title,
             description,
-            fileName,
+            sanitizedFileName,
             fileUrl,
             null, // sourceUrl
             uploadedBy
@@ -106,9 +128,32 @@ public sealed class EvidenceController : ControllerBase
         }
 
         // In a real implementation, you would save the file here
-        // await SaveFileAsync(file, fileUrl);
+        // await SaveFileAsync(file, fileId, sanitizedFileName);
 
         return CreatedAtAction(nameof(GetEvidenceById), new { id = evidence!.Id }, evidence);
+    }
+
+    private static string SanitizeFileName(string fileName)
+    {
+        // Remove path traversal sequences and dangerous characters
+        var sanitized = Path.GetFileName(fileName);
+        
+        // Remove or replace invalid characters
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var c in invalidChars)
+        {
+            sanitized = sanitized.Replace(c, '_');
+        }
+
+        // Limit filename length
+        if (sanitized.Length > 255)
+        {
+            var extension = Path.GetExtension(sanitized);
+            var nameWithoutExtension = Path.GetFileNameWithoutExtension(sanitized);
+            sanitized = nameWithoutExtension.Substring(0, 255 - extension.Length) + extension;
+        }
+
+        return sanitized;
     }
 
     /// <summary>

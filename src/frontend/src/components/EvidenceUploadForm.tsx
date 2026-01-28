@@ -12,7 +12,23 @@ import { WarningCircle, UploadSimple, FileText } from '@phosphor-icons/react'
 const evidenceSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   description: z.string().optional(),
-  sourceUrl: z.string().url('Must be a valid URL').optional().or(z.literal('')),
+  sourceUrl: z.string().optional()
+    .refine(
+      (val) => {
+        if (!val || val === '') return true
+        try {
+          const url = new URL(val)
+          return url.protocol === 'http:' || url.protocol === 'https:'
+        } catch {
+          return false
+        }
+      },
+      { message: 'Must be a valid HTTP or HTTPS URL' }
+    )
+    .refine(
+      (val) => !val || val.length <= 2048,
+      { message: 'URL must not exceed 2048 characters' }
+    ),
 })
 
 type EvidenceFormData = z.infer<typeof evidenceSchema>
@@ -33,12 +49,14 @@ export default function EvidenceUploadForm({
   isSubmitting = false 
 }: EvidenceUploadFormProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [fileError, setFileError] = useState<string>('')
   
   const {
     register,
     handleSubmit,
     formState: { errors },
-    watch
+    watch,
+    setError
   } = useForm<EvidenceFormData>({
     resolver: zodResolver(evidenceSchema),
     defaultValues: {
@@ -50,26 +68,57 @@ export default function EvidenceUploadForm({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    setFileError('')
+    
     if (file) {
       // Validate file size (10MB max)
       const maxSize = 10 * 1024 * 1024
       if (file.size > maxSize) {
-        alert('File size must not exceed 10MB')
+        setFileError('File size must not exceed 10MB')
         e.target.value = ''
+        setSelectedFile(null)
         return
       }
+
+      // Validate file type
+      const allowedTypes = [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'text/csv',
+        'image/png',
+        'image/jpeg',
+        'image/jpg'
+      ]
+      
+      if (!allowedTypes.includes(file.type)) {
+        setFileError('File type not allowed. Accepted formats: PDF, Word, Excel, CSV, PNG, JPEG')
+        e.target.value = ''
+        setSelectedFile(null)
+        return
+      }
+
       setSelectedFile(file)
     }
   }
 
   const onFormSubmit = (data: EvidenceFormData) => {
+    // Validate that either file or URL is provided
+    if (!selectedFile && !data.sourceUrl) {
+      setError('root', {
+        type: 'manual',
+        message: 'Please upload a file or provide a source URL'
+      })
+      return
+    }
+
     onSubmit({
       ...data,
       file: selectedFile || undefined
     })
   }
-
-  const hasFileOrUrl = selectedFile || watch('sourceUrl')
 
   return (
     <form onSubmit={handleSubmit(onFormSubmit)} className="space-y-4">
@@ -106,7 +155,7 @@ export default function EvidenceUploadForm({
             id="file"
             type="file"
             onChange={handleFileChange}
-            className="flex-1"
+            className={`flex-1 ${fileError ? 'border-red-500' : ''}`}
             accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg"
           />
           {selectedFile && (
@@ -116,6 +165,9 @@ export default function EvidenceUploadForm({
             </div>
           )}
         </div>
+        {fileError && (
+          <p className="text-sm text-red-600">{fileError}</p>
+        )}
         <p className="text-xs text-muted-foreground">
           Accepted formats: PDF, Word, Excel, CSV, Images (max 10MB)
         </p>
@@ -149,20 +201,11 @@ export default function EvidenceUploadForm({
       </div>
 
       {/* Validation Error Alert */}
-      {Object.keys(errors).length > 0 && (
+      {(Object.keys(errors).length > 0 || errors.root) && (
         <Alert variant="destructive">
           <WarningCircle size={16} />
           <AlertDescription>
-            Please fix the errors above before submitting.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!hasFileOrUrl && (
-        <Alert>
-          <WarningCircle size={16} />
-          <AlertDescription>
-            Please upload a file or provide a source URL.
+            {errors.root?.message || 'Please fix the errors above before submitting.'}
           </AlertDescription>
         </Alert>
       )}
@@ -172,7 +215,7 @@ export default function EvidenceUploadForm({
         <Button type="button" variant="outline" onClick={onCancel} disabled={isSubmitting}>
           Cancel
         </Button>
-        <Button type="submit" disabled={isSubmitting || !hasFileOrUrl}>
+        <Button type="submit" disabled={isSubmitting}>
           <UploadSimple size={16} className="mr-2" />
           {isSubmitting ? 'Uploading...' : 'Upload Evidence'}
         </Button>

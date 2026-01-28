@@ -865,7 +865,22 @@ public sealed class InMemoryReportStore
             // At least one of file or URL must be provided
             if (string.IsNullOrWhiteSpace(fileName) && string.IsNullOrWhiteSpace(sourceUrl))
             {
-                return (false, "Either a file or source URL must be provided.", null);
+                return (false, "Either a file or a source URL must be provided.", null);
+            }
+
+            // Validate source URL if provided
+            if (!string.IsNullOrWhiteSpace(sourceUrl))
+            {
+                if (sourceUrl.Length > 2048)
+                {
+                    return (false, "Source URL must not exceed 2048 characters.", null);
+                }
+
+                if (!Uri.TryCreate(sourceUrl, UriKind.Absolute, out var uri) || 
+                    (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                {
+                    return (false, "Source URL must be a valid HTTP or HTTPS URL.", null);
+                }
             }
 
             // Validate section exists
