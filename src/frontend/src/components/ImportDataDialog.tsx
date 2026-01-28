@@ -89,8 +89,14 @@ export default function ImportDataDialog({ open, onOpenChange, onImportComplete 
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Import failed')
+        let errorMessage = 'Import failed'
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // If JSON parsing fails, use default error message
+        }
+        throw new Error(errorMessage)
       }
 
       const result: ImportResult = await response.json()

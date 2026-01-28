@@ -247,6 +247,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
       setDataPoints(refreshedDataPoints)
     } catch (error) {
       console.error('Failed to refresh data points after import:', error)
+      // Note: In production, you might want to show a toast notification here
+      // alerting the user that the data refresh failed and they should manually refresh
     }
   }
 

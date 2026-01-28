@@ -49,6 +49,13 @@ public sealed class ImportController : ControllerBase
             return BadRequest(new { error = "Only CSV files are supported." });
         }
 
+        // Limit file size to 10 MB
+        const long maxFileSize = 10 * 1024 * 1024;
+        if (file.Length > maxFileSize)
+        {
+            return BadRequest(new { error = $"File size exceeds maximum allowed size of {maxFileSize / 1024 / 1024} MB." });
+        }
+
         var result = new ImportResult();
 
         try
