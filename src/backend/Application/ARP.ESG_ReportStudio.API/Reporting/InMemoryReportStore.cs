@@ -2662,12 +2662,14 @@ public sealed class InMemoryReportStore
                 return (false, "CreatedBy is required.", null);
             }
 
-            // Validate that at least one boundary is specified
-            if ((affectedEntities == null || affectedEntities.Count == 0) &&
-                (affectedSites == null || affectedSites.Count == 0) &&
-                (affectedProcesses == null || affectedProcesses.Count == 0))
+            // Validate that at least one boundary is specified with non-empty values
+            var validEntities = affectedEntities?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
+            var validSites = affectedSites?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new List<string>();
+            var validProcesses = affectedProcesses?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
+            
+            if (validEntities.Count == 0 && validSites.Count == 0 && validProcesses.Count == 0)
             {
-                return (false, "At least one affected boundary (entities, sites, or processes) must be specified.", null);
+                return (false, "At least one affected boundary (entities, sites, or processes) must be specified with non-empty values.", null);
             }
 
             // Validate impact level
@@ -2690,9 +2692,9 @@ public sealed class InMemoryReportStore
                 SectionId = sectionId,
                 Title = title,
                 Description = description,
-                AffectedEntities = affectedEntities ?? new List<string>(),
-                AffectedSites = affectedSites ?? new List<string>(),
-                AffectedProcesses = affectedProcesses ?? new List<string>(),
+                AffectedEntities = validEntities,
+                AffectedSites = validSites,
+                AffectedProcesses = validProcesses,
                 ImpactLevel = impactLevel.ToLowerInvariant(),
                 ImpactNotes = impactNotes,
                 Status = "active",
@@ -2754,12 +2756,14 @@ public sealed class InMemoryReportStore
                 return (false, "UpdatedBy is required.", null);
             }
 
-            // Validate that at least one boundary is specified
-            if ((affectedEntities == null || affectedEntities.Count == 0) &&
-                (affectedSites == null || affectedSites.Count == 0) &&
-                (affectedProcesses == null || affectedProcesses.Count == 0))
+            // Validate that at least one boundary is specified with non-empty values
+            var validEntities = affectedEntities?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
+            var validSites = affectedSites?.Where(s => !string.IsNullOrWhiteSpace(s)).ToList() ?? new List<string>();
+            var validProcesses = affectedProcesses?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
+            
+            if (validEntities.Count == 0 && validSites.Count == 0 && validProcesses.Count == 0)
             {
-                return (false, "At least one affected boundary (entities, sites, or processes) must be specified.", null);
+                return (false, "At least one affected boundary (entities, sites, or processes) must be specified with non-empty values.", null);
             }
 
             // Validate impact level
@@ -2785,27 +2789,27 @@ public sealed class InMemoryReportStore
             }
 
             var oldEntities = string.Join(", ", simplification.AffectedEntities);
-            var newEntities = string.Join(", ", affectedEntities ?? new List<string>());
+            var newEntities = string.Join(", ", validEntities);
             if (oldEntities != newEntities)
             {
                 changes.Add(new FieldChange { Field = "AffectedEntities", OldValue = oldEntities, NewValue = newEntities });
-                simplification.AffectedEntities = affectedEntities ?? new List<string>();
+                simplification.AffectedEntities = validEntities;
             }
 
             var oldSites = string.Join(", ", simplification.AffectedSites);
-            var newSites = string.Join(", ", affectedSites ?? new List<string>());
+            var newSites = string.Join(", ", validSites);
             if (oldSites != newSites)
             {
                 changes.Add(new FieldChange { Field = "AffectedSites", OldValue = oldSites, NewValue = newSites });
-                simplification.AffectedSites = affectedSites ?? new List<string>();
+                simplification.AffectedSites = validSites;
             }
 
             var oldProcesses = string.Join(", ", simplification.AffectedProcesses);
-            var newProcesses = string.Join(", ", affectedProcesses ?? new List<string>());
+            var newProcesses = string.Join(", ", validProcesses);
             if (oldProcesses != newProcesses)
             {
                 changes.Add(new FieldChange { Field = "AffectedProcesses", OldValue = oldProcesses, NewValue = newProcesses });
-                simplification.AffectedProcesses = affectedProcesses ?? new List<string>();
+                simplification.AffectedProcesses = validProcesses;
             }
 
             if (simplification.ImpactLevel != impactLevel.ToLowerInvariant())

@@ -23,14 +23,14 @@ const simplificationSchema = z.object({
   }),
   impactNotes: z.string().optional()
 }).refine((data) => {
-  // At least one boundary must be specified
-  const hasEntities = data.affectedEntities && data.affectedEntities.length > 0
-  const hasSites = data.affectedSites && data.affectedSites.length > 0
-  const hasProcesses = data.affectedProcesses && data.affectedProcesses.length > 0
+  // At least one boundary must be specified (with non-empty values)
+  const hasEntities = data.affectedEntities && data.affectedEntities.filter(e => e.trim() !== '').length > 0
+  const hasSites = data.affectedSites && data.affectedSites.filter(s => s.trim() !== '').length > 0
+  const hasProcesses = data.affectedProcesses && data.affectedProcesses.filter(p => p.trim() !== '').length > 0
   return hasEntities || hasSites || hasProcesses
 }, {
   message: "At least one affected boundary (entities, sites, or processes) must be specified",
-  path: ['affectedEntities']
+  path: [] // Show error at form level instead of specific field
 })
 
 type SimplificationFormData = z.infer<typeof simplificationSchema>
@@ -103,9 +103,10 @@ export function SimplificationForm({ sectionId, simplification, onSuccess, onCan
       const payload = {
         title: data.title,
         description: data.description,
-        affectedEntities: data.affectedEntities || [],
-        affectedSites: data.affectedSites || [],
-        affectedProcesses: data.affectedProcesses || [],
+        // Filter out empty strings before submission
+        affectedEntities: (data.affectedEntities || []).filter(e => e.trim() !== ''),
+        affectedSites: (data.affectedSites || []).filter(s => s.trim() !== ''),
+        affectedProcesses: (data.affectedProcesses || []).filter(p => p.trim() !== ''),
         impactLevel: data.impactLevel,
         impactNotes: data.impactNotes && data.impactNotes.trim() ? data.impactNotes : undefined
       }
@@ -265,8 +266,8 @@ export function SimplificationForm({ sectionId, simplification, onSuccess, onCan
             </div>
           </div>
 
-          {errors.affectedEntities && (
-            <p className="text-sm text-red-600 mt-1">{errors.affectedEntities.message}</p>
+          {errors.root && (
+            <p className="text-sm text-red-600 mt-2">{errors.root.message}</p>
           )}
         </div>
 
