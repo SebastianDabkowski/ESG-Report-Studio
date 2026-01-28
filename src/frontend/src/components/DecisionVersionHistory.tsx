@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -17,11 +17,7 @@ export default function DecisionVersionHistory({ decision, onClose }: DecisionVe
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadVersions()
-  }, [decision.id])
-
-  async function loadVersions() {
+  const loadVersions = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getDecisionVersionHistory(decision.id)
@@ -32,7 +28,11 @@ export default function DecisionVersionHistory({ decision, onClose }: DecisionVe
     } finally {
       setLoading(false)
     }
-  }
+  }, [decision.id])
+
+  useEffect(() => {
+    loadVersions()
+  }, [loadVersions])
 
   return (
     <Card>

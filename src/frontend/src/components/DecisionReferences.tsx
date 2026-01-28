@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollText } from '@phosphor-icons/react'
@@ -16,11 +16,7 @@ export default function DecisionReferences({ fragmentId }: DecisionReferencesPro
   const [error, setError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<string[]>([])
 
-  useEffect(() => {
-    loadDecisions()
-  }, [fragmentId])
-
-  async function loadDecisions() {
+  const loadDecisions = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getDecisionsByFragment(fragmentId)
@@ -31,7 +27,11 @@ export default function DecisionReferences({ fragmentId }: DecisionReferencesPro
     } finally {
       setLoading(false)
     }
-  }
+  }, [fragmentId])
+
+  useEffect(() => {
+    loadDecisions()
+  }, [loadDecisions])
 
   function toggleExpanded(decisionId: string) {
     setExpanded(prev => 

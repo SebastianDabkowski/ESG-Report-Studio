@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -23,11 +23,7 @@ export default function DecisionsList({ sectionId }: DecisionsListProps) {
   const [viewingHistory, setViewingHistory] = useState<Decision | undefined>(undefined)
   const [deprecatingDecision, setDeprecatingDecision] = useState<Decision | undefined>(undefined)
 
-  useEffect(() => {
-    loadDecisions()
-  }, [sectionId])
-
-  async function loadDecisions() {
+  const loadDecisions = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getDecisions(sectionId)
@@ -38,7 +34,11 @@ export default function DecisionsList({ sectionId }: DecisionsListProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [sectionId])
+
+  useEffect(() => {
+    loadDecisions()
+  }, [loadDecisions])
 
   async function handleDelete(id: string) {
     if (!confirm('Are you sure you want to delete this decision? This action cannot be undone.')) {

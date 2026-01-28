@@ -6644,7 +6644,7 @@ public sealed class InMemoryReportStore
                 return (false, "Only active decisions can be updated.", null);
             }
 
-            // Save current version to history
+            // Save current version to history (without changeNote - that's for the next version)
             var version = new DecisionVersion
             {
                 Id = Guid.NewGuid().ToString(),
@@ -6658,7 +6658,7 @@ public sealed class InMemoryReportStore
                 Status = decision.Status,
                 CreatedBy = decision.CreatedBy,
                 CreatedAt = decision.CreatedAt,
-                ChangeNote = decision.ChangeNote
+                ChangeNote = null
             };
             _decisionVersions.Add(version);
 
@@ -6715,7 +6715,7 @@ public sealed class InMemoryReportStore
                 return (false, "Decision is already deprecated.", null);
             }
 
-            // Save current version to history
+            // Save current version to history (without changeNote - that's for the next version)
             var version = new DecisionVersion
             {
                 Id = Guid.NewGuid().ToString(),
@@ -6729,7 +6729,7 @@ public sealed class InMemoryReportStore
                 Status = decision.Status,
                 CreatedBy = decision.CreatedBy,
                 CreatedAt = decision.CreatedAt,
-                ChangeNote = decision.ChangeNote
+                ChangeNote = null
             };
             _decisionVersions.Add(version);
 
@@ -6761,7 +6761,7 @@ public sealed class InMemoryReportStore
     /// <summary>
     /// Link a decision to a report fragment (data point).
     /// </summary>
-    public (bool isValid, string? errorMessage) LinkDecisionToFragment(string decisionId, string fragmentId)
+    public (bool isValid, string? errorMessage) LinkDecisionToFragment(string decisionId, string fragmentId, string userId)
     {
         lock (_lock)
         {
@@ -6790,8 +6790,8 @@ public sealed class InMemoryReportStore
             {
                 Id = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = "system",
-                UserName = "system",
+                UserId = userId,
+                UserName = userId,
                 Action = "linked",
                 EntityType = "decision",
                 EntityId = decision.Id,
@@ -6806,7 +6806,7 @@ public sealed class InMemoryReportStore
     /// <summary>
     /// Unlink a decision from a report fragment.
     /// </summary>
-    public (bool isValid, string? errorMessage) UnlinkDecisionFromFragment(string decisionId, string fragmentId)
+    public (bool isValid, string? errorMessage) UnlinkDecisionFromFragment(string decisionId, string fragmentId, string userId)
     {
         lock (_lock)
         {
@@ -6828,8 +6828,8 @@ public sealed class InMemoryReportStore
             {
                 Id = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = "system",
-                UserName = "system",
+                UserId = userId,
+                UserName = userId,
                 Action = "unlinked",
                 EntityType = "decision",
                 EntityId = decision.Id,
@@ -6857,7 +6857,7 @@ public sealed class InMemoryReportStore
     /// <summary>
     /// Delete a decision. Only allowed if not referenced by any fragments.
     /// </summary>
-    public (bool isValid, string? errorMessage) DeleteDecision(string id)
+    public (bool isValid, string? errorMessage) DeleteDecision(string id, string userId)
     {
         lock (_lock)
         {
@@ -6882,8 +6882,8 @@ public sealed class InMemoryReportStore
             {
                 Id = Guid.NewGuid().ToString(),
                 Timestamp = DateTime.UtcNow.ToString("o"),
-                UserId = "system",
-                UserName = "system",
+                UserId = userId,
+                UserName = userId,
                 Action = "deleted",
                 EntityType = "decision",
                 EntityId = id,

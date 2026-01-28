@@ -2433,3 +2433,11 @@ public sealed class UnlinkDecisionRequest
 {
     public string FragmentId { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Request to deprecate a decision.
+/// </summary>
+public sealed class DeprecateDecisionRequest
+{
+    public string Reason { get; set; } = string.Empty;
+}

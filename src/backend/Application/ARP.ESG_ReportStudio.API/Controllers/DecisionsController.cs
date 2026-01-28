@@ -134,7 +134,7 @@ public sealed class DecisionsController : ControllerBase
     [HttpPost("{id}/link")]
     public ActionResult LinkDecisionToFragment(string id, [FromBody] LinkDecisionRequest request)
     {
-        var (isValid, errorMessage) = _store.LinkDecisionToFragment(id, request.FragmentId);
+        var (isValid, errorMessage) = _store.LinkDecisionToFragment(id, request.FragmentId, User?.Identity?.Name ?? "anonymous");
 
         if (!isValid)
         {
@@ -150,7 +150,7 @@ public sealed class DecisionsController : ControllerBase
     [HttpPost("{id}/unlink")]
     public ActionResult UnlinkDecisionFromFragment(string id, [FromBody] UnlinkDecisionRequest request)
     {
-        var (isValid, errorMessage) = _store.UnlinkDecisionFromFragment(id, request.FragmentId);
+        var (isValid, errorMessage) = _store.UnlinkDecisionFromFragment(id, request.FragmentId, User?.Identity?.Name ?? "anonymous");
 
         if (!isValid)
         {
@@ -176,7 +176,7 @@ public sealed class DecisionsController : ControllerBase
     [HttpDelete("{id}")]
     public ActionResult DeleteDecision(string id)
     {
-        var (isValid, errorMessage) = _store.DeleteDecision(id);
+        var (isValid, errorMessage) = _store.DeleteDecision(id, User?.Identity?.Name ?? "anonymous");
 
         if (!isValid)
         {
@@ -185,12 +185,4 @@ public sealed class DecisionsController : ControllerBase
 
         return Ok(new { message = "Decision deleted successfully." });
     }
-}
-
-/// <summary>
-/// Request to deprecate a decision.
-/// </summary>
-public sealed class DeprecateDecisionRequest
-{
-    public string Reason { get; set; } = string.Empty;
 }
