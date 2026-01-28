@@ -113,6 +113,12 @@ public sealed class DataPointsController : ControllerBase
     [HttpPost("{id}/notes")]
     public ActionResult<DataPointNote> CreateNote(string id, [FromBody] CreateDataPointNoteRequest request)
     {
+        // Validate request content
+        if (string.IsNullOrWhiteSpace(request.Content))
+        {
+            return BadRequest(new { error = "Note content cannot be empty." });
+        }
+
         try
         {
             var note = _store.CreateDataPointNote(id, request);
@@ -127,6 +133,13 @@ public sealed class DataPointsController : ControllerBase
     [HttpGet("{id}/notes")]
     public ActionResult<List<DataPointNote>> GetNotes(string id)
     {
+        // Validate that the data point exists
+        var dataPoint = _store.GetDataPoint(id);
+        if (dataPoint == null)
+        {
+            return NotFound(new { error = $"Data point with ID '{id}' not found." });
+        }
+
         var notes = _store.GetDataPointNotes(id);
         return Ok(notes);
     }
