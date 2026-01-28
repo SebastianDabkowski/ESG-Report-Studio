@@ -23,6 +23,8 @@ public sealed class InMemoryReportStore
     private readonly List<OwnerNotification> _notifications = new();
     private readonly List<EscalationConfiguration> _escalationConfigurations = new();
     private readonly List<EscalationHistory> _escalationHistory = new();
+    private readonly List<RemediationPlan> _remediationPlans = new();
+    private readonly List<RemediationAction> _remediationActions = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -4007,4 +4009,467 @@ public sealed class InMemoryReportStore
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);
+
+    // Remediation Plan management methods
+    public IReadOnlyList<RemediationPlan> GetRemediationPlans(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            return sectionId == null
+                ? _remediationPlans.ToList()
+                : _remediationPlans.Where(p => p.SectionId == sectionId).ToList();
+        }
+    }
+
+    public RemediationPlan? GetRemediationPlanById(string id)
+    {
+        lock (_lock)
+        {
+            return _remediationPlans.FirstOrDefault(p => p.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationPlan? Plan) CreateRemediationPlan(
+        string sectionId,
+        string title,
+        string description,
+        string targetPeriod,
+        string ownerId,
+        string ownerName,
+        string priority,
+        string? gapId,
+        string? assumptionId,
+        string? dataPointId,
+        string createdBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(targetPeriod))
+            {
+                return (false, "Target period is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerId))
+            {
+                return (false, "Owner is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(createdBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+
+            // Validate priority
+            var validPriorities = new[] { "low", "medium", "high" };
+            if (!validPriorities.Contains(priority))
+            {
+                return (false, "Priority must be 'low', 'medium', or 'high'.", null);
+            }
+
+            // Validate references exist if provided
+            if (!string.IsNullOrWhiteSpace(gapId))
+            {
+                var gap = _gaps.FirstOrDefault(g => g.Id == gapId);
+                if (gap == null)
+                {
+                    return (false, $"Gap with ID '{gapId}' not found.", null);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(assumptionId))
+            {
+                var assumption = _assumptions.FirstOrDefault(a => a.Id == assumptionId);
+                if (assumption == null)
+                {
+                    return (false, $"Assumption with ID '{assumptionId}' not found.", null);
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(dataPointId))
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+                if (dataPoint == null)
+                {
+                    return (false, $"Data point with ID '{dataPointId}' not found.", null);
+                }
+            }
+
+            var newPlan = new RemediationPlan
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = title,
+                Description = description,
+                TargetPeriod = targetPeriod,
+                OwnerId = ownerId,
+                OwnerName = ownerName,
+                Priority = priority,
+                Status = "planned",
+                GapId = gapId,
+                AssumptionId = assumptionId,
+                DataPointId = dataPointId,
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _remediationPlans.Add(newPlan);
+            return (true, null, newPlan);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationPlan? Plan) UpdateRemediationPlan(
+        string id,
+        string title,
+        string description,
+        string targetPeriod,
+        string ownerId,
+        string ownerName,
+        string priority,
+        string status,
+        string updatedBy)
+    {
+        lock (_lock)
+        {
+            var plan = _remediationPlans.FirstOrDefault(p => p.Id == id);
+            if (plan == null)
+            {
+                return (false, $"Remediation plan with ID '{id}' not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(targetPeriod))
+            {
+                return (false, "Target period is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerId))
+            {
+                return (false, "Owner is required.", null);
+            }
+
+            // Validate priority
+            var validPriorities = new[] { "low", "medium", "high" };
+            if (!validPriorities.Contains(priority))
+            {
+                return (false, "Priority must be 'low', 'medium', or 'high'.", null);
+            }
+
+            // Validate status
+            var validStatuses = new[] { "planned", "in-progress", "completed", "cancelled" };
+            if (!validStatuses.Contains(status))
+            {
+                return (false, "Status must be 'planned', 'in-progress', 'completed', or 'cancelled'.", null);
+            }
+
+            plan.Title = title;
+            plan.Description = description;
+            plan.TargetPeriod = targetPeriod;
+            plan.OwnerId = ownerId;
+            plan.OwnerName = ownerName;
+            plan.Priority = priority;
+            plan.Status = status;
+            plan.UpdatedBy = updatedBy;
+            plan.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, plan);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationPlan? Plan) CompleteRemediationPlan(
+        string id,
+        string completedBy)
+    {
+        lock (_lock)
+        {
+            var plan = _remediationPlans.FirstOrDefault(p => p.Id == id);
+            if (plan == null)
+            {
+                return (false, $"Remediation plan with ID '{id}' not found.", null);
+            }
+
+            if (plan.Status == "completed")
+            {
+                return (false, "Plan is already completed.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(completedBy))
+            {
+                return (false, "CompletedBy is required.", null);
+            }
+
+            plan.Status = "completed";
+            plan.CompletedBy = completedBy;
+            plan.CompletedAt = DateTime.UtcNow.ToString("O");
+            plan.UpdatedBy = completedBy;
+            plan.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, plan);
+        }
+    }
+
+    public bool DeleteRemediationPlan(string id)
+    {
+        lock (_lock)
+        {
+            var plan = _remediationPlans.FirstOrDefault(p => p.Id == id);
+            if (plan == null)
+            {
+                return false;
+            }
+
+            // Delete associated actions first
+            var actions = _remediationActions.Where(a => a.RemediationPlanId == id).ToList();
+            foreach (var action in actions)
+            {
+                _remediationActions.Remove(action);
+            }
+
+            _remediationPlans.Remove(plan);
+            return true;
+        }
+    }
+
+    // Remediation Action management methods
+    public IReadOnlyList<RemediationAction> GetRemediationActions(string remediationPlanId)
+    {
+        lock (_lock)
+        {
+            return _remediationActions.Where(a => a.RemediationPlanId == remediationPlanId).ToList();
+        }
+    }
+
+    public RemediationAction? GetRemediationActionById(string id)
+    {
+        lock (_lock)
+        {
+            return _remediationActions.FirstOrDefault(a => a.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationAction? Action) CreateRemediationAction(
+        string remediationPlanId,
+        string title,
+        string description,
+        string ownerId,
+        string ownerName,
+        string dueDate,
+        string createdBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerId))
+            {
+                return (false, "Owner is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(dueDate))
+            {
+                return (false, "Due date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(remediationPlanId))
+            {
+                return (false, "RemediationPlanId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(createdBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+
+            // Validate due date format
+            if (!DateTime.TryParse(dueDate, out _))
+            {
+                return (false, "Invalid due date format.", null);
+            }
+
+            // Validate remediation plan exists
+            var plan = _remediationPlans.FirstOrDefault(p => p.Id == remediationPlanId);
+            if (plan == null)
+            {
+                return (false, $"Remediation plan with ID '{remediationPlanId}' not found.", null);
+            }
+
+            var newAction = new RemediationAction
+            {
+                Id = Guid.NewGuid().ToString(),
+                RemediationPlanId = remediationPlanId,
+                Title = title,
+                Description = description,
+                OwnerId = ownerId,
+                OwnerName = ownerName,
+                DueDate = dueDate,
+                Status = "pending",
+                EvidenceIds = new List<string>(),
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _remediationActions.Add(newAction);
+            return (true, null, newAction);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationAction? Action) UpdateRemediationAction(
+        string id,
+        string title,
+        string description,
+        string ownerId,
+        string ownerName,
+        string dueDate,
+        string status,
+        string updatedBy)
+    {
+        lock (_lock)
+        {
+            var action = _remediationActions.FirstOrDefault(a => a.Id == id);
+            if (action == null)
+            {
+                return (false, $"Remediation action with ID '{id}' not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(ownerId))
+            {
+                return (false, "Owner is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(dueDate))
+            {
+                return (false, "Due date is required.", null);
+            }
+
+            // Validate due date format
+            if (!DateTime.TryParse(dueDate, out _))
+            {
+                return (false, "Invalid due date format.", null);
+            }
+
+            // Validate status
+            var validStatuses = new[] { "pending", "in-progress", "completed", "cancelled" };
+            if (!validStatuses.Contains(status))
+            {
+                return (false, "Status must be 'pending', 'in-progress', 'completed', or 'cancelled'.", null);
+            }
+
+            action.Title = title;
+            action.Description = description;
+            action.OwnerId = ownerId;
+            action.OwnerName = ownerName;
+            action.DueDate = dueDate;
+            action.Status = status;
+            action.UpdatedBy = updatedBy;
+            action.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, action);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, RemediationAction? Action) CompleteRemediationAction(
+        string id,
+        string completedBy,
+        string? completionNotes,
+        List<string> evidenceIds)
+    {
+        lock (_lock)
+        {
+            var action = _remediationActions.FirstOrDefault(a => a.Id == id);
+            if (action == null)
+            {
+                return (false, $"Remediation action with ID '{id}' not found.", null);
+            }
+
+            if (action.Status == "completed")
+            {
+                return (false, "Action is already completed.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(completedBy))
+            {
+                return (false, "CompletedBy is required.", null);
+            }
+
+            // Validate evidence exists if provided
+            foreach (var evidenceId in evidenceIds)
+            {
+                var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+                if (evidence == null)
+                {
+                    return (false, $"Evidence with ID '{evidenceId}' not found.", null);
+                }
+            }
+
+            action.Status = "completed";
+            action.CompletedBy = completedBy;
+            action.CompletedAt = DateTime.UtcNow.ToString("O");
+            action.CompletionNotes = completionNotes;
+            action.EvidenceIds = new List<string>(evidenceIds);
+            action.UpdatedBy = completedBy;
+            action.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, action);
+        }
+    }
+
+    public bool DeleteRemediationAction(string id)
+    {
+        lock (_lock)
+        {
+            var action = _remediationActions.FirstOrDefault(a => a.Id == id);
+            if (action == null)
+            {
+                return false;
+            }
+
+            _remediationActions.Remove(action);
+            return true;
+        }
+    }
 }

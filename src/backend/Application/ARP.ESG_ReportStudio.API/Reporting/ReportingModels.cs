@@ -1352,3 +1352,228 @@ public sealed class ReadinessItem
     /// </summary>
     public int CompletenessPercentage { get; set; }
 }
+
+/// <summary>
+/// Represents a remediation plan for addressing missing or estimated data items.
+/// Links to gaps or assumptions that need resolution in future periods.
+/// </summary>
+public sealed class RemediationPlan
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title of the remediation plan.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed description of what needs to be remediated and why.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target period for completion (e.g., "Q1 2026", "FY 2026").
+    /// </summary>
+    public string TargetPeriod { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person responsible for overseeing this remediation.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the owner (denormalized for display).
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Priority level: "low", "medium", or "high".
+    /// </summary>
+    public string Priority { get; set; } = "medium";
+    
+    /// <summary>
+    /// Status of the remediation plan: "planned", "in-progress", "completed", "cancelled".
+    /// </summary>
+    public string Status { get; set; } = "planned";
+    
+    /// <summary>
+    /// Optional reference to a Gap this plan addresses.
+    /// </summary>
+    public string? GapId { get; set; }
+    
+    /// <summary>
+    /// Optional reference to an Assumption this plan addresses (e.g., to replace with actual data).
+    /// </summary>
+    public string? AssumptionId { get; set; }
+    
+    /// <summary>
+    /// Optional reference to a DataPoint this plan addresses.
+    /// </summary>
+    public string? DataPointId { get; set; }
+    
+    /// <summary>
+    /// When the plan was completed (if status is "completed").
+    /// </summary>
+    public string? CompletedAt { get; set; }
+    
+    /// <summary>
+    /// User who completed the plan.
+    /// </summary>
+    public string? CompletedBy { get; set; }
+    
+    /// <summary>
+    /// Audit fields.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string? UpdatedBy { get; set; }
+    public string? UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Represents a specific action within a remediation plan.
+/// Actions can include tasks like gathering data, obtaining evidence, etc.
+/// </summary>
+public sealed class RemediationAction
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the remediation plan this action belongs to.
+    /// </summary>
+    public string RemediationPlanId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title/description of the action.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed description of what needs to be done.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person responsible for this action.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the owner (denormalized for display).
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Due date for this action (ISO 8601).
+    /// </summary>
+    public string DueDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Status of the action: "pending", "in-progress", "completed", "cancelled".
+    /// </summary>
+    public string Status { get; set; } = "pending";
+    
+    /// <summary>
+    /// When the action was completed.
+    /// </summary>
+    public string? CompletedAt { get; set; }
+    
+    /// <summary>
+    /// User who completed the action.
+    /// </summary>
+    public string? CompletedBy { get; set; }
+    
+    /// <summary>
+    /// Evidence IDs attached to this action (e.g., invoices, meter readings, HR exports).
+    /// </summary>
+    public List<string> EvidenceIds { get; set; } = new();
+    
+    /// <summary>
+    /// Optional notes about completion or progress.
+    /// </summary>
+    public string? CompletionNotes { get; set; }
+    
+    /// <summary>
+    /// Audit fields.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string? UpdatedBy { get; set; }
+    public string? UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Request to create a new remediation plan.
+/// </summary>
+public sealed class CreateRemediationPlanRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string TargetPeriod { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public string Priority { get; set; } = "medium";
+    public string? GapId { get; set; }
+    public string? AssumptionId { get; set; }
+    public string? DataPointId { get; set; }
+}
+
+/// <summary>
+/// Request to update an existing remediation plan.
+/// </summary>
+public sealed class UpdateRemediationPlanRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string TargetPeriod { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public string Priority { get; set; } = "medium";
+    public string Status { get; set; } = "planned";
+}
+
+/// <summary>
+/// Request to mark a remediation plan as completed.
+/// </summary>
+public sealed class CompleteRemediationPlanRequest
+{
+    public string CompletedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new remediation action.
+/// </summary>
+public sealed class CreateRemediationActionRequest
+{
+    public string RemediationPlanId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public string DueDate { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing remediation action.
+/// </summary>
+public sealed class UpdateRemediationActionRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public string DueDate { get; set; } = string.Empty;
+    public string Status { get; set; } = "pending";
+}
+
+/// <summary>
+/// Request to mark a remediation action as completed.
+/// </summary>
+public sealed class CompleteRemediationActionRequest
+{
+    public string CompletedBy { get; set; } = string.Empty;
+    public string? CompletionNotes { get; set; }
+    public List<string> EvidenceIds { get; set; } = new();
+}

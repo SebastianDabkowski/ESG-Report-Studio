@@ -599,3 +599,125 @@ export async function deleteSimplification(id: string): Promise<void> {
     method: 'DELETE'
   })
 }
+
+// Remediation Plans API
+
+export async function getRemediationPlans(sectionId?: string): Promise<import('@/lib/types').RemediationPlan[]> {
+  const url = sectionId ? `remediation-plans?sectionId=${sectionId}` : 'remediation-plans'
+  return requestJson<import('@/lib/types').RemediationPlan[]>(url)
+}
+
+export async function getRemediationPlanById(id: string): Promise<import('@/lib/types').RemediationPlan> {
+  return requestJson<import('@/lib/types').RemediationPlan>(`remediation-plans/${id}`)
+}
+
+export interface CreateRemediationPlanPayload {
+  sectionId: string
+  title: string
+  description: string
+  targetPeriod: string
+  ownerId: string
+  ownerName: string
+  priority: 'low' | 'medium' | 'high'
+  gapId?: string
+  assumptionId?: string
+  dataPointId?: string
+}
+
+export async function createRemediationPlan(payload: CreateRemediationPlanPayload): Promise<import('@/lib/types').RemediationPlan> {
+  return requestJson<import('@/lib/types').RemediationPlan>('remediation-plans', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface UpdateRemediationPlanPayload {
+  title: string
+  description: string
+  targetPeriod: string
+  ownerId: string
+  ownerName: string
+  priority: 'low' | 'medium' | 'high'
+  status: 'planned' | 'in-progress' | 'completed' | 'cancelled'
+}
+
+export async function updateRemediationPlan(id: string, payload: UpdateRemediationPlanPayload): Promise<import('@/lib/types').RemediationPlan> {
+  return requestJson<import('@/lib/types').RemediationPlan>(`remediation-plans/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function completeRemediationPlan(id: string, completedBy: string): Promise<import('@/lib/types').RemediationPlan> {
+  return requestJson<import('@/lib/types').RemediationPlan>(`remediation-plans/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify({ completedBy })
+  })
+}
+
+export async function deleteRemediationPlan(id: string): Promise<void> {
+  await requestJson<void>(`remediation-plans/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+// Remediation Actions API
+
+export async function getRemediationActions(planId: string): Promise<import('@/lib/types').RemediationAction[]> {
+  return requestJson<import('@/lib/types').RemediationAction[]>(`remediation-plans/${planId}/actions`)
+}
+
+export async function getRemediationActionById(id: string): Promise<import('@/lib/types').RemediationAction> {
+  return requestJson<import('@/lib/types').RemediationAction>(`remediation-plans/actions/${id}`)
+}
+
+export interface CreateRemediationActionPayload {
+  remediationPlanId: string
+  title: string
+  description: string
+  ownerId: string
+  ownerName: string
+  dueDate: string
+}
+
+export async function createRemediationAction(payload: CreateRemediationActionPayload): Promise<import('@/lib/types').RemediationAction> {
+  return requestJson<import('@/lib/types').RemediationAction>('remediation-plans/actions', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface UpdateRemediationActionPayload {
+  title: string
+  description: string
+  ownerId: string
+  ownerName: string
+  dueDate: string
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled'
+}
+
+export async function updateRemediationAction(id: string, payload: UpdateRemediationActionPayload): Promise<import('@/lib/types').RemediationAction> {
+  return requestJson<import('@/lib/types').RemediationAction>(`remediation-plans/actions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface CompleteRemediationActionPayload {
+  completedBy: string
+  completionNotes?: string
+  evidenceIds: string[]
+}
+
+export async function completeRemediationAction(id: string, payload: CompleteRemediationActionPayload): Promise<import('@/lib/types').RemediationAction> {
+  return requestJson<import('@/lib/types').RemediationAction>(`remediation-plans/actions/${id}/complete`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteRemediationAction(id: string): Promise<void> {
+  await requestJson<void>(`remediation-plans/actions/${id}`, {
+    method: 'DELETE'
+  })
+}
