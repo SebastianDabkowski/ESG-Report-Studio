@@ -171,6 +171,15 @@ export default function DataPointForm({
     }
   }, [selectedOwnerId, contributorIds])
   
+  // Clear estimate fields when informationType changes away from 'estimate'
+  useEffect(() => {
+    if (selectedInformationType !== 'estimate') {
+      setValue('estimateType', undefined)
+      setValue('estimateMethod', '')
+      setValue('confidenceLevel', undefined)
+    }
+  }, [selectedInformationType, setValue])
+  
   const handleToggleContributor = (userId: string) => {
     setContributorIds(prev =>
       prev.includes(userId)
