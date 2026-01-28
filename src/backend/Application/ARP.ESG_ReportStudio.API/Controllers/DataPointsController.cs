@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using ARP.ESG_ReportStudio.API.Reporting;
+using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
@@ -8,10 +9,12 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 public sealed class DataPointsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;
+    private readonly INotificationService _notificationService;
 
-    public DataPointsController(InMemoryReportStore store)
+    public DataPointsController(InMemoryReportStore store, INotificationService notificationService)
     {
         _store = store;
+        _notificationService = notificationService;
     }
 
     [HttpGet]
@@ -42,17 +45,53 @@ public sealed class DataPointsController : ControllerBase
             return BadRequest(new { error = errorMessage });
         }
 
+        // Note: Notifications are sent when ownership changes (via UpdateDataPoint),
+        // not when a data point is initially created with an owner.
+
         return CreatedAtAction(nameof(GetDataPoint), new { id = dataPoint!.Id }, dataPoint);
     }
 
     [HttpPut("{id}")]
-    public ActionResult<DataPoint> UpdateDataPoint(string id, [FromBody] UpdateDataPointRequest request)
+    public async Task<ActionResult<DataPoint>> UpdateDataPoint(string id, [FromBody] UpdateDataPointRequest request)
     {
+        // Get the old data point to track owner changes
+        var oldDataPoint = _store.GetDataPoint(id);
+        var oldOwnerId = oldDataPoint?.OwnerId;
+        
         var (isValid, errorMessage, dataPoint) = _store.UpdateDataPoint(id, request);
         
         if (!isValid)
         {
             return BadRequest(new { error = errorMessage });
+        }
+
+        // Send notifications only if owner changed (both old and new owners must exist)
+        if (dataPoint != null && 
+            !string.IsNullOrWhiteSpace(request.OwnerId) && 
+            !string.IsNullOrWhiteSpace(oldOwnerId) &&
+            oldOwnerId != request.OwnerId)
+        {
+            var updatedBy = _store.GetUser(request.UpdatedBy ?? string.Empty);
+            
+            // Only send notifications if we can identify who made the change
+            if (updatedBy != null)
+            {
+                // Send removal notification to old owner
+                var oldOwner = _store.GetUser(oldOwnerId);
+                if (oldOwner != null)
+                {
+                    await _notificationService.SendDataPointRemovedNotificationAsync(
+                        dataPoint, oldOwner, updatedBy);
+                }
+                
+                // Send assignment notification to new owner
+                var newOwner = _store.GetUser(request.OwnerId);
+                if (newOwner != null)
+                {
+                    await _notificationService.SendDataPointAssignedNotificationAsync(
+                        dataPoint, newOwner, updatedBy);
+                }
+            }
         }
 
         return Ok(dataPoint);

@@ -19,6 +19,7 @@ public sealed class InMemoryReportStore
     private readonly List<ReminderConfiguration> _reminderConfigurations = new();
     private readonly List<ReminderHistory> _reminderHistory = new();
     private readonly List<DataPointNote> _dataPointNotes = new();
+    private readonly List<OwnerNotification> _notifications = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -372,7 +373,7 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public (bool IsValid, string? ErrorMessage, ReportSection? Section) UpdateSectionOwner(string sectionId, UpdateSectionOwnerRequest request)
+    public (bool IsValid, string? ErrorMessage, UpdateSectionOwnerResult? Result) UpdateSectionOwner(string sectionId, UpdateSectionOwnerRequest request)
     {
         lock (_lock)
         {
@@ -457,7 +458,16 @@ public sealed class InMemoryReportStore
                 changeNote: request.ChangeNote
             );
 
-            return (true, null, section);
+            // Return result with owner information for notifications
+            var result = new UpdateSectionOwnerResult
+            {
+                Section = section,
+                OldOwner = oldOwner,
+                NewOwner = newOwner,
+                ChangedBy = updatingUser
+            };
+
+            return (true, null, result);
         }
     }
 
@@ -601,6 +611,14 @@ public sealed class InMemoryReportStore
 
                 // Add to successful updates
                 result.UpdatedSections.Add(section);
+                
+                // Track owner update for notifications
+                result.OwnerUpdates.Add(new SectionOwnerUpdate
+                {
+                    Section = section,
+                    OldOwner = oldOwner,
+                    NewOwner = newOwner
+                });
             }
 
             return result;
@@ -2631,6 +2649,53 @@ public sealed class InMemoryReportStore
                 UnassignedSections = unassignedCount,
                 PeriodId = periodId
             };
+        }
+    }
+
+    /// <summary>
+    /// Records a notification in the notification history.
+    /// </summary>
+    public void RecordNotification(OwnerNotification notification)
+    {
+        lock (_lock)
+        {
+            _notifications.Add(notification);
+        }
+    }
+
+    /// <summary>
+    /// Gets all notifications for a user.
+    /// </summary>
+    public List<OwnerNotification> GetNotifications(string userId, bool unreadOnly = false)
+    {
+        lock (_lock)
+        {
+            var query = _notifications.Where(n => n.RecipientUserId == userId);
+            
+            if (unreadOnly)
+            {
+                query = query.Where(n => !n.IsRead);
+            }
+            
+            return query.OrderByDescending(n => n.CreatedAt).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Marks a notification as read.
+    /// </summary>
+    public bool MarkNotificationAsRead(string notificationId)
+    {
+        lock (_lock)
+        {
+            var notification = _notifications.FirstOrDefault(n => n.Id == notificationId);
+            if (notification == null)
+            {
+                return false;
+            }
+            
+            notification.IsRead = true;
+            return true;
         }
     }
 

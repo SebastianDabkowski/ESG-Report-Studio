@@ -52,13 +52,14 @@ namespace SD.ProjectName.Tests.Products
                 UpdatedBy = "user-2", // admin user
                 ChangeNote = "Reassigning section to John Smith"
             };
-            var (isValid, errorMessage, section) = store.UpdateSectionOwner(sectionId, updateRequest);
+            var (isValid, errorMessage, result) = store.UpdateSectionOwner(sectionId, updateRequest);
             
             // Assert
             Assert.True(isValid);
             Assert.Null(errorMessage);
-            Assert.NotNull(section);
-            Assert.Equal("user-3", section.OwnerId);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Section);
+            Assert.Equal("user-3", result.Section.OwnerId);
         }
         
         [Fact]
@@ -517,13 +518,14 @@ namespace SD.ProjectName.Tests.Products
                 UpdatedBy = "user-2",
                 ChangeNote = "Reassigning to John Smith for Q1 reporting"
             };
-            var (isValidUpdate, errorMessage, updatedSection) = store.UpdateSectionOwner(sectionId, updateRequest);
+            var (isValidUpdate, errorMessage, updateResult) = store.UpdateSectionOwner(sectionId, updateRequest);
             
             // 6. Verify update succeeded
             Assert.True(isValidUpdate);
             Assert.Null(errorMessage);
-            Assert.NotNull(updatedSection);
-            Assert.Equal("user-3", updatedSection.OwnerId);
+            Assert.NotNull(updateResult);
+            Assert.NotNull(updateResult.Section);
+            Assert.Equal("user-3", updateResult.Section.OwnerId);
             
             // 7. Verify section summary was updated
             var updatedSummary = store.GetSectionSummaries(null).First(s => s.Id == sectionId);
@@ -555,11 +557,13 @@ namespace SD.ProjectName.Tests.Products
                 UpdatedBy = "user-1",
                 ChangeNote = "Reassigning to Emily Johnson"
             };
-            var (isValidSecondUpdate, _, secondUpdatedSection) = store.UpdateSectionOwner(sectionId, secondUpdateRequest);
+            var (isValidSecondUpdate, _, secondUpdateResult) = store.UpdateSectionOwner(sectionId, secondUpdateRequest);
             
             // 10. Verify second update
             Assert.True(isValidSecondUpdate);
-            Assert.Equal("user-4", secondUpdatedSection!.OwnerId);
+            Assert.NotNull(secondUpdateResult);
+            Assert.NotNull(secondUpdateResult.Section);
+            Assert.Equal("user-4", secondUpdateResult.Section.OwnerId);
             
             // 11. Verify audit log now has 2 entries
             var finalAuditLog = store.GetAuditLog(entityType: "ReportSection", entityId: sectionId);
