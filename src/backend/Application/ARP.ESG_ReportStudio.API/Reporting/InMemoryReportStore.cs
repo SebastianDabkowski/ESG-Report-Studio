@@ -9,6 +9,10 @@ public sealed class InMemoryReportStore
     private readonly List<SectionSummary> _summaries = new();
     private readonly List<OrganizationalUnit> _organizationalUnits = new();
     private readonly List<SectionCatalogItem> _sectionCatalog = new();
+    private readonly List<DataPoint> _dataPoints = new();
+    private readonly List<Evidence> _evidence = new();
+    private readonly List<Assumption> _assumptions = new();
+    private readonly List<Gap> _gaps = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -622,6 +626,165 @@ public sealed class InMemoryReportStore
             item.DeprecatedAt = DateTime.UtcNow.ToString("O");
 
             return (true, null);
+        }
+    }
+
+    // DataPoint Management
+    public IReadOnlyList<DataPoint> GetDataPoints(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            return sectionId == null 
+                ? _dataPoints.ToList()
+                : _dataPoints.Where(d => d.SectionId == sectionId).ToList();
+        }
+    }
+
+    public DataPoint? GetDataPoint(string id)
+    {
+        lock (_lock)
+        {
+            return _dataPoints.FirstOrDefault(d => d.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) CreateDataPoint(CreateDataPointRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Content))
+            {
+                return (false, "Content is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.OwnerId))
+            {
+                return (false, "OwnerId is required.", null);
+            }
+
+            // Validate required metadata fields
+            if (string.IsNullOrWhiteSpace(request.Source))
+            {
+                return (false, "Source is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.InformationType))
+            {
+                return (false, "InformationType is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
+            {
+                return (false, "CompletenessStatus is required.", null);
+            }
+
+            // Validate section exists
+            var sectionExists = _sections.Any(s => s.Id == request.SectionId);
+            if (!sectionExists)
+            {
+                return (false, $"Section with ID '{request.SectionId}' not found.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var newDataPoint = new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = request.SectionId,
+                Type = request.Type,
+                Classification = request.Classification,
+                Title = request.Title,
+                Content = request.Content,
+                Value = request.Value,
+                Unit = request.Unit,
+                OwnerId = request.OwnerId,
+                Source = request.Source,
+                InformationType = request.InformationType,
+                CompletenessStatus = request.CompletenessStatus,
+                CreatedAt = now,
+                UpdatedAt = now,
+                EvidenceIds = new List<string>()
+            };
+
+            _dataPoints.Add(newDataPoint);
+            return (true, null, newDataPoint);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) UpdateDataPoint(string id, UpdateDataPointRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Content))
+            {
+                return (false, "Content is required.", null);
+            }
+
+            // Validate required metadata fields
+            if (string.IsNullOrWhiteSpace(request.Source))
+            {
+                return (false, "Source is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.InformationType))
+            {
+                return (false, "InformationType is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
+            {
+                return (false, "CompletenessStatus is required.", null);
+            }
+
+            dataPoint.Type = request.Type;
+            dataPoint.Classification = request.Classification;
+            dataPoint.Title = request.Title;
+            dataPoint.Content = request.Content;
+            dataPoint.Value = request.Value;
+            dataPoint.Unit = request.Unit;
+            dataPoint.Source = request.Source;
+            dataPoint.InformationType = request.InformationType;
+            dataPoint.CompletenessStatus = request.CompletenessStatus;
+            dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, dataPoint);
+        }
+    }
+
+    public bool DeleteDataPoint(string id)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return false;
+            }
+
+            _dataPoints.Remove(dataPoint);
+            return true;
         }
     }
 
