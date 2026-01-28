@@ -185,6 +185,7 @@ public sealed class DataPoint
     public string OwnerId { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
+    public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
     public string UpdatedAt { get; set; } = string.Empty;
@@ -206,6 +207,7 @@ public sealed class CreateDataPointRequest
     public string OwnerId { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
+    public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
 }
 
@@ -222,6 +224,7 @@ public sealed class UpdateDataPointRequest
     public string? Unit { get; set; }
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
+    public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
 }
 

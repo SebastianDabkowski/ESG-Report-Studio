@@ -70,6 +70,7 @@ export interface DataPoint {
   ownerId: string
   source: string
   informationType: string
+  assumptions?: string
   completenessStatus: string
   createdAt: string
   updatedAt: string

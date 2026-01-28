@@ -685,10 +685,17 @@ public sealed class InMemoryReportStore
             }
 
             // Validate informationType enum
-            var validInformationTypes = new[] { "measured", "calculated", "estimated", "reported" };
+            var validInformationTypes = new[] { "fact", "estimate", "declaration", "plan" };
             if (!validInformationTypes.Contains(request.InformationType, StringComparer.OrdinalIgnoreCase))
             {
                 return (false, $"InformationType must be one of: {string.Join(", ", validInformationTypes)}.", null);
+            }
+
+            // Validate assumptions required for estimate
+            if (request.InformationType.Equals("estimate", StringComparison.OrdinalIgnoreCase) 
+                && string.IsNullOrWhiteSpace(request.Assumptions))
+            {
+                return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
             }
 
             if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
@@ -724,6 +731,7 @@ public sealed class InMemoryReportStore
                 OwnerId = request.OwnerId,
                 Source = request.Source,
                 InformationType = request.InformationType,
+                Assumptions = request.Assumptions,
                 CompletenessStatus = request.CompletenessStatus,
                 CreatedAt = now,
                 UpdatedAt = now,
@@ -768,10 +776,17 @@ public sealed class InMemoryReportStore
             }
 
             // Validate informationType enum
-            var validInformationTypes = new[] { "measured", "calculated", "estimated", "reported" };
+            var validInformationTypes = new[] { "fact", "estimate", "declaration", "plan" };
             if (!validInformationTypes.Contains(request.InformationType, StringComparer.OrdinalIgnoreCase))
             {
                 return (false, $"InformationType must be one of: {string.Join(", ", validInformationTypes)}.", null);
+            }
+
+            // Validate assumptions required for estimate
+            if (request.InformationType.Equals("estimate", StringComparison.OrdinalIgnoreCase) 
+                && string.IsNullOrWhiteSpace(request.Assumptions))
+            {
+                return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
             }
 
             if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
@@ -794,6 +809,7 @@ public sealed class InMemoryReportStore
             dataPoint.Unit = request.Unit;
             dataPoint.Source = request.Source;
             dataPoint.InformationType = request.InformationType;
+            dataPoint.Assumptions = request.Assumptions;
             dataPoint.CompletenessStatus = request.CompletenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
 

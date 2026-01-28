@@ -18,12 +18,22 @@ const dataPointSchema = z.object({
   value: z.string().optional(),
   unit: z.string().optional(),
   source: z.string().min(1, 'Source is required'),
-  informationType: z.enum(['measured', 'calculated', 'estimated', 'reported'], {
+  informationType: z.enum(['fact', 'estimate', 'declaration', 'plan'], {
     errorMap: () => ({ message: 'Information type is required' })
   }),
+  assumptions: z.string().optional(),
   completenessStatus: z.enum(['complete', 'partial', 'incomplete'], {
     errorMap: () => ({ message: 'Completeness status is required' })
   }),
+}).refine((data) => {
+  // Require assumptions when informationType is 'estimate'
+  if (data.informationType === 'estimate' && (!data.assumptions || !data.assumptions.trim())) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Assumptions field is required when Information Type is 'estimate'",
+  path: ['assumptions']
 })
 
 type DataPointFormData = z.infer<typeof dataPointSchema>
@@ -62,17 +72,20 @@ export default function DataPointForm({
       unit: dataPoint.unit || '',
       source: dataPoint.source,
       informationType: dataPoint.informationType,
+      assumptions: dataPoint.assumptions || '',
       completenessStatus: dataPoint.completenessStatus,
     } : {
       type: 'narrative',
       classification: 'fact',
       source: '',
-      informationType: 'measured',
+      informationType: 'fact',
+      assumptions: '',
       completenessStatus: 'complete',
     }
   })
 
   const selectedType = watch('type')
+  const selectedInformationType = watch('informationType')
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -196,16 +209,36 @@ export default function DataPointForm({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="measured">Measured</SelectItem>
-                <SelectItem value="calculated">Calculated</SelectItem>
-                <SelectItem value="estimated">Estimated</SelectItem>
-                <SelectItem value="reported">Reported</SelectItem>
+                <SelectItem value="fact">Fact</SelectItem>
+                <SelectItem value="estimate">Estimate</SelectItem>
+                <SelectItem value="declaration">Declaration</SelectItem>
+                <SelectItem value="plan">Plan</SelectItem>
               </SelectContent>
             </Select>
             {errors.informationType && (
               <p className="text-sm text-red-600">{errors.informationType.message}</p>
             )}
           </div>
+
+          {/* Assumptions (required for estimate) */}
+          {selectedInformationType === 'estimate' && (
+            <div className="space-y-2">
+              <Label htmlFor="assumptions">Assumptions *</Label>
+              <Textarea
+                id="assumptions"
+                {...register('assumptions')}
+                placeholder="Describe the assumptions used for this estimate..."
+                rows={3}
+                className={errors.assumptions ? 'border-red-500' : ''}
+              />
+              {errors.assumptions && (
+                <p className="text-sm text-red-600">{errors.assumptions.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Required for estimates to ensure transparency and auditability
+              </p>
+            </div>
+          )}
 
           {/* Completeness Status */}
           <div className="space-y-2">
