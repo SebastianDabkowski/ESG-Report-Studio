@@ -2441,3 +2441,262 @@ public sealed class DeprecateDecisionRequest
 {
     public string Reason { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Represents the audit view for a report fragment (section, data point, table row, paragraph).
+/// Provides traceability from report output back to sources, evidence, and decisions.
+/// </summary>
+public sealed class FragmentAuditView
+{
+    /// <summary>
+    /// Type of fragment: 'section', 'data-point', 'table-row', 'paragraph'.
+    /// </summary>
+    public string FragmentType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Unique identifier of the fragment.
+    /// </summary>
+    public string FragmentId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Stable identifier for export formats (PDF/DOCX). Used for mapping.
+    /// </summary>
+    public string StableFragmentIdentifier { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title or description of the fragment.
+    /// </summary>
+    public string FragmentTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Content of the fragment.
+    /// </summary>
+    public string FragmentContent { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Parent section information.
+    /// </summary>
+    public FragmentSectionInfo? SectionInfo { get; set; }
+    
+    /// <summary>
+    /// Linked source data references.
+    /// </summary>
+    public List<LinkedSource> LinkedSources { get; set; } = new();
+    
+    /// <summary>
+    /// Linked evidence files.
+    /// </summary>
+    public List<LinkedEvidence> LinkedEvidenceFiles { get; set; } = new();
+    
+    /// <summary>
+    /// Linked decisions.
+    /// </summary>
+    public List<LinkedDecision> LinkedDecisions { get; set; } = new();
+    
+    /// <summary>
+    /// Linked assumptions.
+    /// </summary>
+    public List<LinkedAssumption> LinkedAssumptions { get; set; } = new();
+    
+    /// <summary>
+    /// Linked gaps (if applicable).
+    /// </summary>
+    public List<LinkedGap> LinkedGaps { get; set; } = new();
+    
+    /// <summary>
+    /// Missing provenance warnings.
+    /// </summary>
+    public List<ProvenanceWarning> ProvenanceWarnings { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates whether all required provenance links are present.
+    /// </summary>
+    public bool HasCompleteProvenance { get; set; }
+    
+    /// <summary>
+    /// Audit trail entries for this fragment.
+    /// </summary>
+    public List<AuditLogEntry> AuditTrail { get; set; } = new();
+}
+
+/// <summary>
+/// Section information for a fragment.
+/// </summary>
+public sealed class FragmentSectionInfo
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string SectionTitle { get; set; } = string.Empty;
+    public string SectionCategory { get; set; } = string.Empty;
+    public string? CatalogCode { get; set; }
+}
+
+/// <summary>
+/// Linked source reference with navigation details.
+/// </summary>
+public sealed class LinkedSource
+{
+    public string SourceType { get; set; } = string.Empty;
+    public string SourceReference { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string? NavigationUrl { get; set; }
+    public string? OriginSystem { get; set; }
+    public string? OwnerId { get; set; }
+    public string? OwnerName { get; set; }
+    public string? LastUpdated { get; set; }
+}
+
+/// <summary>
+/// Linked evidence file with navigation details.
+/// </summary>
+public sealed class LinkedEvidence
+{
+    public string EvidenceId { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string UploadedBy { get; set; } = string.Empty;
+    public string UploadedAt { get; set; } = string.Empty;
+    public string? FileUrl { get; set; }
+    public string? Checksum { get; set; }
+    public string IntegrityStatus { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Linked decision with navigation details.
+/// </summary>
+public sealed class LinkedDecision
+{
+    public string DecisionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string DecisionText { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Version { get; set; }
+    public string DecisionBy { get; set; } = string.Empty;
+    public string DecisionDate { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Linked assumption with navigation details.
+/// </summary>
+public sealed class LinkedAssumption
+{
+    public string AssumptionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public int Version { get; set; }
+    public string? Methodology { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Linked gap with navigation details.
+/// </summary>
+public sealed class LinkedGap
+{
+    public string GapId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Impact { get; set; } = string.Empty;
+    public bool Resolved { get; set; }
+    public string? ImprovementPlan { get; set; }
+}
+
+/// <summary>
+/// Warning about missing provenance information.
+/// </summary>
+public sealed class ProvenanceWarning
+{
+    /// <summary>
+    /// Type of missing link: 'source', 'evidence', 'decision', 'assumption'.
+    /// </summary>
+    public string MissingLinkType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Warning message describing what is missing.
+    /// </summary>
+    public string Message { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Severity: 'info', 'warning', 'error'.
+    /// </summary>
+    public string Severity { get; set; } = "warning";
+    
+    /// <summary>
+    /// Recommendation for addressing the warning.
+    /// </summary>
+    public string? Recommendation { get; set; }
+}
+
+/// <summary>
+/// Export mapping metadata for PDF/DOCX exports.
+/// Maps stable fragment identifiers to their location in the export.
+/// </summary>
+public sealed class ExportFragmentMapping
+{
+    /// <summary>
+    /// Unique identifier for this export.
+    /// </summary>
+    public string ExportId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting period ID.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Export format: 'pdf', 'docx'.
+    /// </summary>
+    public string ExportFormat { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when export was created.
+    /// </summary>
+    public string ExportedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who generated the export.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Fragment mappings in this export.
+    /// </summary>
+    public List<FragmentMapping> Mappings { get; set; } = new();
+}
+
+/// <summary>
+/// Individual fragment mapping in an export.
+/// </summary>
+public sealed class FragmentMapping
+{
+    /// <summary>
+    /// Stable fragment identifier.
+    /// </summary>
+    public string StableFragmentIdentifier { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Fragment type.
+    /// </summary>
+    public string FragmentType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Fragment ID.
+    /// </summary>
+    public string FragmentId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Page number in the export (for PDF).
+    /// </summary>
+    public int? PageNumber { get; set; }
+    
+    /// <summary>
+    /// Paragraph/section number (for DOCX).
+    /// </summary>
+    public string? ParagraphNumber { get; set; }
+    
+    /// <summary>
+    /// Section heading in the export.
+    /// </summary>
+    public string? SectionHeading { get; set; }
+}

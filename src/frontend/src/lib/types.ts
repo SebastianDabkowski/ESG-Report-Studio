@@ -636,3 +636,105 @@ export interface UnlinkDecisionRequest {
 export interface DeprecateDecisionRequest {
   reason: string
 }
+
+// Fragment Audit Types
+export interface FragmentSectionInfo {
+  sectionId: string
+  sectionTitle: string
+  sectionCategory: string
+  catalogCode?: string
+}
+
+export interface LinkedSource {
+  sourceType: string
+  sourceReference: string
+  description: string
+  navigationUrl?: string
+  originSystem?: string
+  ownerId?: string
+  ownerName?: string
+  lastUpdated?: string
+}
+
+export interface LinkedEvidence {
+  evidenceId: string
+  fileName: string
+  description?: string
+  uploadedBy: string
+  uploadedAt: string
+  fileUrl?: string
+  checksum?: string
+  integrityStatus: string
+}
+
+export interface LinkedDecision {
+  decisionId: string
+  title: string
+  decisionText: string
+  status: string
+  version: number
+  decisionBy: string
+  decisionDate: string
+}
+
+export interface LinkedAssumption {
+  assumptionId: string
+  title: string
+  description: string
+  status: string
+  version: number
+  methodology?: string
+  createdBy: string
+  createdAt: string
+}
+
+export interface LinkedGap {
+  gapId: string
+  title: string
+  description: string
+  impact: string
+  resolved: boolean
+  improvementPlan?: string
+}
+
+export interface ProvenanceWarning {
+  missingLinkType: string
+  message: string
+  severity: 'info' | 'warning' | 'error'
+  recommendation?: string
+}
+
+export interface FragmentAuditView {
+  fragmentType: string
+  fragmentId: string
+  stableFragmentIdentifier: string
+  fragmentTitle: string
+  fragmentContent: string
+  sectionInfo?: FragmentSectionInfo
+  linkedSources: LinkedSource[]
+  linkedEvidenceFiles: LinkedEvidence[]
+  linkedDecisions: LinkedDecision[]
+  linkedAssumptions: LinkedAssumption[]
+  linkedGaps: LinkedGap[]
+  provenanceWarnings: ProvenanceWarning[]
+  hasCompleteProvenance: boolean
+  auditTrail: AuditLogEntry[]
+}
+
+export interface ExportFragmentMapping {
+  exportId: string
+  periodId: string
+  exportFormat: string
+  exportedAt: string
+  exportedBy: string
+  mappings: FragmentMapping[]
+}
+
+export interface FragmentMapping {
+  stableFragmentIdentifier: string
+  fragmentType: string
+  fragmentId: string
+  pageNumber?: number
+  paragraphNumber?: string
+  sectionHeading?: string
+}

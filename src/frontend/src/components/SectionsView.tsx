@@ -11,11 +11,12 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle, Users, CheckSquare, Square } from '@phosphor-icons/react'
+import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle, Users, CheckSquare, Square, FileSearch } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, DataPoint, Gap, Classification, ContentType } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
 import { updateSectionOwner, bulkUpdateSectionOwner, getUsers, type BulkUpdateFailure } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import FragmentAuditView from './FragmentAuditView'
 
 interface SectionsViewProps {
   currentUser: User
@@ -34,6 +35,9 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
   const [isAddGapOpen, setIsAddGapOpen] = useState(false)
   const [isChangeOwnerOpen, setIsChangeOwnerOpen] = useState(false)
   const [isBulkChangeOwnerOpen, setIsBulkChangeOwnerOpen] = useState(false)
+  const [isAuditViewOpen, setIsAuditViewOpen] = useState(false)
+  const [auditFragmentType, setAuditFragmentType] = useState<string>('')
+  const [auditFragmentId, setAuditFragmentId] = useState<string>('')
   
   const [dataTitle, setDataTitle] = useState('')
   const [dataContent, setDataContent] = useState('')
@@ -450,16 +454,33 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
           {selectedSection && (
             <>
               <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  {selectedSection.title}
-                  <Badge className={getStatusColor(selectedSection.status)}>
-                    {selectedSection.status}
-                  </Badge>
-                  <Badge className={getProgressStatusColor(selectedSection.progressStatus)}>
-                    {getProgressStatusLabel(selectedSection.progressStatus)}
-                  </Badge>
-                </DialogTitle>
-                <DialogDescription>{selectedSection.description}</DialogDescription>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <DialogTitle className="flex items-center gap-2">
+                      {selectedSection.title}
+                      <Badge className={getStatusColor(selectedSection.status)}>
+                        {selectedSection.status}
+                      </Badge>
+                      <Badge className={getProgressStatusColor(selectedSection.progressStatus)}>
+                        {getProgressStatusLabel(selectedSection.progressStatus)}
+                      </Badge>
+                    </DialogTitle>
+                    <DialogDescription>{selectedSection.description}</DialogDescription>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setAuditFragmentType('section')
+                      setAuditFragmentId(selectedSection.id)
+                      setIsAuditViewOpen(true)
+                    }}
+                    className="gap-2"
+                  >
+                    <FileSearch size={16} />
+                    Audit View
+                  </Button>
+                </div>
               </DialogHeader>
 
               <div className="space-y-6 py-4">
@@ -944,6 +965,17 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
               </>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Fragment Audit View Dialog */}
+      <Dialog open={isAuditViewOpen} onOpenChange={setIsAuditViewOpen}>
+        <DialogContent className="max-w-5xl max-h-[85vh] overflow-y-auto">
+          <FragmentAuditView 
+            fragmentType={auditFragmentType} 
+            fragmentId={auditFragmentId}
+            onClose={() => setIsAuditViewOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>
