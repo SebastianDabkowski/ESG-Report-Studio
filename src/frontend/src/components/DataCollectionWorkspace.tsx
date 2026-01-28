@@ -59,18 +59,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     }
   }
 
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'environmental':
-        return 'bg-green-50 border-green-200'
-      case 'social':
-        return 'bg-blue-50 border-blue-200'
-      case 'governance':
-        return 'bg-purple-50 border-purple-200'
-      default:
-        return 'bg-gray-50 border-gray-200'
-    }
-  }
+
 
   const handleOpenDataItem = (dataPoint: DataPoint) => {
     setSelectedDataItem(dataPoint)
@@ -157,7 +146,15 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                       <div 
                         key={dp.id} 
                         className="border border-border rounded-lg p-3 hover:bg-accent cursor-pointer transition-colors"
+                        role="button"
+                        tabIndex={0}
                         onClick={() => handleOpenDataItem(dp)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            handleOpenDataItem(dp)
+                          }
+                        }}
                       >
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <h5 className="font-medium text-sm">{dp.title}</h5>
@@ -254,7 +251,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
             </CardContent>
           </Card>
 
-          <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as any)} className="space-y-4">
+          <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as 'environmental' | 'social' | 'governance')} className="space-y-4">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="environmental" className="flex items-center gap-2">
                 <Leaf size={16} weight="duotone" />
@@ -298,7 +295,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
       {/* Data Item Detail Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          {selectedDataItem && (
+          {selectedDataItem ? (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -416,12 +413,12 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+                <Button variant="outline" onClick={() => setIsDetailOpen(false)} autoFocus>
                   Close
                 </Button>
               </DialogFooter>
             </>
-          )}
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
