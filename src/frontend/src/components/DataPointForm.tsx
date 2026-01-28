@@ -28,6 +28,7 @@ const dataPointSchema = z.object({
   completenessStatus: z.enum(['missing', 'incomplete', 'complete', 'not applicable'], {
     errorMap: () => ({ message: 'Completeness status is required' })
   }).optional(),
+  changeNote: z.string().optional(),
 }).refine((data) => {
   // Require assumptions when informationType is 'estimate'
   if (data.informationType === 'estimate' && (!data.assumptions || !data.assumptions.trim())) {
@@ -82,6 +83,7 @@ export default function DataPointForm({
       informationType: dataPoint.informationType,
       assumptions: dataPoint.assumptions || '',
       completenessStatus: dataPoint.completenessStatus,
+      changeNote: '',
     } : {
       type: 'narrative',
       classification: 'fact',
@@ -90,6 +92,7 @@ export default function DataPointForm({
       informationType: 'fact',
       assumptions: '',
       completenessStatus: undefined,
+      changeNote: '',
     }
   })
 
@@ -351,6 +354,25 @@ export default function DataPointForm({
           <p className="text-xs text-muted-foreground">Select users who will contribute to this data item</p>
         </div>
       </div>
+
+      {/* Change Note (optional, for updates only) */}
+      {dataPoint && (
+        <div className="space-y-4 pt-4 border-t">
+          <h3 className="font-medium text-sm">Change Documentation</h3>
+          <div className="space-y-2">
+            <Label htmlFor="changeNote">Change Note (Optional)</Label>
+            <Textarea
+              id="changeNote"
+              {...register('changeNote')}
+              placeholder="Describe the reason for these changes..."
+              rows={2}
+            />
+            <p className="text-xs text-muted-foreground">
+              Add a note to document why you're making these changes (visible in audit trail)
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Validation Error Alert */}
       {Object.keys(errors).length > 0 && (

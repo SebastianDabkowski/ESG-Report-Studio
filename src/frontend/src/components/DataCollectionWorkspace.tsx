@@ -141,7 +141,9 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
           source: formData.source,
           informationType: formData.informationType,
           assumptions: formData.assumptions,
-          completenessStatus: formData.completenessStatus
+          completenessStatus: formData.completenessStatus,
+          changeNote: formData.changeNote,
+          updatedBy: currentUser?.id || 'user-1'
         }
         
         const updatedDataPoint = await updateDataPoint(editingDataPoint.id, payload)
