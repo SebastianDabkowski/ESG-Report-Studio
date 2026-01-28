@@ -16,6 +16,8 @@ public sealed class InMemoryReportStore
     private readonly List<User> _users = new();
     private readonly List<ValidationRule> _validationRules = new();
     private readonly List<AuditLogEntry> _auditLog = new();
+    private readonly List<ReminderConfiguration> _reminderConfigurations = new();
+    private readonly List<ReminderHistory> _reminderHistory = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -842,7 +844,8 @@ public sealed class InMemoryReportStore
                 ReviewStatus = reviewStatus,
                 CreatedAt = now,
                 UpdatedAt = now,
-                EvidenceIds = new List<string>()
+                EvidenceIds = new List<string>(),
+                Deadline = request.Deadline
             };
 
             // Validate against validation rules
@@ -1075,6 +1078,16 @@ public sealed class InMemoryReportStore
             dataPoint.Assumptions = request.Assumptions;
             dataPoint.CompletenessStatus = completenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            // Update deadline if provided
+            if (request.Deadline != null)
+            {
+                if (dataPoint.Deadline != request.Deadline)
+                {
+                    changes.Add(new FieldChange { Field = "Deadline", OldValue = dataPoint.Deadline ?? "", NewValue = request.Deadline });
+                }
+                dataPoint.Deadline = request.Deadline;
+            }
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -1733,6 +1746,107 @@ public sealed class InMemoryReportStore
             }
 
             return query.OrderByDescending(e => e.Timestamp).ToList();
+        }
+    }
+
+    // Reminder management methods
+    public ReminderConfiguration? GetReminderConfiguration(string periodId)
+    {
+        lock (_lock)
+        {
+            return _reminderConfigurations.FirstOrDefault(rc => rc.PeriodId == periodId);
+        }
+    }
+
+    public ReminderConfiguration CreateOrUpdateReminderConfiguration(string periodId, ReminderConfiguration config)
+    {
+        lock (_lock)
+        {
+            var existing = _reminderConfigurations.FirstOrDefault(rc => rc.PeriodId == periodId);
+            if (existing != null)
+            {
+                // Create a new configuration to ensure thread-safe reads
+                var updated = new ReminderConfiguration
+                {
+                    Id = existing.Id,
+                    PeriodId = periodId,
+                    Enabled = config.Enabled,
+                    DaysBeforeDeadline = new List<int>(config.DaysBeforeDeadline),
+                    CheckFrequencyHours = config.CheckFrequencyHours,
+                    CreatedAt = existing.CreatedAt,
+                    UpdatedAt = DateTime.UtcNow.ToString("O")
+                };
+                
+                _reminderConfigurations.Remove(existing);
+                _reminderConfigurations.Add(updated);
+                return updated;
+            }
+
+            var newConfig = new ReminderConfiguration
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = periodId,
+                Enabled = config.Enabled,
+                DaysBeforeDeadline = new List<int>(config.DaysBeforeDeadline),
+                CheckFrequencyHours = config.CheckFrequencyHours,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                UpdatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _reminderConfigurations.Add(newConfig);
+            return newConfig;
+        }
+    }
+
+    public IReadOnlyList<DataPoint> GetDataPointsForPeriod(string periodId)
+    {
+        lock (_lock)
+        {
+            var sectionIds = _sections
+                .Where(s => s.PeriodId == periodId)
+                .Select(s => s.Id)
+                .ToHashSet();
+
+            return _dataPoints
+                .Where(dp => sectionIds.Contains(dp.SectionId))
+                .ToList();
+        }
+    }
+
+    public void RecordReminderSent(ReminderHistory history)
+    {
+        lock (_lock)
+        {
+            _reminderHistory.Add(history);
+        }
+    }
+
+    public bool HasReminderBeenSentToday(string dataPointId, int daysUntilDeadline)
+    {
+        lock (_lock)
+        {
+            var today = DateTime.UtcNow.Date;
+            return _reminderHistory.Any(rh =>
+                rh.DataPointId == dataPointId &&
+                rh.DaysUntilDeadline == daysUntilDeadline &&
+                DateTime.TryParse(rh.SentAt, out var sentDate) &&
+                sentDate.Date == today);
+        }
+    }
+
+    public IReadOnlyList<ReminderHistory> GetReminderHistory(string? dataPointId = null, string? userId = null)
+    {
+        lock (_lock)
+        {
+            var query = _reminderHistory.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(dataPointId))
+                query = query.Where(rh => rh.DataPointId == dataPointId);
+
+            if (!string.IsNullOrEmpty(userId))
+                query = query.Where(rh => rh.RecipientUserId == userId);
+
+            return query.OrderByDescending(rh => rh.SentAt).ToList();
         }
     }
 
