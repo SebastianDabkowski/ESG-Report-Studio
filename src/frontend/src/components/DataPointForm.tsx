@@ -18,8 +18,12 @@ const dataPointSchema = z.object({
   value: z.string().optional(),
   unit: z.string().optional(),
   source: z.string().min(1, 'Source is required'),
-  informationType: z.string().min(1, 'Information type is required'),
-  completenessStatus: z.string().min(1, 'Completeness status is required'),
+  informationType: z.enum(['measured', 'calculated', 'estimated', 'reported'], {
+    errorMap: () => ({ message: 'Information type is required' })
+  }),
+  completenessStatus: z.enum(['complete', 'partial', 'incomplete'], {
+    errorMap: () => ({ message: 'Completeness status is required' })
+  }),
 })
 
 type DataPointFormData = z.infer<typeof dataPointSchema>
@@ -107,7 +111,7 @@ export default function DataPointForm({
           <Label htmlFor="type">Type *</Label>
           <Select
             value={watch('type')}
-            onValueChange={(value) => setValue('type', value as any)}
+            onValueChange={(value) => setValue('type', value as 'narrative' | 'metric' | 'evidence' | 'assumption' | 'gap')}
           >
             <SelectTrigger id="type">
               <SelectValue />
@@ -126,7 +130,7 @@ export default function DataPointForm({
           <Label htmlFor="classification">Classification</Label>
           <Select
             value={watch('classification') || ''}
-            onValueChange={(value) => setValue('classification', value as any)}
+            onValueChange={(value) => setValue('classification', value as 'fact' | 'declaration' | 'plan')}
           >
             <SelectTrigger id="classification">
               <SelectValue placeholder="Select classification" />

@@ -84,7 +84,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     setIsDetailOpen(false)
   }
 
-  const handleFormSubmit = async (formData: any) => {
+  const handleFormSubmit = async (formData: Omit<DataPoint, 'id' | 'sectionId' | 'ownerId' | 'createdAt' | 'updatedAt' | 'evidenceIds'>) => {
     const now = new Date().toISOString()
     
     if (editingDataPoint) {
@@ -98,7 +98,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     } else {
       // Create new data point
       const newDataPoint: DataPoint = {
-        id: `dp-${Date.now()}`,
+        id: crypto.randomUUID(),
         sectionId: selectedSectionId!,
         ...formData,
         ownerId: currentUser.id,

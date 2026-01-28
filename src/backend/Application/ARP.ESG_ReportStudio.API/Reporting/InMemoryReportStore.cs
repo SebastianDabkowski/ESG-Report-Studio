@@ -684,9 +684,23 @@ public sealed class InMemoryReportStore
                 return (false, "InformationType is required.", null);
             }
 
+            // Validate informationType enum
+            var validInformationTypes = new[] { "measured", "calculated", "estimated", "reported" };
+            if (!validInformationTypes.Contains(request.InformationType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"InformationType must be one of: {string.Join(", ", validInformationTypes)}.", null);
+            }
+
             if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
             {
                 return (false, "CompletenessStatus is required.", null);
+            }
+
+            // Validate completenessStatus enum
+            var validCompletenessStatuses = new[] { "complete", "partial", "incomplete" };
+            if (!validCompletenessStatuses.Contains(request.CompletenessStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
             }
 
             // Validate section exists
@@ -753,9 +767,23 @@ public sealed class InMemoryReportStore
                 return (false, "InformationType is required.", null);
             }
 
+            // Validate informationType enum
+            var validInformationTypes = new[] { "measured", "calculated", "estimated", "reported" };
+            if (!validInformationTypes.Contains(request.InformationType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"InformationType must be one of: {string.Join(", ", validInformationTypes)}.", null);
+            }
+
             if (string.IsNullOrWhiteSpace(request.CompletenessStatus))
             {
                 return (false, "CompletenessStatus is required.", null);
+            }
+
+            // Validate completenessStatus enum
+            var validCompletenessStatuses = new[] { "complete", "partial", "incomplete" };
+            if (!validCompletenessStatuses.Contains(request.CompletenessStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
             }
 
             dataPoint.Type = request.Type;
