@@ -126,19 +126,24 @@ public sealed class EscalationService : IEscalationService
             return;
         }
 
+        var isOwnerAndAdmin = admin.Id == owner.Id;
+
         // Send notification to owner
         var ownerSubject = $"OVERDUE: ESG Data Point - {dataPoint.Title}";
-        var ownerBody = BuildOwnerEscalationEmailBody(dataPoint, owner.Name, daysOverdue);
+        var ownerBody = BuildOwnerEscalationEmailBody(dataPoint, owner.Name, daysOverdue, isOwnerAndAdmin);
         var ownerEmailSent = await _emailService.SendEmailAsync(owner.Email, owner.Name, ownerSubject, ownerBody);
 
         // Send escalation notification to admin (only if different from owner)
         var adminEmailSent = false;
-        if (admin.Id != owner.Id)
+        if (!isOwnerAndAdmin)
         {
             var adminSubject = $"ESCALATION: Overdue ESG Data Point - {dataPoint.Title}";
             var adminBody = BuildAdminEscalationEmailBody(dataPoint, admin.Name, owner.Name, daysOverdue);
             adminEmailSent = await _emailService.SendEmailAsync(admin.Email, admin.Name, adminSubject, adminBody);
         }
+
+        // Determine if there was an error
+        var hasError = !ownerEmailSent || (!isOwnerAndAdmin && !adminEmailSent);
 
         // Record the escalation in history
         _store.RecordEscalationSent(new EscalationHistory
@@ -147,14 +152,14 @@ public sealed class EscalationService : IEscalationService
             DataPointId = dataPoint.Id,
             OwnerUserId = owner.Id,
             OwnerEmail = owner.Email,
-            EscalatedToUserId = admin.Id != owner.Id ? admin.Id : null,
-            EscalatedToEmail = admin.Id != owner.Id ? admin.Email : null,
+            EscalatedToUserId = isOwnerAndAdmin ? null : admin.Id,
+            EscalatedToEmail = isOwnerAndAdmin ? null : admin.Email,
             SentAt = DateTime.UtcNow.ToString("O"),
             DaysOverdue = daysOverdue,
             DeadlineDate = dataPoint.Deadline ?? string.Empty,
             OwnerEmailSent = ownerEmailSent,
             AdminEmailSent = adminEmailSent,
-            ErrorMessage = (!ownerEmailSent || !adminEmailSent) ? "One or more emails failed to send" : null
+            ErrorMessage = hasError ? "One or more emails failed to send" : null
         });
 
         _logger.LogInformation(
@@ -165,8 +170,12 @@ public sealed class EscalationService : IEscalationService
     /// <summary>
     /// Builds the email body for owner notification.
     /// </summary>
-    private string BuildOwnerEscalationEmailBody(DataPoint dataPoint, string ownerName, int daysOverdue)
+    private string BuildOwnerEscalationEmailBody(DataPoint dataPoint, string ownerName, int daysOverdue, bool isOwnerAndAdmin)
     {
+        var escalationNote = isOwnerAndAdmin
+            ? "As the report administrator, please address this overdue item immediately."
+            : "This item has been escalated to the report administrator.";
+
         return $@"Hello {ownerName},
 
 URGENT: The following ESG data point is now {daysOverdue} day(s) OVERDUE and requires immediate attention:
@@ -176,7 +185,7 @@ Status: {dataPoint.CompletenessStatus}
 Deadline: {dataPoint.Deadline}
 Days Overdue: {daysOverdue}
 
-This item has been escalated to the report administrator. Please complete this data point immediately to ensure timely ESG reporting.
+{escalationNote} Please complete this data point immediately to ensure timely ESG reporting.
 
 Best regards,
 ESG Report Studio";

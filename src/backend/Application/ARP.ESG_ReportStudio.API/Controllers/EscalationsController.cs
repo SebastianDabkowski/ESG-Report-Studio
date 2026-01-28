@@ -24,11 +24,15 @@ public sealed class EscalationsController : ControllerBase
         if (config == null)
         {
             // Return default configuration if none exists
+            // Note: Empty Id/CreatedAt/UpdatedAt indicate this is a non-persisted default
             return Ok(new EscalationConfiguration
             {
+                Id = string.Empty,
                 PeriodId = periodId,
                 Enabled = true,
-                DaysAfterDeadline = new List<int> { 3, 7 }
+                DaysAfterDeadline = new List<int> { 3, 7 },
+                CreatedAt = string.Empty,
+                UpdatedAt = string.Empty
             });
         }
 
@@ -54,8 +58,15 @@ public sealed class EscalationsController : ControllerBase
             return BadRequest(new { error = "DaysAfterDeadline values must be positive (days after deadline)." });
         }
 
-        config.PeriodId = periodId;
-        var result = _store.CreateOrUpdateEscalationConfiguration(periodId, config);
+        // Create new config object to avoid mutating the parameter
+        var configToSave = new EscalationConfiguration
+        {
+            PeriodId = periodId,
+            Enabled = config.Enabled,
+            DaysAfterDeadline = config.DaysAfterDeadline
+        };
+
+        var result = _store.CreateOrUpdateEscalationConfiguration(periodId, configToSave);
         return Ok(result);
     }
 
