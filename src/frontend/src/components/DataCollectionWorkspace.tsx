@@ -29,7 +29,7 @@ import {
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
-import { getUsers, getDataPoints } from '@/lib/api'
+import { getUsers, getDataPoints, createDataPoint, updateDataPoint } from '@/lib/api'
 import { useEffect } from 'react'
 
 interface DataCollectionWorkspaceProps {
@@ -53,6 +53,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
   const [showMyItemsOnly, setShowMyItemsOnly] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   // Fetch users on mount
   useEffect(() => {
@@ -121,38 +123,72 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   }
 
   const handleFormSubmit = async (formData: Omit<DataPoint, 'id' | 'sectionId' | 'createdAt' | 'updatedAt' | 'evidenceIds'>) => {
-    const now = new Date().toISOString()
+    setSubmitError(null)
+    setIsSubmitting(true)
     
-    if (editingDataPoint) {
-      // Update existing data point
-      const updatedDataPoints = dataPoints?.map(dp => 
-        dp.id === editingDataPoint.id
-          ? { ...dp, ...formData, updatedAt: now }
-          : dp
-      ) || []
-      setDataPoints(updatedDataPoints)
-    } else {
-      // Create new data point
-      const newDataPoint: DataPoint = {
-        id: crypto.randomUUID(),
-        sectionId: selectedSectionId!,
-        ...formData,
-        createdAt: now,
-        updatedAt: now,
-        evidenceIds: []
+    try {
+      if (editingDataPoint) {
+        // Update existing data point
+        const payload = {
+          type: formData.type,
+          classification: formData.classification,
+          title: formData.title,
+          content: formData.content,
+          value: formData.value,
+          unit: formData.unit,
+          ownerId: formData.ownerId,
+          contributorIds: formData.contributorIds || [],
+          source: formData.source,
+          informationType: formData.informationType,
+          assumptions: formData.assumptions,
+          completenessStatus: formData.completenessStatus
+        }
+        
+        const updatedDataPoint = await updateDataPoint(editingDataPoint.id, payload)
+        
+        const updatedDataPoints = dataPoints?.map(dp => 
+          dp.id === editingDataPoint.id ? updatedDataPoint : dp
+        ) || []
+        setDataPoints(updatedDataPoints)
+      } else {
+        // Create new data point
+        const payload = {
+          sectionId: selectedSectionId!,
+          type: formData.type,
+          classification: formData.classification,
+          title: formData.title,
+          content: formData.content,
+          value: formData.value,
+          unit: formData.unit,
+          ownerId: formData.ownerId,
+          contributorIds: formData.contributorIds || [],
+          source: formData.source,
+          informationType: formData.informationType,
+          assumptions: formData.assumptions,
+          completenessStatus: formData.completenessStatus
+        }
+        
+        const newDataPoint = await createDataPoint(payload)
+        setDataPoints([...(dataPoints || []), newDataPoint])
       }
-      setDataPoints([...(dataPoints || []), newDataPoint])
+      
+      setIsFormOpen(false)
+      setEditingDataPoint(null)
+      setSelectedSectionId(null)
+      setSubmitError(null)
+    } catch (error) {
+      // Validation error from backend
+      setSubmitError(error instanceof Error ? error.message : 'Failed to save data point')
+    } finally {
+      setIsSubmitting(false)
     }
-    
-    setIsFormOpen(false)
-    setEditingDataPoint(null)
-    setSelectedSectionId(null)
   }
 
   const handleFormCancel = () => {
     setIsFormOpen(false)
     setEditingDataPoint(null)
     setSelectedSectionId(null)
+    setSubmitError(null)
   }
 
   const handleUploadEvidence = (sectionId: string) => {
@@ -714,6 +750,12 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                 : 'Add a new data point with required metadata for auditability.'}
             </DialogDescription>
           </DialogHeader>
+          {submitError && (
+            <Alert variant="destructive">
+              <WarningCircle size={16} className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
           {selectedSectionId && (
             <DataPointForm
               sectionId={selectedSectionId}
@@ -722,6 +764,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               dataPoint={editingDataPoint || undefined}
               onSubmit={handleFormSubmit}
               onCancel={handleFormCancel}
+              isSubmitting={isSubmitting}
             />
           )}
         </DialogContent>

@@ -195,3 +195,54 @@ export async function getDataPoints(sectionId?: string, assignedUserId?: string)
   
   return requestJson<any[]>(path)
 }
+
+export interface CreateDataPointPayload {
+  sectionId: string
+  type: string
+  classification?: string
+  title: string
+  content: string
+  value?: string
+  unit?: string
+  ownerId: string
+  contributorIds: string[]
+  source: string
+  informationType: string
+  assumptions?: string
+  completenessStatus: string
+}
+
+export interface UpdateDataPointPayload {
+  type: string
+  classification?: string
+  title: string
+  content: string
+  value?: string
+  unit?: string
+  ownerId: string
+  contributorIds: string[]
+  source: string
+  informationType: string
+  assumptions?: string
+  completenessStatus: string
+}
+
+export async function createDataPoint(payload: CreateDataPointPayload): Promise<any> {
+  return requestJson<any>('data-points', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateDataPoint(id: string, payload: UpdateDataPointPayload): Promise<any> {
+  return requestJson<any>(`data-points/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteDataPoint(id: string): Promise<void> {
+  await requestJson<void>(`data-points/${id}`, {
+    method: 'DELETE'
+  })
+}
