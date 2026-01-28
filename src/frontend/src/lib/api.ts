@@ -800,3 +800,31 @@ export async function getCompletenessValidationReport(
     `completion-exceptions/validation-report?periodId=${periodId}`
   )
 }
+
+// ==================== Gaps and Improvements ====================
+
+export async function getGapsAndImprovementsReport(
+  periodId?: string,
+  sectionId?: string
+): Promise<import('@/lib/types').GapsAndImprovementsReport> {
+  const params = new URLSearchParams()
+  if (periodId) params.append('periodId', periodId)
+  if (sectionId) params.append('sectionId', sectionId)
+  
+  const url = params.toString() 
+    ? `gaps-and-improvements/report?${params.toString()}`
+    : 'gaps-and-improvements/report'
+  
+  return requestJson<import('@/lib/types').GapsAndImprovementsReport>(url)
+}
+
+export interface UpdateGapsNarrativePayload {
+  manualNarrative?: string
+}
+
+export async function updateGapsNarrative(payload: UpdateGapsNarrativePayload): Promise<{ message: string }> {
+  return requestJson<{ message: string }>('gaps-and-improvements/narrative', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
