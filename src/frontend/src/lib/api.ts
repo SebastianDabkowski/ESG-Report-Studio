@@ -426,6 +426,72 @@ export async function exportAuditLogJson(filters?: AuditLogFilters): Promise<voi
   await downloadFile(buildUrl(path), filename)
 }
 
+export interface EntityTimeline {
+  entityType: string
+  entityId: string
+  totalChanges: number
+  metadata: any
+  timeline: TimelineEntry[]
+}
+
+export interface TimelineEntry {
+  id: string
+  timestamp: string
+  userId: string
+  userName: string
+  action: string
+  changeNote?: string
+  changes: {
+    field: string
+    before: string | null
+    after: string | null
+  }[]
+}
+
+export async function getEntityTimeline(entityType: string, entityId: string): Promise<EntityTimeline> {
+  return requestJson<EntityTimeline>(`audit-log/timeline/${entityType}/${entityId}`)
+}
+
+export interface VersionComparison {
+  entityType: string
+  entityId: string
+  fromVersion: {
+    id: string
+    timestamp: string
+    userId: string
+    userName: string
+    action: string
+    changeNote?: string
+  }
+  toVersion: {
+    id: string
+    timestamp: string
+    userId: string
+    userName: string
+    action: string
+    changeNote?: string
+  }
+  metadata: any
+  differences: {
+    field: string
+    fromValue: string | null
+    toValue: string | null
+    changeType: 'added' | 'removed' | 'modified'
+  }[]
+}
+
+export async function compareVersions(
+  entityType: string, 
+  entityId: string, 
+  fromVersion: string, 
+  toVersion: string
+): Promise<VersionComparison> {
+  const params = new URLSearchParams()
+  params.append('fromVersion', fromVersion)
+  params.append('toVersion', toVersion)
+  return requestJson<VersionComparison>(`audit-log/compare/${entityType}/${entityId}?${params}`)
+}
+
 // Dashboard API
 export interface CompletenessStatsParams {
   periodId?: string
