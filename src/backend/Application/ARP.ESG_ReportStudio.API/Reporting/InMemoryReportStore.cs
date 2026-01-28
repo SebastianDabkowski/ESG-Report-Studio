@@ -254,6 +254,13 @@ public sealed class InMemoryReportStore
             // Copy ownership from previous period if specified
             if (!string.IsNullOrWhiteSpace(request.CopyOwnershipFromPeriodId))
             {
+                // Validate source period exists
+                var sourcePeriod = _periods.FirstOrDefault(p => p.Id == request.CopyOwnershipFromPeriodId);
+                if (sourcePeriod == null)
+                {
+                    return (false, $"Source period with ID '{request.CopyOwnershipFromPeriodId}' not found.", null);
+                }
+                
                 CopyOwnershipFromPreviousPeriod(request.CopyOwnershipFromPeriodId, newPeriod.Id);
             }
 
@@ -273,7 +280,7 @@ public sealed class InMemoryReportStore
     /// <summary>
     /// Copies ownership mappings from a previous period to a new period.
     /// Matches sections by catalog code and preserves ownership where codes match.
-    /// Sections without matches remain with their default owner (from period).
+    /// Sections without matches remain unassigned (empty OwnerId).
     /// </summary>
     /// <param name="sourcePeriodId">The period to copy ownership from</param>
     /// <param name="targetPeriodId">The period to copy ownership to</param>
@@ -306,16 +313,20 @@ public sealed class InMemoryReportStore
                 if (summary != null)
                 {
                     summary.OwnerId = sourceSection.OwnerId;
-                    // Update owner name
-                    var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
-                    if (owner != null)
+                    // Update owner name - handle missing owner gracefully
+                    if (!string.IsNullOrWhiteSpace(sourceSection.OwnerId))
                     {
-                        summary.OwnerName = owner.Name;
+                        var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
+                        summary.OwnerName = owner?.Name ?? $"Unknown User ({sourceSection.OwnerId})";
+                    }
+                    else
+                    {
+                        summary.OwnerName = "Unassigned";
                     }
                 }
             }
-            // Note: Sections without a match keep their default owner (period owner)
-            // These will appear as "assigned to period owner" and can be reassigned as needed
+            // Note: Sections without a match remain unassigned (empty OwnerId)
+            // These will appear in the "Unassigned" view and must be manually assigned
         }
     }
 

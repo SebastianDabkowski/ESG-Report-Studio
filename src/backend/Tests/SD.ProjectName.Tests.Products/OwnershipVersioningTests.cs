@@ -99,6 +99,7 @@ namespace SD.ProjectName.Tests.Products
             
             // Update ownership of first section to different owner
             var firstSection = snapshot1.Sections.First();
+            var firstSectionCatalogCode = firstSection.CatalogCode;
             var updateOwnerRequest = new UpdateSectionOwnerRequest
             {
                 OwnerId = "user-3",
@@ -126,12 +127,10 @@ namespace SD.ProjectName.Tests.Products
             Assert.Null(errorMessage);
             Assert.NotNull(snapshot2);
             
-            // Find matching sections by catalog code
-            var section1 = snapshot1.Sections.First();
-            var section2 = snapshot2!.Sections.First(s => s.CatalogCode == section1.CatalogCode);
+            // Find matching section in period 2 by catalog code
+            var section2 = snapshot2!.Sections.First(s => s.CatalogCode == firstSectionCatalogCode);
             
-            // Ownership should be copied
-            Assert.Equal(section1.OwnerId, section2.OwnerId);
+            // Ownership should be copied (user-3, as updated)
             Assert.Equal("user-3", section2.OwnerId);
         }
         
@@ -357,6 +356,53 @@ namespace SD.ProjectName.Tests.Products
                 Assert.Equal("user-3", summary.OwnerId);
                 Assert.Equal("John Smith", summary.OwnerName);
             }
+        }
+        
+        [Fact]
+        public void CreatePeriod_WithInvalidSourcePeriod_ShouldReturnError()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            // Act - Try to create period with non-existent source period
+            var periodRequest = new CreateReportingPeriodRequest
+            {
+                Name = "2025 Report",
+                StartDate = "2025-01-01",
+                EndDate = "2025-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen",
+                CopyOwnershipFromPeriodId = "non-existent-id"
+            };
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
+            
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Source period", errorMessage);
+            Assert.Contains("not found", errorMessage);
+            Assert.Null(snapshot);
         }
     }
 }
