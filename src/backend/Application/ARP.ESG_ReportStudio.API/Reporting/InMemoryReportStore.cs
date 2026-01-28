@@ -1520,6 +1520,138 @@ public sealed class InMemoryReportStore
         }
     }
 
+    /// <summary>
+    /// Updates the completeness status of a data point with validation.
+    /// When changing to "complete", validates that all required fields are present.
+    /// Returns validation errors with detailed missing field information.
+    /// </summary>
+    public (bool IsValid, StatusValidationError? ValidationError, DataPoint? DataPoint) UpdateDataPointStatus(string id, UpdateDataPointStatusRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, new StatusValidationError 
+                { 
+                    Message = "DataPoint not found.",
+                    MissingFields = new List<MissingFieldDetail>()
+                }, null);
+            }
+
+            // Validate completenessStatus enum
+            var validCompletenessStatuses = new[] { "missing", "incomplete", "complete", "not applicable" };
+            if (!validCompletenessStatuses.Contains(request.CompletenessStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, new StatusValidationError
+                {
+                    Message = $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.",
+                    MissingFields = new List<MissingFieldDetail>()
+                }, null);
+            }
+
+            // Validate user exists
+            var user = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
+            if (user == null)
+            {
+                return (false, new StatusValidationError
+                {
+                    Message = $"User with ID '{request.UpdatedBy}' not found.",
+                    MissingFields = new List<MissingFieldDetail>()
+                }, null);
+            }
+
+            // Special validation when changing to "complete"
+            if (request.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase))
+            {
+                var missingFields = new List<MissingFieldDetail>();
+
+                // Check for required fields
+                if (string.IsNullOrWhiteSpace(dataPoint.Value))
+                {
+                    missingFields.Add(new MissingFieldDetail
+                    {
+                        Field = "Value",
+                        Reason = "A numeric or textual value is required for completion."
+                    });
+                }
+
+                // Check for period/deadline (using Deadline field as proxy for period)
+                if (string.IsNullOrWhiteSpace(dataPoint.Deadline))
+                {
+                    missingFields.Add(new MissingFieldDetail
+                    {
+                        Field = "Period",
+                        Reason = "A reporting period or deadline must be specified."
+                    });
+                }
+
+                // Check for methodology/source
+                if (string.IsNullOrWhiteSpace(dataPoint.Source))
+                {
+                    missingFields.Add(new MissingFieldDetail
+                    {
+                        Field = "Source",
+                        Reason = "Methodology or source information is required for completion."
+                    });
+                }
+
+                // Check for owner
+                if (string.IsNullOrWhiteSpace(dataPoint.OwnerId))
+                {
+                    missingFields.Add(new MissingFieldDetail
+                    {
+                        Field = "Owner",
+                        Reason = "An owner must be assigned before marking as complete."
+                    });
+                }
+
+                // If there are missing fields, block the completion
+                if (missingFields.Any())
+                {
+                    return (false, new StatusValidationError
+                    {
+                        Message = "Cannot mark data point as complete. Required fields are missing.",
+                        MissingFields = missingFields
+                    }, null);
+                }
+            }
+
+            // Capture change for audit log
+            var changes = new List<FieldChange>();
+            if (dataPoint.CompletenessStatus != request.CompletenessStatus)
+            {
+                changes.Add(new FieldChange
+                {
+                    Field = "CompletenessStatus",
+                    OldValue = dataPoint.CompletenessStatus,
+                    NewValue = request.CompletenessStatus
+                });
+            }
+
+            // Update the status and timestamp
+            var oldStatus = dataPoint.CompletenessStatus;
+            dataPoint.CompletenessStatus = request.CompletenessStatus;
+            dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Create audit log entry if status changed
+            if (changes.Any())
+            {
+                CreateAuditLogEntry(
+                    request.UpdatedBy,
+                    user.Name,
+                    "update-status",
+                    "DataPoint",
+                    dataPoint.Id,
+                    changes,
+                    request.ChangeNote
+                );
+            }
+
+            return (true, null, dataPoint);
+        }
+    }
+
     // Evidence Management
     public IReadOnlyList<Evidence> GetEvidence(string? sectionId = null)
     {
