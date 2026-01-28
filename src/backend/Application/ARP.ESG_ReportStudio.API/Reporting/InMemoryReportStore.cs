@@ -2805,5 +2805,175 @@ public sealed class InMemoryReportStore
         }
     }
 
+    /// <summary>
+    /// Gets a readiness report showing ownership completeness and data completion metrics.
+    /// </summary>
+    /// <param name="periodId">Optional filter by reporting period ID.</param>
+    /// <param name="sectionId">Optional filter by section ID.</param>
+    /// <param name="ownerId">Optional filter by owner ID.</param>
+    /// <param name="category">Optional filter by ESG category (environmental, social, governance).</param>
+    /// <returns>Readiness report with metrics and item list.</returns>
+    public ReadinessReport GetReadinessReport(string? periodId = null, string? sectionId = null, string? ownerId = null, string? category = null)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            
+            // Start with all sections
+            var sections = _sections.AsEnumerable();
+            
+            // Apply period filter
+            if (!string.IsNullOrWhiteSpace(periodId))
+            {
+                sections = sections.Where(s => s.PeriodId == periodId);
+            }
+            
+            // Apply section filter
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                sections = sections.Where(s => s.Id == sectionId);
+            }
+            
+            // Apply owner filter
+            if (!string.IsNullOrWhiteSpace(ownerId))
+            {
+                sections = sections.Where(s => s.OwnerId == ownerId);
+            }
+            
+            // Apply category filter
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                sections = sections.Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            var sectionsList = sections.ToList();
+            var sectionIds = sectionsList.Select(s => s.Id).ToHashSet();
+            
+            // Get data points for filtered sections
+            var dataPoints = _dataPoints.Where(dp => sectionIds.Contains(dp.SectionId)).ToList();
+            
+            var items = new List<ReadinessItem>();
+            var totalItems = 0;
+            var itemsWithOwners = 0;
+            var completedItems = 0;
+            var blockedCount = 0;
+            var overdueCount = 0;
+            
+            // Process sections
+            foreach (var section in sectionsList)
+            {
+                var sectionDataPoints = dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+                var summary = _summaries.FirstOrDefault(s => s.Id == section.Id);
+                var owner = _users.FirstOrDefault(u => u.Id == section.OwnerId);
+                
+                var progressStatus = summary?.ProgressStatus ?? "not-started";
+                var isBlocked = progressStatus == "blocked";
+                var isCompleted = progressStatus == "completed";
+                
+                // For sections, we consider them as items
+                totalItems++;
+                if (!string.IsNullOrWhiteSpace(section.OwnerId))
+                {
+                    itemsWithOwners++;
+                }
+                if (isCompleted)
+                {
+                    completedItems++;
+                }
+                if (isBlocked)
+                {
+                    blockedCount++;
+                }
+                
+                items.Add(new ReadinessItem
+                {
+                    Id = section.Id,
+                    Type = "section",
+                    Title = section.Title,
+                    Category = section.Category,
+                    OwnerId = section.OwnerId,
+                    OwnerName = owner?.Name ?? string.Empty,
+                    ProgressStatus = progressStatus,
+                    IsBlocked = isBlocked,
+                    IsOverdue = false, // Sections don't have deadlines in current model
+                    Deadline = null,
+                    CompletenessPercentage = summary?.CompletenessPercentage ?? 0
+                });
+            }
+            
+            // Process data points
+            foreach (var dataPoint in dataPoints)
+            {
+                var section = sectionsList.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+                if (section == null) continue;
+                
+                var owner = _users.FirstOrDefault(u => u.Id == dataPoint.OwnerId);
+                var isCompleted = dataPoint.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase);
+                var isBlocked = dataPoint.IsBlocked || dataPoint.ReviewStatus.Equals("changes-requested", StringComparison.OrdinalIgnoreCase);
+                var isOverdue = !string.IsNullOrWhiteSpace(dataPoint.Deadline) && 
+                                DateTime.TryParse(dataPoint.Deadline, out var deadline) &&
+                                deadline < now &&
+                                !isCompleted;
+                
+                var progressStatus = isCompleted ? "completed" :
+                                   isBlocked ? "blocked" :
+                                   string.IsNullOrWhiteSpace(dataPoint.Content) ? "not-started" :
+                                   "in-progress";
+                
+                totalItems++;
+                if (!string.IsNullOrWhiteSpace(dataPoint.OwnerId))
+                {
+                    itemsWithOwners++;
+                }
+                if (isCompleted)
+                {
+                    completedItems++;
+                }
+                if (isBlocked)
+                {
+                    blockedCount++;
+                }
+                if (isOverdue)
+                {
+                    overdueCount++;
+                }
+                
+                items.Add(new ReadinessItem
+                {
+                    Id = dataPoint.Id,
+                    Type = "datapoint",
+                    Title = dataPoint.Title,
+                    Category = section.Category,
+                    OwnerId = dataPoint.OwnerId,
+                    OwnerName = owner?.Name ?? string.Empty,
+                    ProgressStatus = progressStatus,
+                    IsBlocked = isBlocked,
+                    IsOverdue = isOverdue,
+                    Deadline = dataPoint.Deadline,
+                    CompletenessPercentage = isCompleted ? 100 : string.IsNullOrWhiteSpace(dataPoint.Content) ? 0 : 50
+                });
+            }
+            
+            var ownershipPercentage = totalItems > 0 ? (int)Math.Round((double)itemsWithOwners / totalItems * 100) : 0;
+            var completionPercentage = totalItems > 0 ? (int)Math.Round((double)completedItems / totalItems * 100) : 0;
+            
+            return new ReadinessReport
+            {
+                PeriodId = periodId,
+                Metrics = new ReadinessMetrics
+                {
+                    OwnershipPercentage = ownershipPercentage,
+                    CompletionPercentage = completionPercentage,
+                    BlockedCount = blockedCount,
+                    OverdueCount = overdueCount,
+                    TotalItems = totalItems,
+                    ItemsWithOwners = itemsWithOwners,
+                    CompletedItems = completedItems
+                },
+                Items = items
+            };
+        }
+    }
+
     private sealed record SectionTemplate(string Title, string Category, string Description);
 }
