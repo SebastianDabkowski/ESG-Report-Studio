@@ -51,7 +51,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
       setIsLoadingStats(true)
       try {
-        const params: any = { periodId: activePeriod.id }
+        const params: { periodId: string; category?: string; organizationalUnitId?: string } = { 
+          periodId: activePeriod.id 
+        }
         if (selectedCategory !== 'all') params.category = selectedCategory
         if (selectedOrgUnit !== 'all') params.organizationalUnitId = selectedOrgUnit
         

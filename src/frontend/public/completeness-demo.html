@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Completeness Dashboard Demo - ESG Report Studio</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+            color: #333;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { margin-bottom: 8px; color: #1a1a1a; font-size: 28px; }
+        .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .card-header { margin-bottom: 20px; }
+        .card-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 8px; }
+        .card-description { color: #666; font-size: 14px; }
+        .filters { display: flex; gap: 12px; margin-top: 16px; }
+        .select {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid;
+        }
+        .stat-card.missing { background: #fef2f2; border-color: #fecaca; }
+        .stat-card.incomplete { background: #fffbeb; border-color: #fde68a; }
+        .stat-card.complete { background: #f0fdf4; border-color: #bbf7d0; }
+        .stat-card.na { background: #f9fafb; border-color: #e5e7eb; }
+        .stat-label {
+            font-size: 12px;
+            font-weight: 500;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+        .stat-card.missing .stat-label { color: #b91c1c; }
+        .stat-card.incomplete .stat-label { color: #b45309; }
+        .stat-card.complete .stat-label { color: #15803d; }
+        .stat-card.na .stat-label { color: #4b5563; }
+        .stat-value {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        .stat-card.missing .stat-value { color: #991b1b; }
+        .stat-card.incomplete .stat-value { color: #92400e; }
+        .stat-card.complete .stat-value { color: #166534; }
+        .stat-card.na .stat-value { color: #1f2937; }
+        .stat-percent {
+            font-size: 12px;
+        }
+        .stat-card.missing .stat-percent { color: #dc2626; }
+        .stat-card.incomplete .stat-percent { color: #d97706; }
+        .stat-card.complete .stat-percent { color: #16a34a; }
+        .stat-card.na .stat-percent { color: #6b7280; }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .breakdown-item {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .breakdown-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .breakdown-name {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        .category-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+        .category-dot.environmental { background: #22c55e; }
+        .category-dot.social { background: #3b82f6; }
+        .category-dot.governance { background: #a855f7; }
+        .breakdown-percentage {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .breakdown-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            text-align: center;
+            font-size: 12px;
+            margin-bottom: 12px;
+        }
+        .breakdown-stat-value {
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .breakdown-stat-label {
+            color: #6b7280;
+        }
+        .progress-bar {
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #22c55e;
+            transition: width 0.3s ease;
+        }
+        .icon {
+            width: 20px;
+            height: 20px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Completeness Dashboard</h1>
+        <p class="subtitle">Track data completeness by category and organizational unit</p>
+
+        <div class="card">
+            <div class="card-header">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div class="card-title">
+                            <span class="icon">📊</span>
+                            Completeness Overview
+                        </div>
+                        <div class="card-description">Track data completeness by category and organizational unit</div>
+                    </div>
+                    <div class="filters">
+                        <select class="select" id="categoryFilter">
+                            <option value="all">All Categories</option>
+                            <option value="environmental">Environmental</option>
+                            <option value="social">Social</option>
+                            <option value="governance">Governance</option>
+                        </select>
+                        <select class="select" id="unitFilter">
+                            <option value="all">All Units</option>
+                            <option value="user-1">Sarah Chen</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="stats-content">
+                <!-- Stats will be loaded here -->
+                <div style="text-align: center; padding: 40px; color: #999;">Loading completeness data...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:5011/api';
+        let activePeriodId = null;
+
+        async function loadStats() {
+            const categoryFilter = document.getElementById('categoryFilter').value;
+            const unitFilter = document.getElementById('unitFilter').value;
+            
+            const params = new URLSearchParams();
+            if (activePeriodId) params.append('periodId', activePeriodId);
+            if (categoryFilter !== 'all') params.append('category', categoryFilter);
+            if (unitFilter !== 'all') params.append('organizationalUnitId', unitFilter);
+
+            try {
+                const response = await fetch(`${API_BASE}/dashboard/completeness-stats?${params}`);
+                const stats = await response.json();
+                renderStats(stats, categoryFilter, unitFilter);
+            } catch (error) {
+                document.getElementById('stats-content').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: #ef4444;">Failed to load data: ' + error.message + '</div>';
+            }
+        }
+
+        function renderStats(stats, categoryFilter, unitFilter) {
+            let html = `
+                <div class="stats-grid">
+                    <div class="stat-card missing">
+                        <div class="stat-label">Missing</div>
+                        <div class="stat-value">${stats.overall.missingCount}</div>
+                        <div class="stat-percent">
+                            ${stats.overall.totalCount > 0 
+                                ? Math.round((stats.overall.missingCount / stats.overall.totalCount) * 100) 
+                                : 0}%
+                        </div>
+                    </div>
+                    <div class="stat-card incomplete">
+                        <div class="stat-label">Incomplete</div>
+                        <div class="stat-value">${stats.overall.incompleteCount}</div>
+                        <div class="stat-percent">
+                            ${stats.overall.totalCount > 0 
+                                ? Math.round((stats.overall.incompleteCount / stats.overall.totalCount) * 100) 
+                                : 0}%
+                        </div>
+                    </div>
+                    <div class="stat-card complete">
+                        <div class="stat-label">Complete</div>
+                        <div class="stat-value">${stats.overall.completeCount}</div>
+                        <div class="stat-percent">${stats.overall.completePercentage.toFixed(1)}%</div>
+                    </div>
+                    <div class="stat-card na">
+                        <div class="stat-label">Not Applicable</div>
+                        <div class="stat-value">${stats.overall.notApplicableCount}</div>
+                        <div class="stat-percent">
+                            ${stats.overall.totalCount > 0 
+                                ? Math.round((stats.overall.notApplicableCount / stats.overall.totalCount) * 100) 
+                                : 0}%
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // By Category
+            if (unitFilter === 'all' && stats.byCategory.length > 0) {
+                html += '<div class="section-title">By E/S/G Category</div>';
+                stats.byCategory.forEach(cat => {
+                    if (cat.totalCount > 0) {
+                        html += `
+                            <div class="breakdown-item">
+                                <div class="breakdown-header">
+                                    <div class="breakdown-name">
+                                        <div class="category-dot ${cat.id}"></div>
+                                        <span>${cat.name}</span>
+                                    </div>
+                                    <div class="breakdown-percentage">${cat.completePercentage.toFixed(1)}% Complete</div>
+                                </div>
+                                <div class="breakdown-stats">
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #dc2626;">${cat.missingCount}</div>
+                                        <div class="breakdown-stat-label">Missing</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #d97706;">${cat.incompleteCount}</div>
+                                        <div class="breakdown-stat-label">Incomplete</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #16a34a;">${cat.completeCount}</div>
+                                        <div class="breakdown-stat-label">Complete</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #6b7280;">${cat.notApplicableCount}</div>
+                                        <div class="breakdown-stat-label">N/A</div>
+                                    </div>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${cat.completePercentage}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            // By Organizational Unit
+            if (categoryFilter === 'all' && stats.byOrganizationalUnit.length > 0) {
+                html += '<div class="section-title" style="margin-top: 24px;">By Organizational Unit</div>';
+                stats.byOrganizationalUnit.forEach(unit => {
+                    if (unit.totalCount > 0) {
+                        html += `
+                            <div class="breakdown-item">
+                                <div class="breakdown-header">
+                                    <div class="breakdown-name">
+                                        <span>${unit.name}</span>
+                                    </div>
+                                    <div class="breakdown-percentage">${unit.completePercentage.toFixed(1)}% Complete</div>
+                                </div>
+                                <div class="breakdown-stats">
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #dc2626;">${unit.missingCount}</div>
+                                        <div class="breakdown-stat-label">Missing</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #d97706;">${unit.incompleteCount}</div>
+                                        <div class="breakdown-stat-label">Incomplete</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #16a34a;">${unit.completeCount}</div>
+                                        <div class="breakdown-stat-label">Complete</div>
+                                    </div>
+                                    <div>
+                                        <div class="breakdown-stat-value" style="color: #6b7280;">${unit.notApplicableCount}</div>
+                                        <div class="breakdown-stat-label">N/A</div>
+                                    </div>
+                                </div>
+                                <div class="progress-bar">
+                                    <div class="progress-fill" style="width: ${unit.completePercentage}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+            }
+
+            document.getElementById('stats-content').innerHTML = html;
+        }
+
+        // Load period ID
+        async function init() {
+            try {
+                const response = await fetch(`${API_BASE}/periods`);
+                const periods = await response.json();
+                const activePeriod = periods.find(p => p.status === 'active');
+                if (activePeriod) {
+                    activePeriodId = activePeriod.id;
+                }
+                loadStats();
+            } catch (error) {
+                console.error('Failed to initialize:', error);
+                loadStats(); // Try anyway
+            }
+        }
+
+        document.getElementById('categoryFilter').addEventListener('change', loadStats);
+        document.getElementById('unitFilter').addEventListener('change', loadStats);
+
+        init();
+    </script>
+</body>
+</html>

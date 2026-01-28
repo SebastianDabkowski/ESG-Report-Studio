@@ -1895,11 +1895,15 @@ public sealed class InMemoryReportStore
             // Calculate overall stats
             var overall = CalculateBreakdown("overall", "Overall", dataPointsList);
 
+            // Get filtered sections for efficient breakdown calculations
+            var relevantSectionIds = dataPointsList.Select(dp => dp.SectionId).Distinct().ToHashSet();
+            var relevantSections = _sections.Where(s => relevantSectionIds.Contains(s.Id)).ToList();
+
             // Calculate by category
             var byCategory = new List<CompletenessBreakdown>();
             foreach (var cat in new[] { "environmental", "social", "governance" })
             {
-                var categorySectionIds = _sections
+                var categorySectionIds = relevantSections
                     .Where(s => s.Category.Equals(cat, StringComparison.OrdinalIgnoreCase))
                     .Select(s => s.Id)
                     .ToHashSet();
@@ -1912,7 +1916,7 @@ public sealed class InMemoryReportStore
 
             // Calculate by organizational unit (using section owners as proxy)
             var byOrganizationalUnit = new List<CompletenessBreakdown>();
-            var ownerGroups = _sections
+            var ownerGroups = relevantSections
                 .GroupBy(s => s.OwnerId)
                 .ToList();
 
@@ -1923,6 +1927,10 @@ public sealed class InMemoryReportStore
                 var ownerDataPoints = dataPointsList
                     .Where(dp => ownerSectionIds.Contains(dp.SectionId))
                     .ToList();
+
+                // Only include if there are actual data points
+                if (ownerDataPoints.Count == 0)
+                    continue;
 
                 var user = _users.FirstOrDefault(u => u.Id == ownerId);
                 var ownerName = user?.Name ?? "Unknown";
@@ -1941,12 +1949,25 @@ public sealed class InMemoryReportStore
 
     private CompletenessBreakdown CalculateBreakdown(string id, string name, List<DataPoint> dataPoints)
     {
-        var missingCount = dataPoints.Count(dp => dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase));
-        var incompleteCount = dataPoints.Count(dp => dp.CompletenessStatus.Equals("incomplete", StringComparison.OrdinalIgnoreCase));
-        var completeCount = dataPoints.Count(dp => dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase));
-        var notApplicableCount = dataPoints.Count(dp => dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
-        var totalCount = dataPoints.Count;
+        // Single pass through data points for efficiency
+        var missingCount = 0;
+        var incompleteCount = 0;
+        var completeCount = 0;
+        var notApplicableCount = 0;
 
+        foreach (var dp in dataPoints)
+        {
+            if (dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase))
+                missingCount++;
+            else if (dp.CompletenessStatus.Equals("incomplete", StringComparison.OrdinalIgnoreCase))
+                incompleteCount++;
+            else if (dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase))
+                completeCount++;
+            else if (dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase))
+                notApplicableCount++;
+        }
+
+        var totalCount = dataPoints.Count;
         var completePercentage = totalCount > 0 
             ? Math.Round((double)completeCount / totalCount * 100, 1) 
             : 0.0;
