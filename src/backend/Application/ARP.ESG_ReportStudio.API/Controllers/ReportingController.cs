@@ -89,9 +89,9 @@ public sealed class ReportingController : ControllerBase
     [HttpPut("sections/{id}/owner")]
     public ActionResult<ReportSection> UpdateSectionOwner(string id, [FromBody] UpdateSectionOwnerRequest request)
     {
-        if (string.IsNullOrWhiteSpace(request.OwnerId) || string.IsNullOrWhiteSpace(request.UpdatedBy))
+        if (string.IsNullOrWhiteSpace(request.UpdatedBy))
         {
-            return BadRequest(new { error = "OwnerId and UpdatedBy are required." });
+            return BadRequest(new { error = "UpdatedBy is required." });
         }
 
         var (isValid, errorMessage, section) = _store.UpdateSectionOwner(id, request);
@@ -120,5 +120,12 @@ public sealed class ReportingController : ControllerBase
         var result = _store.UpdateSectionOwnersBulk(request);
         
         return Ok(result);
+    }
+
+    [HttpGet("responsibility-matrix")]
+    public ActionResult<ResponsibilityMatrix> GetResponsibilityMatrix([FromQuery] string? periodId, [FromQuery] string? ownerFilter)
+    {
+        var matrix = _store.GetResponsibilityMatrix(periodId, ownerFilter);
+        return Ok(matrix);
     }
 }

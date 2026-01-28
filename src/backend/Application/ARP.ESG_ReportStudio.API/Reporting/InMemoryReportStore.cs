@@ -383,18 +383,22 @@ public sealed class InMemoryReportStore
                 return (false, "Section not found.", null);
             }
 
-            // Validate the new owner exists
-            var newOwner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
-            if (newOwner == null)
-            {
-                return (false, "Owner user not found.", null);
-            }
-
             // Validate the user making the change exists
             var updatingUser = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
             if (updatingUser == null)
             {
                 return (false, "Updating user not found.", null);
+            }
+
+            // Validate the new owner exists (unless clearing the owner)
+            User? newOwner = null;
+            if (!string.IsNullOrEmpty(request.OwnerId))
+            {
+                newOwner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+                if (newOwner == null)
+                {
+                    return (false, "Owner user not found.", null);
+                }
             }
 
             // Check authorization: only admin or report-owner can change section ownership
@@ -429,7 +433,7 @@ public sealed class InMemoryReportStore
             if (summary != null)
             {
                 summary.OwnerId = request.OwnerId;
-                summary.OwnerName = newOwner.Name;
+                summary.OwnerName = newOwner?.Name ?? "Unassigned";
             }
 
             // Create audit log entry
@@ -439,7 +443,7 @@ public sealed class InMemoryReportStore
                 {
                     Field = "OwnerId",
                     OldValue = $"{oldOwnerName} ({oldOwnerId})",
-                    NewValue = $"{newOwner.Name} ({newOwner.Id})"
+                    NewValue = newOwner != null ? $"{newOwner.Name} ({newOwner.Id})" : "Unassigned"
                 }
             };
 
@@ -2564,6 +2568,69 @@ public sealed class InMemoryReportStore
         lock (_lock)
         {
             return _dataPointNotes.FirstOrDefault(n => n.Id == noteId);
+        }
+    }
+
+    public ResponsibilityMatrix GetResponsibilityMatrix(string? periodId = null, string? ownerFilter = null)
+    {
+        lock (_lock)
+        {
+            // Get section summaries for the specified period or all sections
+            var summaries = periodId != null
+                ? _summaries.Where(s => s.PeriodId == periodId).ToList()
+                : _summaries.ToList();
+
+            // Apply owner filter if specified
+            if (!string.IsNullOrEmpty(ownerFilter))
+            {
+                if (ownerFilter == "unassigned")
+                {
+                    summaries = summaries.Where(s => string.IsNullOrEmpty(s.OwnerId)).ToList();
+                }
+                else
+                {
+                    summaries = summaries.Where(s => s.OwnerId == ownerFilter).ToList();
+                }
+            }
+
+            // Group sections by owner
+            var grouped = summaries.GroupBy(s => s.OwnerId).ToList();
+            var assignments = new List<OwnerAssignment>();
+
+            foreach (var group in grouped)
+            {
+                var ownerId = group.Key;
+                var owner = !string.IsNullOrEmpty(ownerId) ? _users.FirstOrDefault(u => u.Id == ownerId) : null;
+                
+                // Count data points for this owner
+                var sectionIds = group.Select(s => s.Id).ToList();
+                var dataPointCount = _dataPoints.Count(dp => sectionIds.Contains(dp.SectionId));
+
+                assignments.Add(new OwnerAssignment
+                {
+                    OwnerId = ownerId ?? string.Empty,
+                    OwnerName = owner?.Name ?? "Unassigned",
+                    OwnerEmail = owner?.Email ?? string.Empty,
+                    Sections = group.OrderBy(s => s.Order).ToList(),
+                    TotalDataPoints = dataPointCount
+                });
+            }
+
+            // Sort assignments: unassigned first, then by owner name
+            assignments = assignments
+                .OrderBy(a => string.IsNullOrEmpty(a.OwnerId) ? 0 : 1)
+                .ThenBy(a => a.OwnerName)
+                .ToList();
+
+            var unassignedCount = summaries.Count(s => string.IsNullOrEmpty(s.OwnerId));
+
+            return new ResponsibilityMatrix
+            {
+                Assignments = assignments,
+                TotalSections = summaries.Count,
+                UnassignedSections = unassignedCount,
+                PeriodId = periodId
+            };
         }
     }
 

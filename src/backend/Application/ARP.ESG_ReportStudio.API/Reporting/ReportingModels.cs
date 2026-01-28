@@ -161,6 +161,63 @@ public sealed class BulkUpdateFailure
     public string Reason { get; set; } = string.Empty;
 }
 
+/// <summary>
+/// Represents ownership information for a user with their assigned sections.
+/// </summary>
+public sealed class OwnerAssignment
+{
+    /// <summary>
+    /// User ID of the owner. Empty string for unassigned sections.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the owner. "Unassigned" for sections without an owner.
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Email of the owner. Empty string for unassigned sections.
+    /// </summary>
+    public string OwnerEmail { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Sections assigned to this owner.
+    /// </summary>
+    public List<SectionSummary> Sections { get; set; } = new();
+    
+    /// <summary>
+    /// Count of data points owned by this owner across all their sections.
+    /// </summary>
+    public int TotalDataPoints { get; set; }
+}
+
+/// <summary>
+/// Responsibility matrix showing all sections grouped by owner.
+/// </summary>
+public sealed class ResponsibilityMatrix
+{
+    /// <summary>
+    /// Assignments grouped by owner.
+    /// </summary>
+    public List<OwnerAssignment> Assignments { get; set; } = new();
+    
+    /// <summary>
+    /// Total number of sections.
+    /// </summary>
+    public int TotalSections { get; set; }
+    
+    /// <summary>
+    /// Number of sections without an assigned owner.
+    /// </summary>
+    public int UnassignedSections { get; set; }
+    
+    /// <summary>
+    /// Reporting period ID for this matrix.
+    /// </summary>
+    public string? PeriodId { get; set; }
+}
+
 public sealed class ReportingDataSnapshot
 {
     public Organization? Organization { get; set; }
