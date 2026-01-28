@@ -183,3 +183,15 @@ export function getUsers(): Promise<User[]> {
 export function getUser(id: string): Promise<User> {
   return requestJson<User>(`users/${id}`)
 }
+
+// Data Points API methods
+export async function getDataPoints(sectionId?: string, assignedUserId?: string): Promise<any[]> {
+  const params = new URLSearchParams()
+  if (sectionId) params.append('sectionId', sectionId)
+  if (assignedUserId) params.append('assignedUserId', assignedUserId)
+  
+  const queryString = params.toString()
+  const path = queryString ? `data-points?${queryString}` : 'data-points'
+  
+  return requestJson<any[]>(path)
+}
