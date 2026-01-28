@@ -2087,3 +2087,44 @@ public sealed class UpdateGapsNarrativeRequest
     /// </summary>
     public string? ManualNarrative { get; set; }
 }
+
+/// <summary>
+/// Extended gap information including section and owner details for dashboard display.
+/// </summary>
+public sealed class GapDashboardItem
+{
+    public Gap Gap { get; set; } = new();
+    public string SectionTitle { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string? OwnerName { get; set; }
+    public string? OwnerId { get; set; }
+    public string? DuePeriod { get; set; }
+    public string Status { get; set; } = "open"; // open, resolved
+    public string? RemediationPlanId { get; set; }
+    public string? RemediationPlanStatus { get; set; }
+}
+
+/// <summary>
+/// Response for listing gaps with dashboard metadata.
+/// </summary>
+public sealed class GapDashboardResponse
+{
+    public List<GapDashboardItem> Gaps { get; set; } = new();
+    public GapDashboardSummary Summary { get; set; } = new();
+    public int TotalCount { get; set; }
+}
+
+/// <summary>
+/// Summary metrics for the gap dashboard.
+/// </summary>
+public sealed class GapDashboardSummary
+{
+    public int TotalGaps { get; set; }
+    public int OpenGaps { get; set; }
+    public int ResolvedGaps { get; set; }
+    public int HighRiskGaps { get; set; }
+    public int MediumRiskGaps { get; set; }
+    public int LowRiskGaps { get; set; }
+    public int WithRemediationPlan { get; set; }
+    public int WithoutRemediationPlan { get; set; }
+}

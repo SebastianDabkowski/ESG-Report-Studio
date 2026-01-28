@@ -509,3 +509,33 @@ export interface RemediationPlanWithActions {
   plan: RemediationPlan
   actions: RemediationAction[]
 }
+
+// Gap Dashboard Types
+export interface GapDashboardItem {
+  gap: Gap
+  sectionTitle: string
+  category: string
+  ownerName?: string
+  ownerId?: string
+  duePeriod?: string
+  status: 'open' | 'resolved'
+  remediationPlanId?: string
+  remediationPlanStatus?: string
+}
+
+export interface GapDashboardResponse {
+  gaps: GapDashboardItem[]
+  summary: GapDashboardSummary
+  totalCount: number
+}
+
+export interface GapDashboardSummary {
+  totalGaps: number
+  openGaps: number
+  resolvedGaps: number
+  highRiskGaps: number
+  mediumRiskGaps: number
+  lowRiskGaps: number
+  withRemediationPlan: number
+  withoutRemediationPlan: number
+}

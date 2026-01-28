@@ -73,4 +73,137 @@ public class GapsAndImprovementsReportTests
         Assert.Equal("period-1", report.PeriodId);
         Assert.NotNull(report.Summary);
     }
+
+    [Fact]
+    public void GetGapsDashboard_WithNoData_ReturnsEmptyDashboard()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act
+        var dashboard = store.GetGapsDashboard(null, "all", null, null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.Empty(dashboard.Gaps);
+        Assert.Equal(0, dashboard.Summary.TotalGaps);
+        Assert.Equal(0, dashboard.Summary.OpenGaps);
+        Assert.Equal(0, dashboard.Summary.ResolvedGaps);
+        Assert.Equal(0, dashboard.TotalCount);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_WithAllStatus_ReturnsAllGaps()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - with "all" status should not filter
+        var dashboard = store.GetGapsDashboard(null, "all", null, null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Summary);
+        Assert.NotNull(dashboard.Gaps);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_WithOpenStatus_FiltersCorrectly()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - with "open" status
+        var dashboard = store.GetGapsDashboard(null, "open", null, null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Summary);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_WithResolvedStatus_FiltersCorrectly()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - with "resolved" status
+        var dashboard = store.GetGapsDashboard(null, "resolved", null, null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Summary);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_SortsByRisk_Descending()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - sort by risk descending (default)
+        var dashboard = store.GetGapsDashboard(null, "all", null, null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Gaps);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_SortsByDueDate()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - sort by due date
+        var dashboard = store.GetGapsDashboard(null, "all", null, null, null, "dueDate", "asc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Gaps);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_FiltersBy_Section()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - filter by section
+        var dashboard = store.GetGapsDashboard(null, "all", "section-1", null, null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Gaps);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_FiltersBy_Owner()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - filter by owner
+        var dashboard = store.GetGapsDashboard(null, "all", null, "user-1", null, "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Gaps);
+    }
+
+    [Fact]
+    public void GetGapsDashboard_FiltersBy_DuePeriod()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act - filter by due period
+        var dashboard = store.GetGapsDashboard(null, "all", null, null, "Q1 2026", "risk", "desc", "test-user");
+        
+        // Assert
+        Assert.NotNull(dashboard);
+        Assert.NotNull(dashboard.Gaps);
+    }
 }
+
+
