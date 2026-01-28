@@ -363,5 +363,95 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal(originalNote, firstEntry.ChangeNote);
             Assert.Equal(2, newAuditLog.Count); // Two separate entries
         }
+
+        [Fact]
+        public void GetAuditLog_FilterByDateRange_ShouldReturnMatchingEntries()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "narrative",
+                Title = "Test Title",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Manual entry",
+                InformationType = "fact",
+                CompletenessStatus = "complete"
+            };
+
+            var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
+
+            // Capture time before first update
+            var beforeFirstUpdate = DateTime.UtcNow;
+            Thread.Sleep(100);
+
+            // Make first update
+            var updateRequest1 = new UpdateDataPointRequest
+            {
+                Type = "narrative",
+                Title = "First Update",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Manual entry",
+                InformationType = "fact",
+                CompletenessStatus = "complete",
+                UpdatedBy = "user-1"
+            };
+            store.UpdateDataPoint(dataPoint!.Id, updateRequest1);
+
+            // Capture time between updates
+            Thread.Sleep(100);
+            var betweenUpdates = DateTime.UtcNow;
+            Thread.Sleep(100);
+
+            // Make second update
+            var updateRequest2 = new UpdateDataPointRequest
+            {
+                Type = "narrative",
+                Title = "Second Update",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Manual entry",
+                InformationType = "fact",
+                CompletenessStatus = "complete",
+                UpdatedBy = "user-1"
+            };
+            store.UpdateDataPoint(dataPoint.Id, updateRequest2);
+
+            Thread.Sleep(100);
+            var afterSecondUpdate = DateTime.UtcNow;
+
+            // Act - Get all entries
+            var allEntries = store.GetAuditLog();
+            Assert.Equal(2, allEntries.Count);
+
+            // Filter by date range that should include only first update
+            var onlyFirstUpdate = store.GetAuditLog(
+                startDate: beforeFirstUpdate.ToString("O"),
+                endDate: betweenUpdates.ToString("O")
+            );
+
+            // Filter by date range that should include only second update
+            var onlySecondUpdate = store.GetAuditLog(
+                startDate: betweenUpdates.ToString("O"),
+                endDate: afterSecondUpdate.ToString("O")
+            );
+
+            // Filter by date range that includes both
+            var bothUpdates = store.GetAuditLog(
+                startDate: beforeFirstUpdate.ToString("O"),
+                endDate: afterSecondUpdate.ToString("O")
+            );
+
+            // Assert
+            Assert.Single(onlyFirstUpdate);
+            Assert.Single(onlySecondUpdate);
+            Assert.Equal(2, bothUpdates.Count);
+        }
     }
 }

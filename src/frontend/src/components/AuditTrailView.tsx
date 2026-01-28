@@ -26,7 +26,7 @@ export default function AuditTrailView() {
   useEffect(() => {
     loadData()
     loadUsers()
-  }, [])
+  }, [filters])
 
   async function loadData() {
     try {
@@ -57,7 +57,6 @@ export default function AuditTrailView() {
     if (filterEndDate) newFilters.endDate = filterEndDate
     
     setFilters(newFilters)
-    loadData()
   }
 
   function clearFilters() {
@@ -65,7 +64,6 @@ export default function AuditTrailView() {
     setFilterStartDate('')
     setFilterEndDate('')
     setFilters({})
-    loadData()
   }
 
   if (loading) {

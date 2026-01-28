@@ -382,9 +382,9 @@ public sealed class UpdateValidationRuleRequest
 /// </summary>
 public sealed class FieldChange
 {
-    public string Field { get; set; } = string.Empty;
-    public string OldValue { get; set; } = string.Empty;
-    public string NewValue { get; set; } = string.Empty;
+    public string Field { get; init; } = string.Empty;
+    public string OldValue { get; init; } = string.Empty;
+    public string NewValue { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -392,13 +392,13 @@ public sealed class FieldChange
 /// </summary>
 public sealed class AuditLogEntry
 {
-    public string Id { get; set; } = string.Empty;
-    public string Timestamp { get; set; } = string.Empty;
-    public string UserId { get; set; } = string.Empty;
-    public string UserName { get; set; } = string.Empty;
-    public string Action { get; set; } = string.Empty;
-    public string EntityType { get; set; } = string.Empty;
-    public string EntityId { get; set; } = string.Empty;
-    public string? ChangeNote { get; set; }
-    public List<FieldChange> Changes { get; set; } = new();
+    public string Id { get; init; } = string.Empty;
+    public string Timestamp { get; init; } = string.Empty;
+    public string UserId { get; init; } = string.Empty;
+    public string UserName { get; init; } = string.Empty;
+    public string Action { get; init; } = string.Empty;
+    public string EntityType { get; init; } = string.Empty;
+    public string EntityId { get; init; } = string.Empty;
+    public string? ChangeNote { get; init; }
+    public List<FieldChange> Changes { get; init; } = new();
 }
