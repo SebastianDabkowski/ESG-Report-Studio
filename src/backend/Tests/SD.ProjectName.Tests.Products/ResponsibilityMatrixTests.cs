@@ -297,5 +297,64 @@ namespace SD.ProjectName.Tests.Products
             // Assert
             Assert.Equal(2, matrix.UnassignedSections);
         }
+        
+        [Fact]
+        public void GetResponsibilityMatrix_WithNullPeriodId_ShouldReturnAllPeriods()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            // Create first period
+            var period1Request = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot1) = store.ValidateAndCreatePeriod(period1Request);
+            
+            // Create second period
+            var period2Request = new CreateReportingPeriodRequest
+            {
+                Name = "2025 Report",
+                StartDate = "2025-01-01",
+                EndDate = "2025-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot2) = store.ValidateAndCreatePeriod(period2Request);
+            
+            // Act - get matrix for all periods (null periodId)
+            var matrix = store.GetResponsibilityMatrix(null);
+            
+            // Assert
+            Assert.Equal(12, matrix.TotalSections); // 6 sections per period * 2 periods
+            Assert.Null(matrix.PeriodId);
+        }
     }
 }

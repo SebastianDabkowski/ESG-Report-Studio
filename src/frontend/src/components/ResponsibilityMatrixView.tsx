@@ -129,8 +129,6 @@ export default function ResponsibilityMatrixView({ currentUser }: Responsibility
     setBulkUpdateResult(null)
   }
 
-  const activePeriod = periods?.find(p => p.id === selectedPeriod) || periods?.[0]
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -325,7 +323,7 @@ export default function ResponsibilityMatrixView({ currentUser }: Responsibility
               <UsersThree size={48} className="text-muted-foreground mb-4" />
               <div className="text-lg font-medium">No sections found</div>
               <div className="text-sm text-muted-foreground mt-1">
-                {ownerFilter
+                {ownerFilter !== 'all' || selectedPeriod !== 'all'
                   ? 'Try adjusting your filters to see more results'
                   : 'Create a reporting period to get started'}
               </div>
@@ -375,6 +373,7 @@ export default function ResponsibilityMatrixView({ currentUser }: Responsibility
                 value={changeNote}
                 onChange={(e) => setChangeNote(e.target.value)}
                 rows={3}
+                disabled={isUpdating}
               />
             </div>
 
