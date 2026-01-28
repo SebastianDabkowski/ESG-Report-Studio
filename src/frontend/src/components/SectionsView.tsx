@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, DataPoint, Gap, Classification, ContentType } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, getClassificationColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
 
 interface SectionsViewProps {
   currentUser: User
@@ -278,6 +278,11 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                               {dp.classification && (
                                 <Badge className={`${getClassificationColor(dp.classification)} text-xs`}>
                                   {dp.classification}
+                                </Badge>
+                              )}
+                              {dp.completenessStatus && (
+                                <Badge className={`${getCompletenessStatusColor(dp.completenessStatus)} text-xs capitalize border`}>
+                                  {dp.completenessStatus}
                                 </Badge>
                               )}
                             </div>

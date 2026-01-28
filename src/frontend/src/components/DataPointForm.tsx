@@ -22,9 +22,9 @@ const dataPointSchema = z.object({
     errorMap: () => ({ message: 'Information type is required' })
   }),
   assumptions: z.string().optional(),
-  completenessStatus: z.enum(['complete', 'partial', 'incomplete'], {
+  completenessStatus: z.enum(['missing', 'incomplete', 'complete', 'not applicable'], {
     errorMap: () => ({ message: 'Completeness status is required' })
-  }),
+  }).optional(),
 }).refine((data) => {
   // Require assumptions when informationType is 'estimate'
   if (data.informationType === 'estimate' && (!data.assumptions || !data.assumptions.trim())) {
@@ -80,7 +80,7 @@ export default function DataPointForm({
       source: '',
       informationType: 'fact',
       assumptions: '',
-      completenessStatus: 'complete',
+      completenessStatus: 'incomplete',
     }
   })
 
@@ -242,20 +242,21 @@ export default function DataPointForm({
 
           {/* Completeness Status */}
           <div className="space-y-2">
-            <Label htmlFor="completenessStatus">Completeness Status *</Label>
+            <Label htmlFor="completenessStatus">Completeness Status</Label>
             <Select
-              value={watch('completenessStatus')}
-              onValueChange={(value) => setValue('completenessStatus', value)}
+              value={watch('completenessStatus') || ''}
+              onValueChange={(value) => setValue('completenessStatus', value as any)}
             >
               <SelectTrigger id="completenessStatus" className={errors.completenessStatus ? 'border-red-500' : ''}>
-                <SelectValue />
+                <SelectValue placeholder="Auto-calculate" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="complete">Complete</SelectItem>
-                <SelectItem value="partial">Partial</SelectItem>
                 <SelectItem value="incomplete">Incomplete</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
+                <SelectItem value="not applicable">Not Applicable</SelectItem>
               </SelectContent>
             </Select>
+            <p className="text-xs text-muted-foreground">Leave empty to auto-calculate based on required fields and evidence</p>
             {errors.completenessStatus && (
               <p className="text-sm text-red-600">{errors.completenessStatus.message}</p>
             )}
