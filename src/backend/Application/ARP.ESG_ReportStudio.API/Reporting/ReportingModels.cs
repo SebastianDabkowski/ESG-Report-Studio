@@ -206,6 +206,7 @@ public sealed class DataPoint
     public string CreatedAt { get; set; } = string.Empty;
     public string UpdatedAt { get; set; } = string.Empty;
     public List<string> EvidenceIds { get; set; } = new();
+    public string? Deadline { get; set; }
 }
 
 /// <summary>
@@ -227,6 +228,7 @@ public sealed class CreateDataPointRequest
     public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
     public string ReviewStatus { get; set; } = "draft";
+    public string? Deadline { get; set; }
 }
 
 /// <summary>
@@ -249,6 +251,7 @@ public sealed class UpdateDataPointRequest
     public string? ReviewStatus { get; set; }
     public string? ChangeNote { get; set; }
     public string? UpdatedBy { get; set; }
+    public string? Deadline { get; set; }
 }
 
 /// <summary>
@@ -439,4 +442,41 @@ public sealed class AuditLogEntry
     public string EntityId { get; init; } = string.Empty;
     public string? ChangeNote { get; init; }
     public List<FieldChange> Changes { get; init; } = new();
+}
+
+/// <summary>
+/// Configuration for reminder schedule.
+/// </summary>
+public sealed class ReminderConfiguration
+{
+    public string Id { get; set; } = string.Empty;
+    public string PeriodId { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    /// <summary>
+    /// Days before deadline to send reminders (e.g., [7, 3, 1] means reminders at 7, 3, and 1 day before deadline)
+    /// </summary>
+    public List<int> DaysBeforeDeadline { get; set; } = new() { 7, 3, 1 };
+    /// <summary>
+    /// Frequency in hours to check for items needing reminders
+    /// </summary>
+    public int CheckFrequencyHours { get; set; } = 24;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string UpdatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Tracks reminder history for data points.
+/// </summary>
+public sealed class ReminderHistory
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string RecipientUserId { get; set; } = string.Empty;
+    public string RecipientEmail { get; set; } = string.Empty;
+    public string SentAt { get; set; } = string.Empty;
+    public string ReminderType { get; set; } = string.Empty; // "missing", "incomplete"
+    public int DaysUntilDeadline { get; set; }
+    public string? DeadlineDate { get; set; }
+    public bool EmailSent { get; set; }
+    public string? ErrorMessage { get; set; }
 }

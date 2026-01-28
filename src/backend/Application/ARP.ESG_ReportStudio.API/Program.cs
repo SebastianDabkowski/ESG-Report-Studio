@@ -4,6 +4,12 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Reporting.InMemoryReportStore>();
+
+// Add reminder services
+builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Services.IEmailService, ARP.ESG_ReportStudio.API.Services.MockEmailService>();
+builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.ReminderService>();
+builder.Services.AddHostedService<ARP.ESG_ReportStudio.API.Services.ReminderBackgroundService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
