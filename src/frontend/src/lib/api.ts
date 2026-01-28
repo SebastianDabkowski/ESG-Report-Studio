@@ -465,3 +465,86 @@ export async function getReadinessReport(params?: ReadinessReportParams): Promis
   const queryString = queryParams.toString()
   return requestJson<ReadinessReport>(`readiness/report${queryString ? `?${queryString}` : ''}`)
 }
+
+// Assumptions API
+export interface CreateAssumptionPayload {
+  sectionId: string
+  title: string
+  description: string
+  scope: string
+  validityStartDate: string
+  validityEndDate: string
+  methodology: string
+  limitations: string
+  linkedDataPointIds: string[]
+}
+
+export interface UpdateAssumptionPayload {
+  title: string
+  description: string
+  scope: string
+  validityStartDate: string
+  validityEndDate: string
+  methodology: string
+  limitations: string
+  linkedDataPointIds: string[]
+}
+
+export interface DeprecateAssumptionPayload {
+  replacementAssumptionId?: string
+  justification?: string
+}
+
+export interface LinkAssumptionPayload {
+  dataPointId: string
+}
+
+export async function getAssumptions(sectionId?: string): Promise<import('@/lib/types').Assumption[]> {
+  const queryString = sectionId ? `?sectionId=${encodeURIComponent(sectionId)}` : ''
+  return requestJson<import('@/lib/types').Assumption[]>(`assumptions${queryString}`)
+}
+
+export async function getAssumptionById(id: string): Promise<import('@/lib/types').Assumption> {
+  return requestJson<import('@/lib/types').Assumption>(`assumptions/${id}`)
+}
+
+export async function createAssumption(payload: CreateAssumptionPayload): Promise<import('@/lib/types').Assumption> {
+  return requestJson<import('@/lib/types').Assumption>('assumptions', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateAssumption(id: string, payload: UpdateAssumptionPayload): Promise<import('@/lib/types').Assumption> {
+  return requestJson<import('@/lib/types').Assumption>(`assumptions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deprecateAssumption(id: string, payload: DeprecateAssumptionPayload): Promise<void> {
+  await requestJson<void>(`assumptions/${id}/deprecate`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function linkAssumptionToDataPoint(assumptionId: string, dataPointId: string): Promise<void> {
+  await requestJson<void>(`assumptions/${assumptionId}/link`, {
+    method: 'POST',
+    body: JSON.stringify({ dataPointId })
+  })
+}
+
+export async function unlinkAssumptionFromDataPoint(assumptionId: string, dataPointId: string): Promise<void> {
+  await requestJson<void>(`assumptions/${assumptionId}/unlink`, {
+    method: 'POST',
+    body: JSON.stringify({ dataPointId })
+  })
+}
+
+export async function deleteAssumption(id: string): Promise<void> {
+  await requestJson<void>(`assumptions/${id}`, {
+    method: 'DELETE'
+  })
+}

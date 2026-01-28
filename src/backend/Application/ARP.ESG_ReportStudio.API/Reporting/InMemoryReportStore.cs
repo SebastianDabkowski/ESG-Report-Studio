@@ -2252,6 +2252,359 @@ public sealed class InMemoryReportStore
         }
     }
 
+    // Assumption management methods
+    public IReadOnlyList<Assumption> GetAssumptions(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            return sectionId == null 
+                ? _assumptions.ToList()
+                : _assumptions.Where(a => a.SectionId == sectionId).ToList();
+        }
+    }
+
+    public Assumption? GetAssumptionById(string id)
+    {
+        lock (_lock)
+        {
+            return _assumptions.FirstOrDefault(a => a.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Assumption? Assumption) CreateAssumption(
+        string sectionId,
+        string title,
+        string description,
+        string scope,
+        string validityStartDate,
+        string validityEndDate,
+        string methodology,
+        string limitations,
+        List<string> linkedDataPointIds,
+        string createdBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(scope))
+            {
+                return (false, "Scope is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(validityStartDate))
+            {
+                return (false, "Validity start date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(validityEndDate))
+            {
+                return (false, "Validity end date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(methodology))
+            {
+                return (false, "Methodology is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(createdBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+
+            // Validate dates
+            if (!DateTime.TryParse(validityStartDate, out var startDate))
+            {
+                return (false, "Invalid validity start date format.", null);
+            }
+
+            if (!DateTime.TryParse(validityEndDate, out var endDate))
+            {
+                return (false, "Invalid validity end date format.", null);
+            }
+
+            if (endDate <= startDate)
+            {
+                return (false, "Validity end date must be after start date.", null);
+            }
+
+            // Validate linked data points exist
+            foreach (var dataPointId in linkedDataPointIds)
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+                if (dataPoint == null)
+                {
+                    return (false, $"Data point with ID '{dataPointId}' not found.", null);
+                }
+            }
+
+            var newAssumption = new Assumption
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = title,
+                Description = description,
+                Scope = scope,
+                ValidityStartDate = validityStartDate,
+                ValidityEndDate = validityEndDate,
+                Methodology = methodology,
+                Limitations = limitations,
+                Status = "active",
+                Version = 1,
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                LinkedDataPointIds = new List<string>(linkedDataPointIds)
+            };
+
+            _assumptions.Add(newAssumption);
+            return (true, null, newAssumption);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Assumption? Assumption) UpdateAssumption(
+        string id,
+        string title,
+        string description,
+        string scope,
+        string validityStartDate,
+        string validityEndDate,
+        string methodology,
+        string limitations,
+        List<string> linkedDataPointIds,
+        string updatedBy)
+    {
+        lock (_lock)
+        {
+            var assumption = _assumptions.FirstOrDefault(a => a.Id == id);
+            if (assumption == null)
+            {
+                return (false, $"Assumption with ID '{id}' not found.", null);
+            }
+
+            if (assumption.Status != "active")
+            {
+                return (false, "Cannot update a deprecated or invalid assumption.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(scope))
+            {
+                return (false, "Scope is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(validityStartDate))
+            {
+                return (false, "Validity start date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(validityEndDate))
+            {
+                return (false, "Validity end date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(methodology))
+            {
+                return (false, "Methodology is required.", null);
+            }
+
+            // Validate dates
+            if (!DateTime.TryParse(validityStartDate, out var startDate))
+            {
+                return (false, "Invalid validity start date format.", null);
+            }
+
+            if (!DateTime.TryParse(validityEndDate, out var endDate))
+            {
+                return (false, "Invalid validity end date format.", null);
+            }
+
+            if (endDate <= startDate)
+            {
+                return (false, "Validity end date must be after start date.", null);
+            }
+
+            // Validate linked data points exist
+            foreach (var dataPointId in linkedDataPointIds)
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+                if (dataPoint == null)
+                {
+                    return (false, $"Data point with ID '{dataPointId}' not found.", null);
+                }
+            }
+
+            // Update fields
+            assumption.Title = title;
+            assumption.Description = description;
+            assumption.Scope = scope;
+            assumption.ValidityStartDate = validityStartDate;
+            assumption.ValidityEndDate = validityEndDate;
+            assumption.Methodology = methodology;
+            assumption.Limitations = limitations;
+            assumption.LinkedDataPointIds = new List<string>(linkedDataPointIds);
+            assumption.Version += 1;
+            assumption.UpdatedBy = updatedBy;
+            assumption.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null, assumption);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) DeprecateAssumption(
+        string id,
+        string? replacementAssumptionId,
+        string? justification)
+    {
+        lock (_lock)
+        {
+            var assumption = _assumptions.FirstOrDefault(a => a.Id == id);
+            if (assumption == null)
+            {
+                return (false, $"Assumption with ID '{id}' not found.");
+            }
+
+            if (assumption.Status != "active")
+            {
+                return (false, "Assumption is already deprecated or invalid.");
+            }
+
+            // Either replacement or justification is required
+            if (string.IsNullOrWhiteSpace(replacementAssumptionId) && string.IsNullOrWhiteSpace(justification))
+            {
+                return (false, "Either a replacement assumption or justification is required when deprecating an assumption.");
+            }
+
+            // Validate replacement assumption exists if provided
+            if (!string.IsNullOrWhiteSpace(replacementAssumptionId))
+            {
+                var replacement = _assumptions.FirstOrDefault(a => a.Id == replacementAssumptionId);
+                if (replacement == null)
+                {
+                    return (false, $"Replacement assumption with ID '{replacementAssumptionId}' not found.");
+                }
+
+                if (replacement.Status != "active")
+                {
+                    return (false, "Replacement assumption must be active.");
+                }
+
+                assumption.ReplacementAssumptionId = replacementAssumptionId;
+                assumption.Status = "deprecated";
+            }
+            else
+            {
+                assumption.DeprecationJustification = justification;
+                assumption.Status = "invalid";
+            }
+
+            return (true, null);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) LinkAssumptionToDataPoint(string assumptionId, string dataPointId)
+    {
+        lock (_lock)
+        {
+            var assumption = _assumptions.FirstOrDefault(a => a.Id == assumptionId);
+            if (assumption == null)
+            {
+                return (false, $"Assumption with ID '{assumptionId}' not found.");
+            }
+
+            if (assumption.Status != "active")
+            {
+                return (false, "Cannot link a deprecated or invalid assumption.");
+            }
+
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, $"DataPoint with ID '{dataPointId}' not found.");
+            }
+
+            // Check if already linked
+            if (assumption.LinkedDataPointIds.Contains(dataPointId))
+            {
+                return (false, "Assumption is already linked to this data point.");
+            }
+
+            assumption.LinkedDataPointIds.Add(dataPointId);
+            return (true, null);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) UnlinkAssumptionFromDataPoint(string assumptionId, string dataPointId)
+    {
+        lock (_lock)
+        {
+            var assumption = _assumptions.FirstOrDefault(a => a.Id == assumptionId);
+            if (assumption == null)
+            {
+                return (false, $"Assumption with ID '{assumptionId}' not found.");
+            }
+
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, $"DataPoint with ID '{dataPointId}' not found.");
+            }
+
+            if (!assumption.LinkedDataPointIds.Contains(dataPointId))
+            {
+                return (false, "Assumption is not linked to this data point.");
+            }
+
+            assumption.LinkedDataPointIds.Remove(dataPointId);
+            return (true, null);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) DeleteAssumption(string id)
+    {
+        lock (_lock)
+        {
+            var assumption = _assumptions.FirstOrDefault(a => a.Id == id);
+            if (assumption == null)
+            {
+                return (false, $"Assumption with ID '{id}' not found.");
+            }
+
+            // Don't allow deletion if used as replacement for other assumptions
+            var usedAsReplacement = _assumptions.Any(a => a.ReplacementAssumptionId == id);
+            if (usedAsReplacement)
+            {
+                return (false, "Cannot delete assumption as it is used as a replacement for other assumptions.");
+            }
+
+            _assumptions.Remove(assumption);
+            return (true, null);
+        }
+    }
+
     // User management methods
     public IReadOnlyList<User> GetUsers()
     {
