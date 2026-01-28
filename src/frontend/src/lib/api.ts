@@ -828,3 +828,33 @@ export async function updateGapsNarrative(payload: UpdateGapsNarrativePayload): 
     body: JSON.stringify(payload)
   })
 }
+
+export interface GetGapsDashboardParams {
+  periodId?: string
+  status?: 'open' | 'resolved' | 'all'
+  sectionId?: string
+  ownerId?: string
+  duePeriod?: string
+  sortBy?: 'risk' | 'dueDate' | 'section'
+  sortOrder?: 'asc' | 'desc'
+}
+
+export async function getGapsDashboard(
+  params: GetGapsDashboardParams = {}
+): Promise<import('@/lib/types').GapDashboardResponse> {
+  const searchParams = new URLSearchParams()
+  
+  if (params.periodId) searchParams.append('periodId', params.periodId)
+  if (params.status) searchParams.append('status', params.status)
+  if (params.sectionId) searchParams.append('sectionId', params.sectionId)
+  if (params.ownerId) searchParams.append('ownerId', params.ownerId)
+  if (params.duePeriod) searchParams.append('duePeriod', params.duePeriod)
+  if (params.sortBy) searchParams.append('sortBy', params.sortBy)
+  if (params.sortOrder) searchParams.append('sortOrder', params.sortOrder)
+  
+  const url = searchParams.toString()
+    ? `gaps-and-improvements/dashboard?${searchParams.toString()}`
+    : 'gaps-and-improvements/dashboard'
+  
+  return requestJson<import('@/lib/types').GapDashboardResponse>(url)
+}

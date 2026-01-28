@@ -5694,4 +5694,152 @@ public sealed class InMemoryReportStore
         
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Gets a filtered and sorted dashboard view of gaps.
+    /// </summary>
+    public GapDashboardResponse GetGapsDashboard(
+        string? periodId, 
+        string? status, 
+        string? sectionId, 
+        string? ownerId, 
+        string? duePeriod, 
+        string sortBy, 
+        string sortOrder, 
+        string currentUserId)
+    {
+        lock (_lock)
+        {
+            // Start with all gaps
+            IEnumerable<Gap> filteredGaps = _gaps;
+
+            // Filter by period (through sections)
+            if (!string.IsNullOrWhiteSpace(periodId))
+            {
+                var periodSectionIds = _sections
+                    .Where(s => s.PeriodId == periodId)
+                    .Select(s => s.Id)
+                    .ToHashSet();
+                filteredGaps = filteredGaps.Where(g => periodSectionIds.Contains(g.SectionId));
+            }
+
+            // Filter by status
+            if (!string.IsNullOrWhiteSpace(status) && status != "all")
+            {
+                if (status == "open")
+                {
+                    filteredGaps = filteredGaps.Where(g => !g.Resolved);
+                }
+                else if (status == "resolved")
+                {
+                    filteredGaps = filteredGaps.Where(g => g.Resolved);
+                }
+            }
+
+            // Filter by section
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                filteredGaps = filteredGaps.Where(g => g.SectionId == sectionId);
+            }
+
+            // Build dashboard items with enriched data
+            var dashboardItems = new List<GapDashboardItem>();
+            foreach (var gap in filteredGaps)
+            {
+                var section = _sections.FirstOrDefault(s => s.Id == gap.SectionId);
+                if (section == null) continue;
+
+                // Find associated remediation plan
+                var remediationPlan = _remediationPlans.FirstOrDefault(rp => rp.GapId == gap.Id);
+
+                // Determine owner and due period
+                string? ownerName = null;
+                string? ownerIdValue = null;
+                string? duePeriodValue = gap.TargetDate;
+
+                if (remediationPlan != null)
+                {
+                    ownerName = remediationPlan.OwnerName;
+                    ownerIdValue = remediationPlan.OwnerId;
+                    duePeriodValue = remediationPlan.TargetPeriod;
+                }
+
+                // Apply owner filter
+                if (!string.IsNullOrWhiteSpace(ownerId) && ownerIdValue != ownerId)
+                {
+                    continue;
+                }
+
+                // Apply due period filter
+                if (!string.IsNullOrWhiteSpace(duePeriod))
+                {
+                    if (duePeriodValue == null || !duePeriodValue.Contains(duePeriod, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+                }
+
+                dashboardItems.Add(new GapDashboardItem
+                {
+                    Gap = gap,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    OwnerName = ownerName,
+                    OwnerId = ownerIdValue,
+                    DuePeriod = duePeriodValue,
+                    Status = gap.Resolved ? "resolved" : "open",
+                    RemediationPlanId = remediationPlan?.Id,
+                    RemediationPlanStatus = remediationPlan?.Status
+                });
+            }
+
+            // Sort the results
+            if (sortBy == "risk" || sortBy == "impact")
+            {
+                var riskOrder = new Dictionary<string, int>
+                {
+                    { "high", 3 },
+                    { "medium", 2 },
+                    { "low", 1 }
+                };
+
+                dashboardItems = sortOrder == "asc"
+                    ? dashboardItems.OrderBy(item => riskOrder.GetValueOrDefault(item.Gap.Impact.ToLowerInvariant(), 0)).ToList()
+                    : dashboardItems.OrderByDescending(item => riskOrder.GetValueOrDefault(item.Gap.Impact.ToLowerInvariant(), 0)).ToList();
+            }
+            else if (sortBy == "dueDate" || sortBy == "duePeriod")
+            {
+                dashboardItems = sortOrder == "desc"
+                    ? dashboardItems.OrderByDescending(item => item.DuePeriod ?? string.Empty).ToList()
+                    : dashboardItems.OrderBy(item => item.DuePeriod ?? string.Empty).ToList();
+            }
+            else if (sortBy == "section")
+            {
+                dashboardItems = sortOrder == "desc"
+                    ? dashboardItems.OrderByDescending(item => item.SectionTitle).ToList()
+                    : dashboardItems.OrderBy(item => item.SectionTitle).ToList();
+            }
+
+            // Calculate summary metrics
+            var allGaps = dashboardItems;
+            var summary = new GapDashboardSummary
+            {
+                TotalGaps = allGaps.Count,
+                OpenGaps = allGaps.Count(g => g.Status == "open"),
+                ResolvedGaps = allGaps.Count(g => g.Status == "resolved"),
+                HighRiskGaps = allGaps.Count(g => g.Gap.Impact.Equals("high", StringComparison.OrdinalIgnoreCase)),
+                MediumRiskGaps = allGaps.Count(g => g.Gap.Impact.Equals("medium", StringComparison.OrdinalIgnoreCase)),
+                LowRiskGaps = allGaps.Count(g => g.Gap.Impact.Equals("low", StringComparison.OrdinalIgnoreCase)),
+                WithRemediationPlan = allGaps.Count(g => g.RemediationPlanId != null),
+                WithoutRemediationPlan = allGaps.Count(g => g.RemediationPlanId == null)
+            };
+
+            return new GapDashboardResponse
+            {
+                Gaps = dashboardItems,
+                Summary = summary,
+                TotalCount = dashboardItems.Count
+            };
+        }
+    }
 }
