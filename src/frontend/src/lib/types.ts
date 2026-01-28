@@ -185,6 +185,46 @@ export interface Simplification {
   updatedAt?: string
 }
 
+export interface RemediationPlan {
+  id: string
+  sectionId: string
+  title: string
+  description: string
+  targetPeriod: string
+  ownerId: string
+  ownerName: string
+  priority: 'low' | 'medium' | 'high'
+  status: 'planned' | 'in-progress' | 'completed' | 'cancelled'
+  gapId?: string
+  assumptionId?: string
+  dataPointId?: string
+  completedAt?: string
+  completedBy?: string
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
+export interface RemediationAction {
+  id: string
+  remediationPlanId: string
+  title: string
+  description: string
+  ownerId: string
+  ownerName: string
+  dueDate: string
+  status: 'pending' | 'in-progress' | 'completed' | 'cancelled'
+  completedAt?: string
+  completedBy?: string
+  evidenceIds: string[]
+  completionNotes?: string
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
 export interface AuditLogEntry {
   id: string
   timestamp: string
