@@ -393,6 +393,56 @@ public sealed class EstimateInputSource
 }
 
 /// <summary>
+/// Represents a source data reference for narrative content provenance tracking.
+/// Links narrative statements to their underlying source data for auditability.
+/// </summary>
+public sealed class NarrativeSourceReference
+{
+    /// <summary>
+    /// Type of source: 'data-point', 'evidence', 'assumption', 'external-system', 'uploaded-file', or 'other'.
+    /// </summary>
+    public string SourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reference identifier to the source record (e.g., data point ID, evidence ID, file path, system identifier).
+    /// </summary>
+    public string SourceReference { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Human-readable description of the source.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the origin system or file where the source data originated.
+    /// Examples: "HR System", "Finance ERP", "Sustainability Report 2023.xlsx"
+    /// </summary>
+    public string? OriginSystem { get; set; }
+    
+    /// <summary>
+    /// User ID of the owner of this source data.
+    /// </summary>
+    public string? OwnerId { get; set; }
+    
+    /// <summary>
+    /// Name of the owner of this source data.
+    /// </summary>
+    public string? OwnerName { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the source data was last updated.
+    /// Used to detect when source data has changed and provenance needs review.
+    /// </summary>
+    public string? LastUpdated { get; set; }
+    
+    /// <summary>
+    /// Optional snapshot or hash of the source value at the time of linking.
+    /// Stored at publication time to detect changes in source data.
+    /// </summary>
+    public string? ValueSnapshot { get; set; }
+}
+
+/// <summary>
 /// Represents an ESG data point entry with metadata for auditability.
 /// </summary>
 public sealed class DataPoint
@@ -478,6 +528,45 @@ public sealed class DataPoint
     /// Timestamp when the estimate was created. For audit trail.
     /// </summary>
     public string? EstimateCreatedAt { get; set; }
+    
+    // Narrative Provenance fields (for all content types, especially narrative)
+    /// <summary>
+    /// List of source data references that support this statement/narrative.
+    /// Enables traceability from report statements to underlying evidence and data.
+    /// </summary>
+    public List<NarrativeSourceReference> SourceReferences { get; set; } = new();
+    
+    /// <summary>
+    /// Hash or snapshot of source values at the time of publication.
+    /// Used to detect when underlying source data has changed and provenance needs review.
+    /// </summary>
+    public string? PublicationSourceHash { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when source references were last verified/published.
+    /// </summary>
+    public string? ProvenanceLastVerified { get; set; }
+    
+    /// <summary>
+    /// Flag indicating that source data has changed and this statement needs review.
+    /// Set to true when source data is updated after publication.
+    /// </summary>
+    public bool ProvenanceNeedsReview { get; set; }
+    
+    /// <summary>
+    /// Reason why provenance needs review (e.g., "Source data point updated", "Evidence file replaced").
+    /// </summary>
+    public string? ProvenanceReviewReason { get; set; }
+    
+    /// <summary>
+    /// User ID who flagged the provenance for review.
+    /// </summary>
+    public string? ProvenanceFlaggedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when provenance was flagged for review.
+    /// </summary>
+    public string? ProvenanceFlaggedAt { get; set; }
 }
 
 /// <summary>
@@ -529,6 +618,13 @@ public sealed class CreateDataPointRequest
     /// Detailed inputs used in the estimate calculation.
     /// </summary>
     public string? EstimateInputs { get; set; }
+    
+    // Narrative Provenance fields
+    /// <summary>
+    /// List of source data references that support this statement/narrative.
+    /// Optional: can be added to link narrative to source data for traceability.
+    /// </summary>
+    public List<NarrativeSourceReference> SourceReferences { get; set; } = new();
 }
 
 /// <summary>
@@ -581,6 +677,13 @@ public sealed class UpdateDataPointRequest
     /// Detailed inputs used in the estimate calculation.
     /// </summary>
     public string? EstimateInputs { get; set; }
+    
+    // Narrative Provenance fields
+    /// <summary>
+    /// List of source data references that support this statement/narrative.
+    /// Optional: can be added to link narrative to source data for traceability.
+    /// </summary>
+    public List<NarrativeSourceReference> SourceReferences { get; set; } = new();
 }
 
 /// <summary>

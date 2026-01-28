@@ -107,12 +107,30 @@ export interface DataPoint {
   estimateInputs?: string
   estimateAuthor?: string
   estimateCreatedAt?: string
+  sourceReferences?: NarrativeSourceReference[]
+  publicationSourceHash?: string
+  provenanceLastVerified?: string
+  provenanceNeedsReview?: boolean
+  provenanceReviewReason?: string
+  provenanceFlaggedBy?: string
+  provenanceFlaggedAt?: string
 }
 
 export interface EstimateInputSource {
   sourceType: string
   sourceReference: string
   description: string
+}
+
+export interface NarrativeSourceReference {
+  sourceType: string
+  sourceReference: string
+  description: string
+  originSystem?: string
+  ownerId?: string
+  ownerName?: string
+  lastUpdated?: string
+  valueSnapshot?: string
 }
 
 export interface DataPointNote {
