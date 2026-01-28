@@ -548,3 +548,54 @@ export async function deleteAssumption(id: string): Promise<void> {
     method: 'DELETE'
   })
 }
+
+// Simplifications API
+export interface CreateSimplificationPayload {
+  sectionId: string
+  title: string
+  description: string
+  affectedEntities: string[]
+  affectedSites: string[]
+  affectedProcesses: string[]
+  impactLevel: 'low' | 'medium' | 'high'
+  impactNotes?: string
+}
+
+export interface UpdateSimplificationPayload {
+  title: string
+  description: string
+  affectedEntities: string[]
+  affectedSites: string[]
+  affectedProcesses: string[]
+  impactLevel: 'low' | 'medium' | 'high'
+  impactNotes?: string
+}
+
+export async function getSimplifications(sectionId?: string): Promise<import('@/lib/types').Simplification[]> {
+  const queryString = sectionId ? `?sectionId=${encodeURIComponent(sectionId)}` : ''
+  return requestJson<import('@/lib/types').Simplification[]>(`simplifications${queryString}`)
+}
+
+export async function getSimplificationById(id: string): Promise<import('@/lib/types').Simplification> {
+  return requestJson<import('@/lib/types').Simplification>(`simplifications/${id}`)
+}
+
+export async function createSimplification(payload: CreateSimplificationPayload): Promise<import('@/lib/types').Simplification> {
+  return requestJson<import('@/lib/types').Simplification>('simplifications', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateSimplification(id: string, payload: UpdateSimplificationPayload): Promise<import('@/lib/types').Simplification> {
+  return requestJson<import('@/lib/types').Simplification>(`simplifications/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteSimplification(id: string): Promise<void> {
+  await requestJson<void>(`simplifications/${id}`, {
+    method: 'DELETE'
+  })
+}

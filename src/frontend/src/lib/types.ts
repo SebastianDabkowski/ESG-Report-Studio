@@ -168,6 +168,23 @@ export interface Gap {
   resolved: boolean
 }
 
+export interface Simplification {
+  id: string
+  sectionId: string
+  title: string
+  description: string
+  affectedEntities: string[]
+  affectedSites: string[]
+  affectedProcesses: string[]
+  impactLevel: 'low' | 'medium' | 'high'
+  impactNotes?: string
+  status: 'active' | 'removed'
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
 export interface AuditLogEntry {
   id: string
   timestamp: string
