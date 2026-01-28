@@ -277,6 +277,15 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
     setOwnerChangeError(null)
     setBulkUpdateResult(null)
     
+    // Check if any selected section would actually change
+    const selectedSections = activeSections.filter(s => selectedSectionIds.has(s.id))
+    const sectionsToUpdate = selectedSections.filter(s => s.ownerId !== newOwnerId)
+    
+    if (sectionsToUpdate.length === 0) {
+      setOwnerChangeError('All selected sections already have this owner.')
+      return
+    }
+    
     bulkUpdateOwnerMutation.mutate({
       sectionIds: Array.from(selectedSectionIds),
       ownerId: newOwnerId,
@@ -373,6 +382,7 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                         onCheckedChange={() => handleToggleSelection(section.id)}
                         onClick={(e) => e.stopPropagation()}
                         className="mt-1"
+                        aria-label={`Select section ${section.title}`}
                       />
                     )}
                     <div 

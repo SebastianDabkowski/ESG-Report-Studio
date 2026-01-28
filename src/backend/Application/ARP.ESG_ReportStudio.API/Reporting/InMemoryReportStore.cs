@@ -516,6 +516,17 @@ public sealed class InMemoryReportStore
                     continue;
                 }
 
+                // Check if owner is already set to the new owner (no-op)
+                if (section.OwnerId == request.OwnerId)
+                {
+                    result.SkippedSections.Add(new BulkUpdateFailure
+                    {
+                        SectionId = sectionId,
+                        Reason = "Section already has this owner."
+                    });
+                    continue;
+                }
+
                 // Capture old value for audit log
                 var oldOwnerId = section.OwnerId;
                 var oldOwner = _users.FirstOrDefault(u => u.Id == oldOwnerId);
