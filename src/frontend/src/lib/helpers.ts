@@ -1,4 +1,4 @@
-import { CompletenessLevel, CompletenessStatus, SectionStatus, Classification, UserRole } from './types'
+import { CompletenessLevel, CompletenessStatus, SectionStatus, ProgressStatus, Classification, UserRole } from './types'
 
 export function getStatusColor(status: SectionStatus): string {
   switch (status) {
@@ -43,6 +43,32 @@ export function getCompletenessStatusColor(status: CompletenessStatus): string {
       return 'bg-red-100 text-red-800 border-red-300'
     case 'not applicable':
       return 'bg-gray-100 text-gray-800 border-gray-300'
+  }
+}
+
+export function getProgressStatusColor(status: ProgressStatus): string {
+  switch (status) {
+    case 'completed':
+      return 'bg-success text-success-foreground'
+    case 'in-progress':
+      return 'bg-info text-info-foreground'
+    case 'blocked':
+      return 'bg-alert text-alert-foreground'
+    case 'not-started':
+      return 'bg-muted text-muted-foreground'
+  }
+}
+
+export function getProgressStatusLabel(status: ProgressStatus): string {
+  switch (status) {
+    case 'completed':
+      return 'Completed'
+    case 'in-progress':
+      return 'In Progress'
+    case 'blocked':
+      return 'Blocked'
+    case 'not-started':
+      return 'Not Started'
   }
 }
 

@@ -13,7 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle, Users, CheckSquare, Square } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, DataPoint, Gap, Classification, ContentType } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
 import { updateSectionOwner, bulkUpdateSectionOwner, getUsers, type BulkUpdateFailure } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
@@ -394,6 +394,9 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                         <Badge className={getStatusColor(section.status)} variant="secondary">
                           {section.status}
                         </Badge>
+                        <Badge className={getProgressStatusColor(section.progressStatus)} variant="secondary">
+                          {getProgressStatusLabel(section.progressStatus)}
+                        </Badge>
                         <Badge variant="outline" className="capitalize">
                           {section.category}
                         </Badge>
@@ -451,6 +454,9 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                   {selectedSection.title}
                   <Badge className={getStatusColor(selectedSection.status)}>
                     {selectedSection.status}
+                  </Badge>
+                  <Badge className={getProgressStatusColor(selectedSection.progressStatus)}>
+                    {getProgressStatusLabel(selectedSection.progressStatus)}
                   </Badge>
                 </DialogTitle>
                 <DialogDescription>{selectedSection.description}</DialogDescription>
