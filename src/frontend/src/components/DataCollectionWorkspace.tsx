@@ -18,6 +18,8 @@ import ImportDataDialog from '@/components/ImportDataDialog'
 import { AssumptionsList } from '@/components/AssumptionsList'
 import { SimplificationsList } from '@/components/SimplificationsList'
 import { RemediationPlansList } from '@/components/RemediationPlansList'
+import DecisionsList from '@/components/DecisionsList'
+import DecisionReferences from '@/components/DecisionReferences'
 import { 
   Leaf, 
   Users, 
@@ -33,7 +35,8 @@ import {
   UploadSimple,
   FileArrowDown,
   CheckCircle,
-  XCircle
+  XCircle,
+  ScrollText
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence, DataPointNote } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
@@ -647,6 +650,11 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                   <SimplificationsList sectionId={section.id} />
                 </div>
 
+                {/* Decision Log Section */}
+                <div className="pt-4 border-t">
+                  <DecisionsList sectionId={section.id} />
+                </div>
+
                 {/* Remediation Plans Section */}
                 <div className="pt-4 border-t">
                   <RemediationPlansList 
@@ -958,6 +966,16 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                   currentUserName={currentUser.name}
                   onAddNote={handleAddNote}
                 />
+
+                <Separator />
+
+                <div>
+                  <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
+                    <ScrollText size={16} />
+                    Decision References
+                  </h4>
+                  <DecisionReferences fragmentId={selectedDataItem.id} />
+                </div>
 
                 <Separator />
 

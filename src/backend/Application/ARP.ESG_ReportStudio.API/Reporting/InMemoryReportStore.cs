@@ -29,6 +29,8 @@ public sealed class InMemoryReportStore
     private readonly List<RemediationAction> _remediationActions = new();
     private readonly List<CompletionException> _completionExceptions = new();
     private readonly List<EvidenceAccessLog> _evidenceAccessLog = new();
+    private readonly List<Decision> _decisions = new();
+    private readonly List<DecisionVersion> _decisionVersions = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -6485,4 +6487,413 @@ public sealed class InMemoryReportStore
             };
         }
     }
+
+    #region Decision Management
+
+    /// <summary>
+    /// Get all decisions, optionally filtered by section.
+    /// </summary>
+    public IReadOnlyList<Decision> GetDecisions(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrEmpty(sectionId))
+            {
+                return _decisions.ToList();
+            }
+            return _decisions.Where(d => d.SectionId == sectionId).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Get a specific decision by ID.
+    /// </summary>
+    public Decision? GetDecisionById(string id)
+    {
+        lock (_lock)
+        {
+            return _decisions.FirstOrDefault(d => d.Id == id);
+        }
+    }
+
+    /// <summary>
+    /// Get version history for a decision.
+    /// </summary>
+    public IReadOnlyList<DecisionVersion> GetDecisionVersionHistory(string decisionId)
+    {
+        lock (_lock)
+        {
+            return _decisionVersions
+                .Where(v => v.DecisionId == decisionId)
+                .OrderByDescending(v => v.Version)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Create a new decision.
+    /// </summary>
+    public (bool isValid, string? errorMessage, Decision? decision) CreateDecision(
+        string? sectionId,
+        string title,
+        string context,
+        string decisionText,
+        string alternatives,
+        string consequences,
+        string createdBy)
+    {
+        // Validation
+        if (string.IsNullOrWhiteSpace(title))
+            return (false, "Title is required.", null);
+        if (string.IsNullOrWhiteSpace(context))
+            return (false, "Context is required.", null);
+        if (string.IsNullOrWhiteSpace(decisionText))
+            return (false, "Decision text is required.", null);
+        if (string.IsNullOrWhiteSpace(alternatives))
+            return (false, "Alternatives are required.", null);
+        if (string.IsNullOrWhiteSpace(consequences))
+            return (false, "Consequences are required.", null);
+
+        // Validate section if provided
+        if (!string.IsNullOrEmpty(sectionId))
+        {
+            lock (_lock)
+            {
+                if (!_sections.Any(s => s.Id == sectionId))
+                {
+                    return (false, $"Section with ID '{sectionId}' not found.", null);
+                }
+            }
+        }
+
+        var decision = new Decision
+        {
+            Id = Guid.NewGuid().ToString(),
+            SectionId = sectionId,
+            Title = title.Trim(),
+            Context = context.Trim(),
+            DecisionText = decisionText.Trim(),
+            Alternatives = alternatives.Trim(),
+            Consequences = consequences.Trim(),
+            Status = "active",
+            Version = 1,
+            CreatedBy = createdBy,
+            CreatedAt = DateTime.UtcNow.ToString("o")
+        };
+
+        lock (_lock)
+        {
+            _decisions.Add(decision);
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = createdBy,
+                UserName = createdBy,
+                Action = "created",
+                EntityType = "decision",
+                EntityId = decision.Id,
+                ChangeNote = $"Created decision: {title}",
+                Changes = new List<FieldChange>()
+            });
+        }
+
+        return (true, null, decision);
+    }
+
+    /// <summary>
+    /// Update an existing decision. Creates a new version and preserves the old version.
+    /// Only active decisions can be updated.
+    /// </summary>
+    public (bool isValid, string? errorMessage, Decision? decision) UpdateDecision(
+        string id,
+        string title,
+        string context,
+        string decisionText,
+        string alternatives,
+        string consequences,
+        string changeNote,
+        string updatedBy)
+    {
+        // Validation
+        if (string.IsNullOrWhiteSpace(title))
+            return (false, "Title is required.", null);
+        if (string.IsNullOrWhiteSpace(context))
+            return (false, "Context is required.", null);
+        if (string.IsNullOrWhiteSpace(decisionText))
+            return (false, "Decision text is required.", null);
+        if (string.IsNullOrWhiteSpace(alternatives))
+            return (false, "Alternatives are required.", null);
+        if (string.IsNullOrWhiteSpace(consequences))
+            return (false, "Consequences are required.", null);
+        if (string.IsNullOrWhiteSpace(changeNote))
+            return (false, "Change note is required when updating a decision.", null);
+
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == id);
+            if (decision == null)
+            {
+                return (false, $"Decision with ID '{id}' not found.", null);
+            }
+
+            if (decision.Status != "active")
+            {
+                return (false, "Only active decisions can be updated.", null);
+            }
+
+            // Save current version to history (without changeNote - that's for the next version)
+            var version = new DecisionVersion
+            {
+                Id = Guid.NewGuid().ToString(),
+                DecisionId = decision.Id,
+                Version = decision.Version,
+                Title = decision.Title,
+                Context = decision.Context,
+                DecisionText = decision.DecisionText,
+                Alternatives = decision.Alternatives,
+                Consequences = decision.Consequences,
+                Status = decision.Status,
+                CreatedBy = decision.CreatedBy,
+                CreatedAt = decision.CreatedAt,
+                ChangeNote = null
+            };
+            _decisionVersions.Add(version);
+
+            // Update the decision
+            decision.Title = title.Trim();
+            decision.Context = context.Trim();
+            decision.DecisionText = decisionText.Trim();
+            decision.Alternatives = alternatives.Trim();
+            decision.Consequences = consequences.Trim();
+            decision.Version++;
+            decision.UpdatedBy = updatedBy;
+            decision.UpdatedAt = DateTime.UtcNow.ToString("o");
+            decision.ChangeNote = changeNote.Trim();
+
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = updatedBy,
+                UserName = updatedBy,
+                Action = "updated",
+                EntityType = "decision",
+                EntityId = decision.Id,
+                ChangeNote = $"Updated decision to version {decision.Version}: {changeNote}",
+                Changes = new List<FieldChange>()
+            });
+
+            return (true, null, decision);
+        }
+    }
+
+    /// <summary>
+    /// Deprecate a decision (mark as no longer applicable).
+    /// </summary>
+    public (bool isValid, string? errorMessage, Decision? decision) DeprecateDecision(
+        string id,
+        string reason,
+        string deprecatedBy)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return (false, "Deprecation reason is required.", null);
+
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == id);
+            if (decision == null)
+            {
+                return (false, $"Decision with ID '{id}' not found.", null);
+            }
+
+            if (decision.Status == "deprecated")
+            {
+                return (false, "Decision is already deprecated.", null);
+            }
+
+            // Save current version to history (without changeNote - that's for the next version)
+            var version = new DecisionVersion
+            {
+                Id = Guid.NewGuid().ToString(),
+                DecisionId = decision.Id,
+                Version = decision.Version,
+                Title = decision.Title,
+                Context = decision.Context,
+                DecisionText = decision.DecisionText,
+                Alternatives = decision.Alternatives,
+                Consequences = decision.Consequences,
+                Status = decision.Status,
+                CreatedBy = decision.CreatedBy,
+                CreatedAt = decision.CreatedAt,
+                ChangeNote = null
+            };
+            _decisionVersions.Add(version);
+
+            // Update status
+            decision.Status = "deprecated";
+            decision.Version++;
+            decision.UpdatedBy = deprecatedBy;
+            decision.UpdatedAt = DateTime.UtcNow.ToString("o");
+            decision.ChangeNote = $"Deprecated: {reason}";
+
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = deprecatedBy,
+                UserName = deprecatedBy,
+                Action = "deprecated",
+                EntityType = "decision",
+                EntityId = decision.Id,
+                ChangeNote = $"Deprecated decision: {reason}",
+                Changes = new List<FieldChange>()
+            });
+
+            return (true, null, decision);
+        }
+    }
+
+    /// <summary>
+    /// Link a decision to a report fragment (data point).
+    /// </summary>
+    public (bool isValid, string? errorMessage) LinkDecisionToFragment(string decisionId, string fragmentId, string userId)
+    {
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == decisionId);
+            if (decision == null)
+            {
+                return (false, $"Decision with ID '{decisionId}' not found.");
+            }
+
+            // Validate fragment exists (data point)
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == fragmentId);
+            if (dataPoint == null)
+            {
+                return (false, $"Fragment (data point) with ID '{fragmentId}' not found.");
+            }
+
+            if (decision.ReferencedByFragmentIds.Contains(fragmentId))
+            {
+                return (false, "Decision is already linked to this fragment.");
+            }
+
+            decision.ReferencedByFragmentIds.Add(fragmentId);
+
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = userId,
+                UserName = userId,
+                Action = "linked",
+                EntityType = "decision",
+                EntityId = decision.Id,
+                ChangeNote = $"Linked decision to fragment {fragmentId}",
+                Changes = new List<FieldChange>()
+            });
+
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Unlink a decision from a report fragment.
+    /// </summary>
+    public (bool isValid, string? errorMessage) UnlinkDecisionFromFragment(string decisionId, string fragmentId, string userId)
+    {
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == decisionId);
+            if (decision == null)
+            {
+                return (false, $"Decision with ID '{decisionId}' not found.");
+            }
+
+            if (!decision.ReferencedByFragmentIds.Contains(fragmentId))
+            {
+                return (false, "Decision is not linked to this fragment.");
+            }
+
+            decision.ReferencedByFragmentIds.Remove(fragmentId);
+
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = userId,
+                UserName = userId,
+                Action = "unlinked",
+                EntityType = "decision",
+                EntityId = decision.Id,
+                ChangeNote = $"Unlinked decision from fragment {fragmentId}",
+                Changes = new List<FieldChange>()
+            });
+
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Get all decisions referenced by a specific fragment.
+    /// </summary>
+    public IReadOnlyList<Decision> GetDecisionsByFragment(string fragmentId)
+    {
+        lock (_lock)
+        {
+            return _decisions
+                .Where(d => d.ReferencedByFragmentIds.Contains(fragmentId))
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Delete a decision. Only allowed if not referenced by any fragments.
+    /// </summary>
+    public (bool isValid, string? errorMessage) DeleteDecision(string id, string userId)
+    {
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == id);
+            if (decision == null)
+            {
+                return (false, $"Decision with ID '{id}' not found.");
+            }
+
+            if (decision.ReferencedByFragmentIds.Any())
+            {
+                return (false, "Cannot delete a decision that is referenced by fragments. Unlink all fragments first.");
+            }
+
+            _decisions.Remove(decision);
+            
+            // Also remove all versions
+            _decisionVersions.RemoveAll(v => v.DecisionId == id);
+
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = userId,
+                UserName = userId,
+                Action = "deleted",
+                EntityType = "decision",
+                EntityId = id,
+                ChangeNote = "Deleted decision",
+                Changes = new List<FieldChange>()
+            });
+
+            return (true, null);
+        }
+    }
+
+    #endregion
 }

@@ -572,3 +572,67 @@ export interface GapDashboardSummary {
   withRemediationPlan: number
   withoutRemediationPlan: number
 }
+
+// Decision Log Types
+export interface Decision {
+  id: string
+  sectionId?: string
+  title: string
+  context: string
+  decisionText: string
+  alternatives: string
+  consequences: string
+  status: 'active' | 'superseded' | 'deprecated'
+  version: number
+  referencedByFragmentIds: string[]
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+  changeNote?: string
+}
+
+export interface DecisionVersion {
+  id: string
+  decisionId: string
+  version: number
+  title: string
+  context: string
+  decisionText: string
+  alternatives: string
+  consequences: string
+  status: string
+  createdBy: string
+  createdAt: string
+  changeNote?: string
+}
+
+export interface CreateDecisionRequest {
+  sectionId?: string
+  title: string
+  context: string
+  decisionText: string
+  alternatives: string
+  consequences: string
+}
+
+export interface UpdateDecisionRequest {
+  title: string
+  context: string
+  decisionText: string
+  alternatives: string
+  consequences: string
+  changeNote: string
+}
+
+export interface LinkDecisionRequest {
+  fragmentId: string
+}
+
+export interface UnlinkDecisionRequest {
+  fragmentId: string
+}
+
+export interface DeprecateDecisionRequest {
+  reason: string
+}
