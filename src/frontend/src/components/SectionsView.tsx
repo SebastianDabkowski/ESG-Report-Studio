@@ -43,11 +43,12 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
   
   const [newOwnerId, setNewOwnerId] = useState('')
   const [ownerChangeNote, setOwnerChangeNote] = useState('')
+  const [ownerChangeError, setOwnerChangeError] = useState<string | null>(null)
 
   const queryClient = useQueryClient()
   
   // Fetch users for owner selection
-  const { data: users = [] } = useQuery({
+  const { data: users = [], isLoading: usersLoading } = useQuery({
     queryKey: ['users'],
     queryFn: getUsers
   })
@@ -84,6 +85,11 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
       setIsChangeOwnerOpen(false)
       setNewOwnerId('')
       setOwnerChangeNote('')
+      setOwnerChangeError(null)
+    },
+    onError: (error: Error) => {
+      // Display error to user
+      setOwnerChangeError(error.message || 'Failed to update section owner. Please try again.')
     }
   })
 
@@ -198,6 +204,15 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
 
   const handleChangeOwner = () => {
     if (!selectedSection || !newOwnerId) return
+    
+    // Prevent no-op changes
+    if (newOwnerId === selectedSection.ownerId) {
+      setOwnerChangeError('The selected user is already the owner of this section.')
+      return
+    }
+    
+    // Clear any previous errors
+    setOwnerChangeError(null)
     
     updateOwnerMutation.mutate({
       sectionId: selectedSection.id,
@@ -322,8 +337,10 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                       onClick={(e) => {
                         e.stopPropagation()
                         setNewOwnerId(selectedSection.ownerId)
+                        setOwnerChangeError(null)
                         setIsChangeOwnerOpen(true)
                       }}
+                      disabled={usersLoading}
                     >
                       Change Owner
                     </Button>
@@ -577,11 +594,25 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
               </div>
             )}
 
+            {ownerChangeError && (
+              <Alert variant="destructive">
+                <WarningCircle size={16} />
+                <AlertDescription>{ownerChangeError}</AlertDescription>
+              </Alert>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="new-owner">New Owner</Label>
-              <Select value={newOwnerId} onValueChange={setNewOwnerId}>
+              <Select 
+                value={newOwnerId} 
+                onValueChange={(value) => {
+                  setNewOwnerId(value)
+                  setOwnerChangeError(null) // Clear error when selection changes
+                }}
+                disabled={usersLoading}
+              >
                 <SelectTrigger id="new-owner">
-                  <SelectValue placeholder="Select a user" />
+                  <SelectValue placeholder={usersLoading ? "Loading users..." : "Select a user"} />
                 </SelectTrigger>
                 <SelectContent>
                   {users.map(user => (
@@ -612,6 +643,7 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                 setIsChangeOwnerOpen(false)
                 setNewOwnerId('')
                 setOwnerChangeNote('')
+                setOwnerChangeError(null)
               }}
             >
               Cancel

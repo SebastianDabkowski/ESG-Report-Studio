@@ -367,7 +367,20 @@ public sealed class InMemoryReportStore
             }
 
             // Check authorization: only admin or report-owner can change section ownership
-            if (updatingUser.Role != "admin" && updatingUser.Role != "report-owner")
+            if (updatingUser.Role == "admin")
+            {
+                // Admins can change ownership of any section
+            }
+            else if (updatingUser.Role == "report-owner")
+            {
+                // Report owners can only change ownership of sections in their own periods
+                var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+                if (period == null || period.OwnerId != updatingUser.Id)
+                {
+                    return (false, "Report owners can only change section ownership for their own reporting periods.", null);
+                }
+            }
+            else
             {
                 return (false, "Only administrators or report owners can change section ownership.", null);
             }

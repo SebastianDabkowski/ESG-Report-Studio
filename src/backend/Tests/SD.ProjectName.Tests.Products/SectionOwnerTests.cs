@@ -571,5 +571,58 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("Sarah Chen", mostRecentEntry.UserName);
             Assert.Contains("Emily Johnson", mostRecentEntry.Changes.First().NewValue);
         }
+        
+        [Fact]
+        public void UpdateSectionOwner_WithReportOwnerOfDifferentPeriod_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            
+            var orgRequest = new CreateOrganizationRequest
+            {
+                Name = "Test Company",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "user-1",
+                CoverageType = "full"
+            };
+            store.CreateOrganization(orgRequest);
+            
+            var unitRequest = new CreateOrganizationalUnitRequest
+            {
+                Name = "Test Unit",
+                Description = "Test Description",
+                CreatedBy = "user-1"
+            };
+            store.CreateOrganizationalUnit(unitRequest);
+            
+            // Create first period owned by user-1
+            var period1Request = new CreateReportingPeriodRequest
+            {
+                Name = "2024 Report",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1",
+                OwnerName = "Sarah Chen"
+            };
+            var (_, _, snapshot) = store.ValidateAndCreatePeriod(period1Request);
+            var sectionId = snapshot!.Sections.First().Id;
+            
+            // Act - owner-1 (a different report-owner) tries to change ownership of user-1's section
+            var updateRequest = new UpdateSectionOwnerRequest
+            {
+                OwnerId = "user-3",
+                UpdatedBy = "owner-1" // Different report owner
+            };
+            var (isValid, errorMessage, section) = store.UpdateSectionOwner(sectionId, updateRequest);
+            
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Report owners can only change section ownership for their own reporting periods.", errorMessage);
+            Assert.Null(section);
+        }
     }
 }
