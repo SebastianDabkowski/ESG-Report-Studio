@@ -62,7 +62,8 @@ public sealed class InMemoryReportStore
             new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor" },
             new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor" },
             new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor" },
-            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" }
+            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" },
+            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner" }
         });
     }
 
