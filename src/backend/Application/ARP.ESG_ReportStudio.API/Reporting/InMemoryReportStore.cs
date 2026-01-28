@@ -214,7 +214,8 @@ public sealed class InMemoryReportStore
                     OwnerId = request.OwnerId,
                     Status = "draft",
                     Completeness = "empty",
-                    Order = order++
+                    Order = order++,
+                    CatalogCode = catalogItem.Code
                 };
 
                 _sections.Add(section);
@@ -230,6 +231,7 @@ public sealed class InMemoryReportStore
                     Status = section.Status,
                     Completeness = section.Completeness,
                     Order = section.Order,
+                    CatalogCode = section.CatalogCode,
                     DataPointCount = 0,
                     EvidenceCount = 0,
                     GapCount = 0,
@@ -237,6 +239,12 @@ public sealed class InMemoryReportStore
                     CompletenessPercentage = 0,
                     OwnerName = request.OwnerName
                 });
+            }
+
+            // Copy ownership from previous period if specified
+            if (!string.IsNullOrWhiteSpace(request.CopyOwnershipFromPeriodId))
+            {
+                CopyOwnershipFromPreviousPeriod(request.CopyOwnershipFromPeriodId, newPeriod.Id);
             }
 
             var snapshot = new ReportingDataSnapshot
@@ -249,6 +257,55 @@ public sealed class InMemoryReportStore
             };
 
             return (true, null, snapshot);
+        }
+    }
+
+    /// <summary>
+    /// Copies ownership mappings from a previous period to a new period.
+    /// Matches sections by catalog code and preserves ownership where codes match.
+    /// Sections without matches remain with their default owner (from period).
+    /// </summary>
+    /// <param name="sourcePeriodId">The period to copy ownership from</param>
+    /// <param name="targetPeriodId">The period to copy ownership to</param>
+    private void CopyOwnershipFromPreviousPeriod(string sourcePeriodId, string targetPeriodId)
+    {
+        // Get all sections from the source period
+        var sourceSections = _sections.Where(s => s.PeriodId == sourcePeriodId).ToList();
+        
+        // Get all sections from the target period
+        var targetSections = _sections.Where(s => s.PeriodId == targetPeriodId).ToList();
+        
+        // Create a lookup of source sections by catalog code
+        var sourceSectionsByCode = sourceSections
+            .Where(s => !string.IsNullOrWhiteSpace(s.CatalogCode))
+            .ToDictionary(s => s.CatalogCode!, s => s);
+        
+        // Update ownership for matching sections
+        foreach (var targetSection in targetSections)
+        {
+            if (string.IsNullOrWhiteSpace(targetSection.CatalogCode))
+                continue;
+                
+            if (sourceSectionsByCode.TryGetValue(targetSection.CatalogCode, out var sourceSection))
+            {
+                // Copy section ownership
+                targetSection.OwnerId = sourceSection.OwnerId;
+                
+                // Update the corresponding summary
+                var summary = _summaries.FirstOrDefault(s => s.Id == targetSection.Id);
+                if (summary != null)
+                {
+                    summary.OwnerId = sourceSection.OwnerId;
+                    // Update owner name
+                    var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
+                    if (owner != null)
+                    {
+                        summary.OwnerName = owner.Name;
+                    }
+                }
+            }
+            // Note: Sections without a match keep their default owner (period owner)
+            // These will appear as "assigned to period owner" and can be reassigned as needed
         }
     }
 

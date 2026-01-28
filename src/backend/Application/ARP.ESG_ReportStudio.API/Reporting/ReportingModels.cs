@@ -38,6 +38,11 @@ public class ReportSection
     public string? ApprovedAt { get; set; }
     public string? ApprovedBy { get; set; }
     public int Order { get; set; }
+    
+    /// <summary>
+    /// Catalog code reference (e.g., "ENV-001", "SOC-001") for stable identification across versions.
+    /// </summary>
+    public string? CatalogCode { get; set; }
 }
 
 public sealed class SectionSummary : ReportSection
@@ -71,6 +76,12 @@ public sealed class CreateReportingPeriodRequest
     public string OwnerId { get; set; } = string.Empty;
     public string OwnerName { get; set; } = string.Empty;
     public string? OrganizationId { get; set; }
+    
+    /// <summary>
+    /// Optional ID of a previous reporting period to copy ownership mappings from.
+    /// When provided, ownership mappings are copied to matching sections/data points based on catalog codes.
+    /// </summary>
+    public string? CopyOwnershipFromPeriodId { get; set; }
 }
 
 public sealed class UpdateReportingPeriodRequest
