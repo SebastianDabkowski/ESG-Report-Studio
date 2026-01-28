@@ -534,6 +534,14 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                       <span className="text-muted-foreground">Information Type:</span>
                       <span className="font-medium capitalize">{selectedDataItem.informationType}</span>
                     </div>
+                    {selectedDataItem.assumptions && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Assumptions:</span>
+                        <span className="font-medium text-sm bg-amber-50 p-2 rounded border border-amber-200">
+                          {selectedDataItem.assumptions}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Completeness:</span>
                       <span className="font-medium capitalize">{selectedDataItem.completenessStatus}</span>

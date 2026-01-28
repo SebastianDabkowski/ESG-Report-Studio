@@ -87,7 +87,7 @@ namespace SD.ProjectName.Tests.Products
                 Unit = "MWh",
                 OwnerId = "owner-1",
                 Source = "Energy Management System",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "complete"
             };
 
@@ -100,7 +100,7 @@ namespace SD.ProjectName.Tests.Products
             Assert.NotNull(dataPoint);
             Assert.Equal("Energy Consumption", dataPoint.Title);
             Assert.Equal("Energy Management System", dataPoint.Source);
-            Assert.Equal("measured", dataPoint.InformationType);
+            Assert.Equal("fact", dataPoint.InformationType);
             Assert.Equal("complete", dataPoint.CompletenessStatus);
             Assert.NotEmpty(dataPoint.Id);
             Assert.NotEmpty(dataPoint.CreatedAt);
@@ -122,7 +122,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Some content",
                 OwnerId = "owner-1",
                 Source = "Test Source",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "complete"
             };
 
@@ -150,7 +150,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Some content",
                 OwnerId = "owner-1",
                 Source = "",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "complete"
             };
 
@@ -206,7 +206,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Some content",
                 OwnerId = "owner-1",
                 Source = "Test Source",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = ""
             };
 
@@ -234,7 +234,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Original content",
                 OwnerId = "owner-1",
                 Source = "Original Source",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "partial"
             };
 
@@ -246,7 +246,8 @@ namespace SD.ProjectName.Tests.Products
                 Title = "Updated Title",
                 Content = "Updated content",
                 Source = "Updated Source",
-                InformationType = "estimated",
+                InformationType = "estimate",
+                Assumptions = "These are test assumptions for the estimate",
                 CompletenessStatus = "complete"
             };
 
@@ -259,7 +260,7 @@ namespace SD.ProjectName.Tests.Products
             Assert.NotNull(updatedDataPoint);
             Assert.Equal("Updated Title", updatedDataPoint.Title);
             Assert.Equal("Updated Source", updatedDataPoint.Source);
-            Assert.Equal("estimated", updatedDataPoint.InformationType);
+            Assert.Equal("estimate", updatedDataPoint.InformationType);
             Assert.Equal("complete", updatedDataPoint.CompletenessStatus);
             Assert.NotEqual(originalUpdatedAt, updatedDataPoint.UpdatedAt);
         }
@@ -279,7 +280,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Original content",
                 OwnerId = "owner-1",
                 Source = "Original Source",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "partial"
             };
 
@@ -290,7 +291,8 @@ namespace SD.ProjectName.Tests.Products
                 Title = "Updated Title",
                 Content = "Updated content",
                 Source = "",
-                InformationType = "estimated",
+                InformationType = "estimate",
+                Assumptions = "Test assumptions",
                 CompletenessStatus = "complete"
             };
 
@@ -318,7 +320,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Test content",
                 OwnerId = "owner-1",
                 Source = "Test Source",
-                InformationType = "measured",
+                InformationType = "fact",
                 CompletenessStatus = "complete"
             };
 
@@ -331,6 +333,136 @@ namespace SD.ProjectName.Tests.Products
             Assert.True(deleted);
             var retrieved = store.GetDataPoint(createdDataPoint.Id);
             Assert.Null(retrieved);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithEstimateAndAssumptions_ShouldSucceed()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "narrative",
+                Title = "Estimated Emissions",
+                Content = "Estimated GHG emissions for remote work",
+                OwnerId = "owner-1",
+                Source = "Calculation Model",
+                InformationType = "estimate",
+                Assumptions = "Based on average employee commute distance and home energy usage patterns",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(dataPoint);
+            Assert.Equal("estimate", dataPoint.InformationType);
+            Assert.Equal("Based on average employee commute distance and home energy usage patterns", dataPoint.Assumptions);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithEstimateWithoutAssumptions_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "narrative",
+                Title = "Estimated Emissions",
+                Content = "Estimated GHG emissions for remote work",
+                OwnerId = "owner-1",
+                Source = "Calculation Model",
+                InformationType = "estimate",
+                Assumptions = "",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Assumptions field is required when InformationType is 'estimate'.", errorMessage);
+            Assert.Null(dataPoint);
+        }
+
+        [Fact]
+        public void UpdateDataPoint_ToEstimateWithoutAssumptions_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Original Title",
+                Content = "Original content",
+                OwnerId = "owner-1",
+                Source = "Original Source",
+                InformationType = "fact",
+                CompletenessStatus = "partial"
+            };
+
+            var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
+
+            var updateRequest = new UpdateDataPointRequest
+            {
+                Title = "Updated Title",
+                Content = "Updated content",
+                Source = "Updated Source",
+                InformationType = "estimate",
+                Assumptions = "",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, updatedDataPoint) = store.UpdateDataPoint(createdDataPoint!.Id, updateRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Assumptions field is required when InformationType is 'estimate'.", errorMessage);
+            Assert.Null(updatedDataPoint);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithInvalidInformationType_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Some content",
+                OwnerId = "owner-1",
+                Source = "Test Source",
+                InformationType = "measured", // Old value, should be rejected
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Contains("InformationType must be one of: fact, estimate, declaration, plan", errorMessage);
+            Assert.Null(dataPoint);
         }
     }
 }
