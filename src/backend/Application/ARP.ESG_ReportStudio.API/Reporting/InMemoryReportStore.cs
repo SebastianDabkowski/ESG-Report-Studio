@@ -1098,6 +1098,12 @@ public sealed class InMemoryReportStore
                 return (false, $"ReviewStatus must be one of: {string.Join(", ", validReviewStatuses)}.", null);
             }
             
+            // Validate blocker fields
+            if (request.IsBlocked && string.IsNullOrWhiteSpace(request.BlockerReason))
+            {
+                return (false, "BlockerReason is required when IsBlocked is true.", null);
+            }
+            
             var newDataPoint = new DataPoint
             {
                 Id = Guid.NewGuid().ToString(),
@@ -1118,7 +1124,10 @@ public sealed class InMemoryReportStore
                 CreatedAt = now,
                 UpdatedAt = now,
                 EvidenceIds = new List<string>(),
-                Deadline = request.Deadline
+                Deadline = request.Deadline,
+                IsBlocked = request.IsBlocked,
+                BlockerReason = request.BlockerReason,
+                BlockerDueDate = request.BlockerDueDate
             };
 
             // Validate against validation rules
