@@ -23,6 +23,17 @@ public sealed class InMemoryReportStore
     private readonly List<EscalationConfiguration> _escalationConfigurations = new();
     private readonly List<EscalationHistory> _escalationHistory = new();
 
+    // Valid missing reason categories
+    private static readonly string[] ValidMissingReasonCategories = new[] 
+    { 
+        "not-measured", 
+        "not-applicable", 
+        "unavailable-from-supplier",
+        "data-quality-issue",
+        "system-limitation",
+        "other"
+    };
+
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
         new("Energy & Emissions", "environmental", "Energy consumption, GHG emissions, carbon footprint"),
@@ -1206,6 +1217,25 @@ public sealed class InMemoryReportStore
                 return (false, "BlockerReason is required when IsBlocked is true.", null);
             }
             
+            // Validate missing data fields
+            if (request.IsMissing)
+            {
+                if (string.IsNullOrWhiteSpace(request.MissingReason))
+                {
+                    return (false, "MissingReason is required when IsMissing is true.", null);
+                }
+                
+                if (string.IsNullOrWhiteSpace(request.MissingReasonCategory))
+                {
+                    return (false, "MissingReasonCategory is required when IsMissing is true.", null);
+                }
+                
+                if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
+                }
+            }
+            
             var newDataPoint = new DataPoint
             {
                 Id = Guid.NewGuid().ToString(),
@@ -1229,7 +1259,12 @@ public sealed class InMemoryReportStore
                 Deadline = request.Deadline,
                 IsBlocked = request.IsBlocked,
                 BlockerReason = request.BlockerReason,
-                BlockerDueDate = request.BlockerDueDate
+                BlockerDueDate = request.BlockerDueDate,
+                IsMissing = request.IsMissing,
+                MissingReason = request.MissingReason,
+                MissingReasonCategory = request.MissingReasonCategory?.ToLowerInvariant(),
+                MissingFlaggedBy = request.IsMissing ? "system" : null, // Will be set properly when flagged via API
+                MissingFlaggedAt = request.IsMissing ? now : null
             };
 
             // Validate against validation rules
@@ -1497,6 +1532,25 @@ public sealed class InMemoryReportStore
                 return (false, "BlockerReason is required when IsBlocked is true.", null);
             }
             
+            // Validate missing data fields
+            if (request.IsMissing)
+            {
+                if (string.IsNullOrWhiteSpace(request.MissingReason))
+                {
+                    return (false, "MissingReason is required when IsMissing is true.", null);
+                }
+                
+                if (string.IsNullOrWhiteSpace(request.MissingReasonCategory))
+                {
+                    return (false, "MissingReasonCategory is required when IsMissing is true.", null);
+                }
+                
+                if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
+                }
+            }
+            
             // Update blocker fields
             if (dataPoint.IsBlocked != request.IsBlocked)
             {
@@ -1515,6 +1569,33 @@ public sealed class InMemoryReportStore
                 changes.Add(new FieldChange { Field = "BlockerDueDate", OldValue = dataPoint.BlockerDueDate ?? "", NewValue = request.BlockerDueDate ?? "" });
             }
             dataPoint.BlockerDueDate = request.BlockerDueDate;
+            
+            // Update missing data fields
+            if (dataPoint.IsMissing != request.IsMissing)
+            {
+                changes.Add(new FieldChange { Field = "IsMissing", OldValue = dataPoint.IsMissing.ToString(), NewValue = request.IsMissing.ToString() });
+                
+                // Clear audit fields when unflagging via UpdateDataPoint
+                if (!request.IsMissing)
+                {
+                    dataPoint.MissingFlaggedBy = null;
+                    dataPoint.MissingFlaggedAt = null;
+                }
+            }
+            dataPoint.IsMissing = request.IsMissing;
+            
+            if (dataPoint.MissingReason != request.MissingReason)
+            {
+                changes.Add(new FieldChange { Field = "MissingReason", OldValue = dataPoint.MissingReason ?? "", NewValue = request.MissingReason ?? "" });
+            }
+            dataPoint.MissingReason = request.MissingReason;
+            
+            var normalizedCategory = request.MissingReasonCategory?.ToLowerInvariant();
+            if (dataPoint.MissingReasonCategory != normalizedCategory)
+            {
+                changes.Add(new FieldChange { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = normalizedCategory ?? "" });
+            }
+            dataPoint.MissingReasonCategory = normalizedCategory;
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -1783,6 +1864,147 @@ public sealed class InMemoryReportStore
                     request.ChangeNote
                 );
             }
+
+            return (true, null, dataPoint);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) FlagMissingData(string id, FlagMissingDataRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Validate user exists
+            var user = _users.FirstOrDefault(u => u.Id == request.FlaggedBy);
+            if (user == null)
+            {
+                return (false, $"User with ID '{request.FlaggedBy}' not found.", null);
+            }
+
+            // Validate missing reason category
+            if (!ValidMissingReasonCategories.Contains(request.MissingReasonCategory, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"MissingReasonCategory must be one of: {string.Join(", ", ValidMissingReasonCategories)}.", null);
+            }
+
+            // Validate reason is provided
+            if (string.IsNullOrWhiteSpace(request.MissingReason))
+            {
+                return (false, "MissingReason cannot be empty.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var normalizedCategory = request.MissingReasonCategory.ToLowerInvariant();
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "IsMissing", OldValue = dataPoint.IsMissing.ToString(), NewValue = "True" },
+                new() { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = normalizedCategory },
+                new() { Field = "MissingReason", OldValue = dataPoint.MissingReason ?? "", NewValue = request.MissingReason }
+            };
+
+            // If completeness status is not already "missing", set it to "missing" and track the change
+            if (dataPoint.CompletenessStatus != "missing")
+            {
+                changes.Add(new FieldChange
+                {
+                    Field = "CompletenessStatus",
+                    OldValue = dataPoint.CompletenessStatus,
+                    NewValue = "missing"
+                });
+                dataPoint.CompletenessStatus = "missing";
+            }
+
+            dataPoint.IsMissing = true;
+            dataPoint.MissingReason = request.MissingReason;
+            dataPoint.MissingReasonCategory = normalizedCategory;
+            dataPoint.MissingFlaggedBy = request.FlaggedBy;
+            dataPoint.MissingFlaggedAt = now;
+            dataPoint.UpdatedAt = now;
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                request.FlaggedBy,
+                user.Name,
+                "flag-missing",
+                "DataPoint",
+                dataPoint.Id,
+                changes,
+                $"Category: {normalizedCategory}. {request.MissingReason}"
+            );
+
+            return (true, null, dataPoint);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) UnflagMissingData(string id, UnflagMissingDataRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Check if data point is currently flagged as missing
+            if (!dataPoint.IsMissing)
+            {
+                return (false, "DataPoint is not currently flagged as missing.", null);
+            }
+
+            // Validate user exists
+            var user = _users.FirstOrDefault(u => u.Id == request.UnflaggedBy);
+            if (user == null)
+            {
+                return (false, $"User with ID '{request.UnflaggedBy}' not found.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "IsMissing", OldValue = dataPoint.IsMissing.ToString(), NewValue = "False" },
+                new() { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = "" },
+                new() { Field = "MissingReason", OldValue = dataPoint.MissingReason ?? "", NewValue = "" }
+            };
+
+            // Store previous values for history (audit log already captures this)
+            var previousReason = dataPoint.MissingReason;
+            var previousCategory = dataPoint.MissingReasonCategory;
+
+            // Update missing flag
+            dataPoint.IsMissing = false;
+            dataPoint.MissingReason = null;
+            dataPoint.MissingReasonCategory = null;
+            // Keep MissingFlaggedBy and MissingFlaggedAt for history reference
+            dataPoint.UpdatedAt = now;
+
+            // If completeness status is "missing", set it to "incomplete" (data is now being provided)
+            if (dataPoint.CompletenessStatus == "missing")
+            {
+                changes.Add(new FieldChange
+                {
+                    Field = "CompletenessStatus",
+                    OldValue = dataPoint.CompletenessStatus,
+                    NewValue = "incomplete"
+                });
+                dataPoint.CompletenessStatus = "incomplete";
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                request.UnflaggedBy,
+                user.Name,
+                "unflag-missing",
+                "DataPoint",
+                dataPoint.Id,
+                changes,
+                request.ChangeNote ?? $"Data previously flagged as: {previousCategory} - {previousReason}"
+            );
 
             return (true, null, dataPoint);
         }

@@ -182,4 +182,30 @@ public sealed class DataPointsController : ControllerBase
         var notes = _store.GetDataPointNotes(id);
         return Ok(notes);
     }
+
+    [HttpPost("{id}/flag-missing")]
+    public ActionResult<DataPoint> FlagMissingData(string id, [FromBody] FlagMissingDataRequest request)
+    {
+        var (isValid, errorMessage, dataPoint) = _store.FlagMissingData(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
+
+    [HttpPost("{id}/unflag-missing")]
+    public ActionResult<DataPoint> UnflagMissingData(string id, [FromBody] UnflagMissingDataRequest request)
+    {
+        var (isValid, errorMessage, dataPoint) = _store.UnflagMissingData(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
 }

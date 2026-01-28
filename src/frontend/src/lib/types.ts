@@ -91,6 +91,11 @@ export interface DataPoint {
   isBlocked: boolean
   blockerReason?: string
   blockerDueDate?: string
+  isMissing: boolean
+  missingReason?: string
+  missingReasonCategory?: string
+  missingFlaggedBy?: string
+  missingFlaggedAt?: string
 }
 
 export interface DataPointNote {
@@ -176,6 +181,25 @@ export interface UpdateDataPointStatusRequest {
   updatedBy: string
   changeNote?: string
 }
+
+export interface FlagMissingDataRequest {
+  flaggedBy: string
+  missingReasonCategory: MissingReasonCategory
+  missingReason: string
+}
+
+export interface UnflagMissingDataRequest {
+  unflaggedBy: string
+  changeNote?: string
+}
+
+export type MissingReasonCategory =
+  | 'not-measured'
+  | 'not-applicable'
+  | 'unavailable-from-supplier'
+  | 'data-quality-issue'
+  | 'system-limitation'
+  | 'other'
 
 export interface SectionSummary extends ReportSection {
   dataPointCount: number
