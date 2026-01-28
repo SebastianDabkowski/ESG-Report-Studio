@@ -8,6 +8,7 @@ public sealed class InMemoryReportStore
     private readonly List<ReportSection> _sections = new();
     private readonly List<SectionSummary> _summaries = new();
     private readonly List<OrganizationalUnit> _organizationalUnits = new();
+    private readonly List<SectionCatalogItem> _sectionCatalog = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -35,6 +36,43 @@ public sealed class InMemoryReportStore
         };
 
         _extendedTemplates = extended;
+
+        // Initialize the catalog with default sections
+        InitializeDefaultCatalog();
+    }
+
+    private void InitializeDefaultCatalog()
+    {
+        var catalogItems = new List<(string Title, string Code, string Category, string Description)>
+        {
+            ("Energy & Emissions", "ENV-001", "environmental", "Energy consumption, GHG emissions, carbon footprint"),
+            ("Waste & Recycling", "ENV-002", "environmental", "Waste generation, recycling rates, circular economy initiatives"),
+            ("Water & Biodiversity", "ENV-003", "environmental", "Water usage, water quality, biodiversity impact"),
+            ("Supply Chain Environmental Impact", "ENV-004", "environmental", "Supplier environmental performance, sustainable sourcing"),
+            ("Employee Health & Safety", "SOC-001", "social", "Workplace safety metrics, injury rates, wellness programs"),
+            ("Diversity & Inclusion", "SOC-002", "social", "Workforce diversity, equal opportunity, inclusion initiatives"),
+            ("Employee Development", "SOC-003", "social", "Training hours, skill development, career progression"),
+            ("Community Engagement", "SOC-004", "social", "Social investment, local employment, community programs"),
+            ("Human Rights", "SOC-005", "social", "Human rights policy, supply chain labor practices"),
+            ("Board Composition", "GOV-001", "governance", "Board structure, independence, diversity, expertise"),
+            ("Ethics & Compliance", "GOV-002", "governance", "Code of conduct, anti-corruption, compliance training"),
+            ("Risk Management", "GOV-003", "governance", "Risk framework, ESG risk integration, climate risk"),
+            ("Stakeholder Engagement", "GOV-004", "governance", "Stakeholder dialogue, materiality assessment")
+        };
+
+        foreach (var (title, code, category, description) in catalogItems)
+        {
+            _sectionCatalog.Add(new SectionCatalogItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = title,
+                Code = code,
+                Category = category,
+                Description = description,
+                IsDeprecated = false,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            });
+        }
     }
 
     public ReportingDataSnapshot GetSnapshot()
@@ -119,18 +157,30 @@ public sealed class InMemoryReportStore
 
             _periods.Add(newPeriod);
 
-            var templates = request.ReportingMode == "extended" ? _extendedTemplates : _simplifiedTemplates;
+            // Get active sections from catalog based on reporting mode
+            var catalogSections = _sectionCatalog
+                .Where(s => !s.IsDeprecated)
+                .ToList();
+
+            // Codes for simplified mode sections
+            var simplifiedCodes = new[] { "ENV-001", "ENV-002", "SOC-001", "SOC-002", "GOV-001", "GOV-002" };
+
+            // Determine which sections to include based on reporting mode
+            var sectionsToInclude = request.ReportingMode == "extended" 
+                ? catalogSections 
+                : catalogSections.Where(s => simplifiedCodes.Contains(s.Code)).ToList();
+
             var order = 0;
 
-            foreach (var template in templates)
+            foreach (var catalogItem in sectionsToInclude)
             {
                 var section = new ReportSection
                 {
                     Id = Guid.NewGuid().ToString(),
                     PeriodId = newPeriod.Id,
-                    Title = template.Title,
-                    Category = template.Category,
-                    Description = template.Description,
+                    Title = catalogItem.Title,
+                    Category = catalogItem.Category,
+                    Description = catalogItem.Description,
                     OwnerId = request.OwnerId,
                     Status = "draft",
                     Completeness = "empty",
@@ -445,6 +495,134 @@ public sealed class InMemoryReportStore
         }
 
         return false;
+    }
+
+    // Section Catalog Management
+    public IReadOnlyList<SectionCatalogItem> GetSectionCatalog(bool includeDeprecated = false)
+    {
+        lock (_lock)
+        {
+            return includeDeprecated 
+                ? _sectionCatalog.ToList()
+                : _sectionCatalog.Where(s => !s.IsDeprecated).ToList();
+        }
+    }
+
+    public SectionCatalogItem? GetSectionCatalogItem(string id)
+    {
+        lock (_lock)
+        {
+            return _sectionCatalog.FirstOrDefault(s => s.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, SectionCatalogItem? Item) CreateSectionCatalogItem(CreateSectionCatalogItemRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                return (false, "Code is required.", null);
+            }
+
+            // Validate category
+            var validCategories = new[] { "environmental", "social", "governance" };
+            if (!validCategories.Contains(request.Category, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"Category must be one of: {string.Join(", ", validCategories)}.", null);
+            }
+
+            // Check if code already exists
+            if (_sectionCatalog.Any(s => s.Code.Equals(request.Code, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, $"A section with code '{request.Code}' already exists.", null);
+            }
+
+            var newItem = new SectionCatalogItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Title = request.Title,
+                Code = request.Code,
+                Category = request.Category.ToLowerInvariant(),
+                Description = request.Description,
+                IsDeprecated = false,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _sectionCatalog.Add(newItem);
+            return (true, null, newItem);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, SectionCatalogItem? Item) UpdateSectionCatalogItem(string id, UpdateSectionCatalogItemRequest request)
+    {
+        lock (_lock)
+        {
+            var item = _sectionCatalog.FirstOrDefault(s => s.Id == id);
+            if (item == null)
+            {
+                return (false, "Section catalog item not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                return (false, "Code is required.", null);
+            }
+
+            // Validate category
+            var validCategories = new[] { "environmental", "social", "governance" };
+            if (!validCategories.Contains(request.Category, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"Category must be one of: {string.Join(", ", validCategories)}.", null);
+            }
+
+            // Check if code already exists (excluding current item)
+            if (_sectionCatalog.Any(s => s.Id != id && s.Code.Equals(request.Code, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, $"A section with code '{request.Code}' already exists.", null);
+            }
+
+            item.Title = request.Title;
+            item.Code = request.Code;
+            item.Category = request.Category.ToLowerInvariant();
+            item.Description = request.Description;
+
+            return (true, null, item);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) DeprecateSectionCatalogItem(string id)
+    {
+        lock (_lock)
+        {
+            var item = _sectionCatalog.FirstOrDefault(s => s.Id == id);
+            if (item == null)
+            {
+                return (false, "Section catalog item not found.");
+            }
+
+            if (item.IsDeprecated)
+            {
+                return (false, "Section is already deprecated.");
+            }
+
+            item.IsDeprecated = true;
+            item.DeprecatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null);
+        }
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);
