@@ -103,6 +103,16 @@ export interface DataPoint {
   estimateType?: EstimateType
   estimateMethod?: string
   confidenceLevel?: ConfidenceLevel
+  estimateInputSources?: EstimateInputSource[]
+  estimateInputs?: string
+  estimateAuthor?: string
+  estimateCreatedAt?: string
+}
+
+export interface EstimateInputSource {
+  sourceType: string
+  sourceReference: string
+  description: string
 }
 
 export interface DataPointNote {
@@ -133,6 +143,12 @@ export interface Evidence {
   linkedDataPoints: string[]
 }
 
+export interface AssumptionSource {
+  sourceType: string
+  sourceReference: string
+  description: string
+}
+
 export interface Assumption {
   id: string
   sectionId: string
@@ -144,6 +160,8 @@ export interface Assumption {
   validityEndDate: string
   methodology: string
   limitations: string
+  rationale?: string
+  sources: AssumptionSource[]
   status: 'active' | 'deprecated' | 'invalid'
   replacementAssumptionId?: string
   deprecationJustification?: string

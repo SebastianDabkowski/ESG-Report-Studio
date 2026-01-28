@@ -267,6 +267,11 @@ export interface CreateDataPointPayload {
   assumptions?: string
   completenessStatus: string
   reviewStatus?: string
+  estimateType?: string
+  estimateMethod?: string
+  confidenceLevel?: string
+  estimateInputSources?: import('@/lib/types').EstimateInputSource[]
+  estimateInputs?: string
 }
 
 export interface UpdateDataPointPayload {
@@ -285,6 +290,11 @@ export interface UpdateDataPointPayload {
   reviewStatus?: string
   changeNote?: string
   updatedBy?: string
+  estimateType?: string
+  estimateMethod?: string
+  confidenceLevel?: string
+  estimateInputSources?: import('@/lib/types').EstimateInputSource[]
+  estimateInputs?: string
 }
 
 export interface ApproveDataPointPayload {
@@ -477,6 +487,8 @@ export interface CreateAssumptionPayload {
   methodology: string
   limitations: string
   linkedDataPointIds: string[]
+  rationale?: string
+  sources?: import('@/lib/types').AssumptionSource[]
 }
 
 export interface UpdateAssumptionPayload {
@@ -488,6 +500,8 @@ export interface UpdateAssumptionPayload {
   methodology: string
   limitations: string
   linkedDataPointIds: string[]
+  rationale?: string
+  sources?: import('@/lib/types').AssumptionSource[]
 }
 
 export interface DeprecateAssumptionPayload {

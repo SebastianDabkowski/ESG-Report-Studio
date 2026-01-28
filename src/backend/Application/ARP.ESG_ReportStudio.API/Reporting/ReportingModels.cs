@@ -365,6 +365,28 @@ public sealed class UpdateSectionCatalogItemRequest
 }
 
 /// <summary>
+/// Represents a source of input data used in an estimate calculation.
+/// Supports both internal documents and external evidence references.
+/// </summary>
+public sealed class EstimateInputSource
+{
+    /// <summary>
+    /// Type of source: 'internal-document', 'uploaded-evidence', 'external-url', 'assumption', or 'other'.
+    /// </summary>
+    public string SourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reference identifier (e.g., document ID, evidence ID, assumption ID, or URL).
+    /// </summary>
+    public string SourceReference { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Human-readable description of the source.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Represents an ESG data point entry with metadata for auditability.
 /// </summary>
 public sealed class DataPoint
@@ -428,6 +450,28 @@ public sealed class DataPoint
     /// Preserves the estimate details (EstimateType, EstimateMethod, ConfidenceLevel, etc.) for historical reference.
     /// </summary>
     public string? PreviousEstimateSnapshot { get; set; }
+    
+    // Data Provenance fields for Estimates
+    /// <summary>
+    /// List of input sources used to derive the estimate. Each source contains reference information.
+    /// Required when InformationType is 'estimate' and multiple sources are used.
+    /// </summary>
+    public List<EstimateInputSource> EstimateInputSources { get; set; } = new();
+    
+    /// <summary>
+    /// Detailed inputs used in the estimate calculation (e.g., "Energy consumption: 1000 kWh, Emission factor: 0.5 kg CO2/kWh").
+    /// </summary>
+    public string? EstimateInputs { get; set; }
+    
+    /// <summary>
+    /// User who created/authored the estimate. For audit trail.
+    /// </summary>
+    public string? EstimateAuthor { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the estimate was created. For audit trail.
+    /// </summary>
+    public string? EstimateCreatedAt { get; set; }
 }
 
 /// <summary>
@@ -468,6 +512,17 @@ public sealed class CreateDataPointRequest
     /// Confidence level in the accuracy of the estimate. Required for estimates. Options: low, medium, high.
     /// </summary>
     public string? ConfidenceLevel { get; set; }
+    
+    // Data Provenance fields for Estimates
+    /// <summary>
+    /// List of input sources used to derive the estimate.
+    /// </summary>
+    public List<EstimateInputSource> EstimateInputSources { get; set; } = new();
+    
+    /// <summary>
+    /// Detailed inputs used in the estimate calculation.
+    /// </summary>
+    public string? EstimateInputs { get; set; }
 }
 
 /// <summary>
@@ -509,6 +564,17 @@ public sealed class UpdateDataPointRequest
     /// Confidence level in the accuracy of the estimate. Required for estimates. Options: low, medium, high.
     /// </summary>
     public string? ConfidenceLevel { get; set; }
+    
+    // Data Provenance fields for Estimates
+    /// <summary>
+    /// List of input sources used to derive the estimate.
+    /// </summary>
+    public List<EstimateInputSource> EstimateInputSources { get; set; } = new();
+    
+    /// <summary>
+    /// Detailed inputs used in the estimate calculation.
+    /// </summary>
+    public string? EstimateInputs { get; set; }
 }
 
 /// <summary>
@@ -736,6 +802,27 @@ public sealed class Evidence
 }
 
 /// <summary>
+/// Represents a source supporting an assumption.
+/// </summary>
+public sealed class AssumptionSource
+{
+    /// <summary>
+    /// Type of source: 'internal-document', 'uploaded-evidence', 'external-url', or 'other'.
+    /// </summary>
+    public string SourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reference identifier (e.g., document ID, evidence ID, or URL).
+    /// </summary>
+    public string SourceReference { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Human-readable description of the source.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Represents an assumption or estimation for an ESG data point.
 /// Supports reusability across multiple disclosures, versioning, and lifecycle management.
 /// </summary>
@@ -756,6 +843,17 @@ public sealed class Assumption
     public string Methodology { get; set; } = string.Empty;
     public string Limitations { get; set; } = string.Empty;
     
+    // Data Provenance fields
+    /// <summary>
+    /// Detailed rationale explaining why this assumption was made and how it was derived.
+    /// </summary>
+    public string? Rationale { get; set; }
+    
+    /// <summary>
+    /// List of sources supporting this assumption (documents, evidence, external references).
+    /// </summary>
+    public List<AssumptionSource> Sources { get; set; } = new();
+    
     // Lifecycle management
     public string Status { get; set; } = "active"; // 'active', 'deprecated', 'invalid'
     public string? ReplacementAssumptionId { get; set; } // Reference to replacement when deprecated
@@ -771,6 +869,7 @@ public sealed class Assumption
     public string CreatedAt { get; set; } = string.Empty;
     
     // Linkage tracking - stores IDs of all data points using this assumption
+    // This represents linked disclosures
     public List<string> LinkedDataPointIds { get; set; } = new();
 }
 
@@ -867,6 +966,10 @@ public sealed class CreateAssumptionRequest
     public string Methodology { get; set; } = string.Empty;
     public string Limitations { get; set; } = string.Empty;
     public List<string> LinkedDataPointIds { get; set; } = new();
+    
+    // Data Provenance fields
+    public string? Rationale { get; set; }
+    public List<AssumptionSource> Sources { get; set; } = new();
 }
 
 /// <summary>
@@ -882,6 +985,10 @@ public sealed class UpdateAssumptionRequest
     public string Methodology { get; set; } = string.Empty;
     public string Limitations { get; set; } = string.Empty;
     public List<string> LinkedDataPointIds { get; set; } = new();
+    
+    // Data Provenance fields
+    public string? Rationale { get; set; }
+    public List<AssumptionSource> Sources { get; set; } = new();
 }
 
 /// <summary>
