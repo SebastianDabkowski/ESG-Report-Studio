@@ -49,6 +49,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [editingDataPoint, setEditingDataPoint] = useState<DataPoint | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
+  const [showMyItemsOnly, setShowMyItemsOnly] = useState(false)
 
   // Fetch users on mount
   useEffect(() => {
@@ -68,6 +69,17 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
 
   const activePeriod = periods?.find(p => p.status === 'active')
   const activeSections = sections?.filter(s => activePeriod && s.periodId === activePeriod.id) || []
+  
+  // Filter data points by assigned user if "My Items" is enabled
+  const getFilteredDataPoints = (sectionId: string) => {
+    const sectionDataPoints = dataPoints?.filter(dp => dp.sectionId === sectionId) || []
+    if (showMyItemsOnly) {
+      return sectionDataPoints.filter(dp => 
+        dp.ownerId === currentUser.id || dp.contributorIds.includes(currentUser.id)
+      )
+    }
+    return sectionDataPoints
+  }
   
   // Group sections by category
   const environmentalSections = activeSections.filter(s => s.category === 'environmental')
@@ -245,7 +257,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     return (
       <div className="space-y-6">
         {categorySections.map(section => {
-          const sectionDataPoints = dataPoints?.filter(d => d.sectionId === section.id) || []
+          const sectionDataPoints = getFilteredDataPoints(section.id)
           const sectionGaps = gaps?.filter(g => g.sectionId === section.id && !g.resolved) || []
 
           return (
@@ -449,6 +461,23 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
             </CardContent>
           </Card>
 
+          <div className="flex items-center gap-2">
+            <Button
+              variant={showMyItemsOnly ? "default" : "outline"}
+              size="sm"
+              onClick={() => setShowMyItemsOnly(!showMyItemsOnly)}
+              className="flex items-center gap-2"
+            >
+              <User size={16} />
+              {showMyItemsOnly ? 'Showing My Items' : 'Show My Items Only'}
+            </Button>
+            {showMyItemsOnly && (
+              <p className="text-sm text-muted-foreground">
+                Filtering data items where you are owner or contributor
+              </p>
+            )}
+          </div>
+
           <Tabs value={activeCategory} onValueChange={(v) => setActiveCategory(v as 'environmental' | 'social' | 'governance')} className="space-y-4">
             <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="environmental" className="flex items-center gap-2">
@@ -534,6 +563,27 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                     Metadata
                   </h4>
                   <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Owner:</span>
+                      <span className="font-medium">
+                        {users?.find(u => u.id === selectedDataItem.ownerId)?.name || 'Unknown'}
+                      </span>
+                    </div>
+                    {selectedDataItem.contributorIds && selectedDataItem.contributorIds.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Contributors:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedDataItem.contributorIds.map(contributorId => {
+                            const contributor = users?.find(u => u.id === contributorId)
+                            return contributor ? (
+                              <Badge key={contributorId} variant="outline" className="text-xs">
+                                {contributor.name}
+                              </Badge>
+                            ) : null
+                          })}
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Type:</span>
                       <span className="font-medium capitalize">{selectedDataItem.type}</span>
