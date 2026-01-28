@@ -15,9 +15,9 @@ public sealed class DataPointsController : ControllerBase
     }
 
     [HttpGet]
-    public ActionResult<IReadOnlyList<DataPoint>> GetDataPoints([FromQuery] string? sectionId)
+    public ActionResult<IReadOnlyList<DataPoint>> GetDataPoints([FromQuery] string? sectionId, [FromQuery] string? assignedUserId)
     {
-        return Ok(_store.GetDataPoints(sectionId));
+        return Ok(_store.GetDataPoints(sectionId, assignedUserId));
     }
 
     [HttpGet("{id}")]

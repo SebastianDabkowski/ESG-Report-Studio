@@ -1,5 +1,16 @@
 namespace ARP.ESG_ReportStudio.API.Reporting;
 
+/// <summary>
+/// Represents a user in the system.
+/// </summary>
+public sealed class User
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string Role { get; set; } = string.Empty; // admin, report-owner, contributor, auditor
+}
+
 public sealed class ReportingPeriod
 {
     public string Id { get; set; } = string.Empty;
@@ -183,6 +194,7 @@ public sealed class DataPoint
     public string? Value { get; set; }
     public string? Unit { get; set; }
     public string OwnerId { get; set; } = string.Empty;
+    public List<string> ContributorIds { get; set; } = new();
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
@@ -205,6 +217,7 @@ public sealed class CreateDataPointRequest
     public string? Value { get; set; }
     public string? Unit { get; set; }
     public string OwnerId { get; set; } = string.Empty;
+    public List<string> ContributorIds { get; set; } = new();
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
@@ -222,6 +235,8 @@ public sealed class UpdateDataPointRequest
     public string Content { get; set; } = string.Empty;
     public string? Value { get; set; }
     public string? Unit { get; set; }
+    public string OwnerId { get; set; } = string.Empty;
+    public List<string> ContributorIds { get; set; } = new();
     public string Source { get; set; } = string.Empty;
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }

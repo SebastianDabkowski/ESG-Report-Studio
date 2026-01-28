@@ -27,6 +27,8 @@ import {
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
+import { getUsers } from '@/lib/api'
+import { useEffect } from 'react'
 
 interface DataCollectionWorkspaceProps {
   currentUser: UserType
@@ -38,6 +40,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [dataPoints, setDataPoints] = useKV<DataPoint[]>('data-points', [])
   const [gaps] = useKV<Gap[]>('gaps', [])
   const [evidence, setEvidence] = useKV<Evidence[]>('evidence', [])
+  const [users, setUsers] = useKV<UserType[]>('users', [])
   
   const [selectedDataItem, setSelectedDataItem] = useState<DataPoint | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
@@ -46,6 +49,22 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [editingDataPoint, setEditingDataPoint] = useState<DataPoint | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
+
+  // Fetch users on mount
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const fetchedUsers = await getUsers()
+        setUsers(fetchedUsers)
+      } catch (error) {
+        console.error('Failed to fetch users:', error)
+      }
+    }
+    
+    if (!users || users.length === 0) {
+      fetchUsers()
+    }
+  }, [])
 
   const activePeriod = periods?.find(p => p.status === 'active')
   const activeSections = sections?.filter(s => activePeriod && s.periodId === activePeriod.id) || []
@@ -88,7 +107,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     setIsDetailOpen(false)
   }
 
-  const handleFormSubmit = async (formData: Omit<DataPoint, 'id' | 'sectionId' | 'ownerId' | 'createdAt' | 'updatedAt' | 'evidenceIds'>) => {
+  const handleFormSubmit = async (formData: Omit<DataPoint, 'id' | 'sectionId' | 'createdAt' | 'updatedAt' | 'evidenceIds'>) => {
     const now = new Date().toISOString()
     
     if (editingDataPoint) {
@@ -105,7 +124,6 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
         id: crypto.randomUUID(),
         sectionId: selectedSectionId!,
         ...formData,
-        ownerId: currentUser.id,
         createdAt: now,
         updatedAt: now,
         evidenceIds: []
@@ -628,6 +646,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
             <DataPointForm
               sectionId={selectedSectionId}
               ownerId={currentUser.id}
+              availableUsers={users || []}
               dataPoint={editingDataPoint || undefined}
               onSubmit={handleFormSubmit}
               onCancel={handleFormCancel}

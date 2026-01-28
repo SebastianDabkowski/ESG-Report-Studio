@@ -1,14 +1,16 @@
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Checkbox } from '@/components/ui/checkbox'
 import { WarningCircle } from '@phosphor-icons/react'
-import type { DataPoint } from '@/lib/types'
+import type { DataPoint, User } from '@/lib/types'
 
 const dataPointSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -17,6 +19,7 @@ const dataPointSchema = z.object({
   classification: z.enum(['fact', 'declaration', 'plan']).optional(),
   value: z.string().optional(),
   unit: z.string().optional(),
+  ownerId: z.string().min(1, 'Owner is required'),
   source: z.string().min(1, 'Source is required'),
   informationType: z.enum(['fact', 'estimate', 'declaration', 'plan'], {
     errorMap: () => ({ message: 'Information type is required' })
@@ -41,8 +44,9 @@ type DataPointFormData = z.infer<typeof dataPointSchema>
 interface DataPointFormProps {
   sectionId: string
   ownerId: string
+  availableUsers: User[]
   dataPoint?: DataPoint
-  onSubmit: (data: DataPointFormData) => void | Promise<void>
+  onSubmit: (data: DataPointFormData & { contributorIds: string[] }) => void | Promise<void>
   onCancel: () => void
   isSubmitting?: boolean
 }
@@ -50,11 +54,14 @@ interface DataPointFormProps {
 export default function DataPointForm({ 
   sectionId, 
   ownerId, 
+  availableUsers,
   dataPoint, 
   onSubmit, 
   onCancel,
   isSubmitting = false 
 }: DataPointFormProps) {
+  const [contributorIds, setContributorIds] = useState<string[]>(dataPoint?.contributorIds || [])
+  
   const {
     register,
     handleSubmit,
@@ -70,6 +77,7 @@ export default function DataPointForm({
       classification: dataPoint.classification,
       value: dataPoint.value?.toString() || '',
       unit: dataPoint.unit || '',
+      ownerId: dataPoint.ownerId,
       source: dataPoint.source,
       informationType: dataPoint.informationType,
       assumptions: dataPoint.assumptions || '',
@@ -77,6 +85,7 @@ export default function DataPointForm({
     } : {
       type: 'narrative',
       classification: 'fact',
+      ownerId: ownerId,
       source: '',
       informationType: 'fact',
       assumptions: '',
@@ -86,9 +95,21 @@ export default function DataPointForm({
 
   const selectedType = watch('type')
   const selectedInformationType = watch('informationType')
+  
+  const handleToggleContributor = (userId: string) => {
+    setContributorIds(prev =>
+      prev.includes(userId)
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    )
+  }
+  
+  const wrappedOnSubmit = (data: DataPointFormData) => {
+    onSubmit({ ...data, contributorIds })
+  }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+    <form onSubmit={handleSubmit(wrappedOnSubmit)} className="space-y-4">
       {/* Title */}
       <div className="space-y-2">
         <Label htmlFor="title">Title *</Label>
@@ -266,6 +287,60 @@ export default function DataPointForm({
               <p className="text-sm text-red-600">{errors.completenessStatus.message}</p>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Ownership & Responsibilities */}
+      <div className="space-y-4 pt-4 border-t">
+        <h3 className="font-medium text-sm">Ownership & Responsibilities</h3>
+        
+        {/* Owner Selection */}
+        <div className="space-y-2">
+          <Label htmlFor="ownerId">Owner *</Label>
+          <Select
+            value={watch('ownerId')}
+            onValueChange={(value) => setValue('ownerId', value)}
+          >
+            <SelectTrigger id="ownerId" className={errors.ownerId ? 'border-red-500' : ''}>
+              <SelectValue placeholder="Select owner" />
+            </SelectTrigger>
+            <SelectContent>
+              {availableUsers.map(user => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.name} ({user.role})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors.ownerId && (
+            <p className="text-sm text-red-600">{errors.ownerId.message}</p>
+          )}
+        </div>
+
+        {/* Contributors Selection */}
+        <div className="space-y-2">
+          <Label>Contributors</Label>
+          <div className="space-y-2 border rounded-md p-3">
+            {availableUsers.filter(u => u.id !== watch('ownerId')).map(user => (
+              <div key={user.id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`contributor-${user.id}`}
+                  checked={contributorIds.includes(user.id)}
+                  onCheckedChange={() => handleToggleContributor(user.id)}
+                />
+                <label
+                  htmlFor={`contributor-${user.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                >
+                  {user.name} ({user.role})
+                </label>
+              </div>
+            ))}
+            {availableUsers.filter(u => u.id !== watch('ownerId')).length === 0 && (
+              <p className="text-sm text-muted-foreground">No other users available</p>
+            )}
+          </div>
+          <p className="text-xs text-muted-foreground">Select users who will contribute to this data item</p>
         </div>
       </div>
 

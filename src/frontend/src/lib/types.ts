@@ -70,6 +70,7 @@ export interface DataPoint {
   value?: string | number
   unit?: string
   ownerId: string
+  contributorIds: string[]
   source: string
   informationType: string
   assumptions?: string

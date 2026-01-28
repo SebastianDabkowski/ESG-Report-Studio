@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -175,3 +175,11 @@ export function deleteOrganizationalUnit(id: string): Promise<void> {
   })
 }
 
+// User API methods
+export function getUsers(): Promise<User[]> {
+  return requestJson<User[]>('users')
+}
+
+export function getUser(id: string): Promise<User> {
+  return requestJson<User>(`users/${id}`)
+}
