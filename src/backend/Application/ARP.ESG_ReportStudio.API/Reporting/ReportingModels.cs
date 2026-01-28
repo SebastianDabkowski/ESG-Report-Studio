@@ -719,6 +719,68 @@ public sealed class Gap
 }
 
 /// <summary>
+/// Represents a simplification (e.g., boundary limitation) applied to the reporting scope.
+/// Ensures transparency about scope constraints and their impact.
+/// </summary>
+public sealed class Simplification
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of affected entities (companies, subsidiaries, etc.) by this simplification.
+    /// </summary>
+    public List<string> AffectedEntities { get; set; } = new();
+    
+    /// <summary>
+    /// List of affected sites (locations, facilities, etc.) by this simplification.
+    /// </summary>
+    public List<string> AffectedSites { get; set; } = new();
+    
+    /// <summary>
+    /// List of affected processes (business processes, operations, etc.) by this simplification.
+    /// </summary>
+    public List<string> AffectedProcesses { get; set; } = new();
+    
+    /// <summary>
+    /// Qualitative impact level: "low", "medium", or "high".
+    /// </summary>
+    public string ImpactLevel { get; set; } = "medium";
+    
+    /// <summary>
+    /// Optional notes providing additional context about the impact assessment.
+    /// </summary>
+    public string? ImpactNotes { get; set; }
+    
+    /// <summary>
+    /// Status of the simplification: "active" or "removed".
+    /// </summary>
+    public string Status { get; set; } = "active";
+    
+    /// <summary>
+    /// User who created this simplification.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this simplification was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who last updated this simplification.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this simplification was last updated.
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+}
+
+/// <summary>
 /// Request to create a new assumption.
 /// </summary>
 public sealed class CreateAssumptionRequest
@@ -756,6 +818,35 @@ public sealed class DeprecateAssumptionRequest
 {
     public string? ReplacementAssumptionId { get; set; }
     public string? Justification { get; set; }
+}
+
+/// <summary>
+/// Request to create a new simplification.
+/// </summary>
+public sealed class CreateSimplificationRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public List<string> AffectedEntities { get; set; } = new();
+    public List<string> AffectedSites { get; set; } = new();
+    public List<string> AffectedProcesses { get; set; } = new();
+    public string ImpactLevel { get; set; } = "medium";
+    public string? ImpactNotes { get; set; }
+}
+
+/// <summary>
+/// Request to update an existing simplification.
+/// </summary>
+public sealed class UpdateSimplificationRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public List<string> AffectedEntities { get; set; } = new();
+    public List<string> AffectedSites { get; set; } = new();
+    public List<string> AffectedProcesses { get; set; } = new();
+    public string ImpactLevel { get; set; } = "medium";
+    public string? ImpactNotes { get; set; }
 }
 
 /// <summary>

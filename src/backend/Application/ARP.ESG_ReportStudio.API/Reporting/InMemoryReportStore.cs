@@ -13,6 +13,7 @@ public sealed class InMemoryReportStore
     private readonly List<Evidence> _evidence = new();
     private readonly List<Assumption> _assumptions = new();
     private readonly List<Gap> _gaps = new();
+    private readonly List<Simplification> _simplifications = new();
     private readonly List<User> _users = new();
     private readonly List<ValidationRule> _validationRules = new();
     private readonly List<AuditLogEntry> _auditLog = new();
@@ -2601,6 +2602,276 @@ public sealed class InMemoryReportStore
             }
 
             _assumptions.Remove(assumption);
+            return (true, null);
+        }
+    }
+
+    // Simplification management methods
+    public IReadOnlyList<Simplification> GetSimplifications(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return _simplifications.Where(s => s.Status == "active").ToList();
+            }
+
+            return _simplifications.Where(s => s.SectionId == sectionId && s.Status == "active").ToList();
+        }
+    }
+
+    public Simplification? GetSimplificationById(string id)
+    {
+        lock (_lock)
+        {
+            return _simplifications.FirstOrDefault(s => s.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Simplification? Simplification) CreateSimplification(
+        string sectionId,
+        string title,
+        string description,
+        List<string> affectedEntities,
+        List<string> affectedSites,
+        List<string> affectedProcesses,
+        string impactLevel,
+        string? impactNotes,
+        string createdBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(createdBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+
+            // Validate that at least one boundary is specified
+            if ((affectedEntities == null || affectedEntities.Count == 0) &&
+                (affectedSites == null || affectedSites.Count == 0) &&
+                (affectedProcesses == null || affectedProcesses.Count == 0))
+            {
+                return (false, "At least one affected boundary (entities, sites, or processes) must be specified.", null);
+            }
+
+            // Validate impact level
+            var validImpactLevels = new[] { "low", "medium", "high" };
+            if (string.IsNullOrWhiteSpace(impactLevel) || !validImpactLevels.Contains(impactLevel.ToLowerInvariant()))
+            {
+                return (false, "Impact level must be one of: low, medium, high.", null);
+            }
+
+            // Verify section exists
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            var simplification = new Simplification
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = title,
+                Description = description,
+                AffectedEntities = affectedEntities ?? new List<string>(),
+                AffectedSites = affectedSites ?? new List<string>(),
+                AffectedProcesses = affectedProcesses ?? new List<string>(),
+                ImpactLevel = impactLevel.ToLowerInvariant(),
+                ImpactNotes = impactNotes,
+                Status = "active",
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _simplifications.Add(simplification);
+
+            // Log to audit trail
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                UserId = createdBy,
+                UserName = createdBy,
+                Action = "create",
+                EntityType = "simplification",
+                EntityId = simplification.Id,
+                ChangeNote = $"Created simplification '{title}' for section {sectionId}"
+            });
+
+            return (true, null, simplification);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Simplification? Simplification) UpdateSimplification(
+        string id,
+        string title,
+        string description,
+        List<string> affectedEntities,
+        List<string> affectedSites,
+        List<string> affectedProcesses,
+        string impactLevel,
+        string? impactNotes,
+        string updatedBy)
+    {
+        lock (_lock)
+        {
+            var simplification = _simplifications.FirstOrDefault(s => s.Id == id);
+            if (simplification == null)
+            {
+                return (false, $"Simplification with ID '{id}' not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(updatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+
+            // Validate that at least one boundary is specified
+            if ((affectedEntities == null || affectedEntities.Count == 0) &&
+                (affectedSites == null || affectedSites.Count == 0) &&
+                (affectedProcesses == null || affectedProcesses.Count == 0))
+            {
+                return (false, "At least one affected boundary (entities, sites, or processes) must be specified.", null);
+            }
+
+            // Validate impact level
+            var validImpactLevels = new[] { "low", "medium", "high" };
+            if (string.IsNullOrWhiteSpace(impactLevel) || !validImpactLevels.Contains(impactLevel.ToLowerInvariant()))
+            {
+                return (false, "Impact level must be one of: low, medium, high.", null);
+            }
+
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (simplification.Title != title)
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = simplification.Title, NewValue = title });
+                simplification.Title = title;
+            }
+
+            if (simplification.Description != description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = simplification.Description, NewValue = description });
+                simplification.Description = description;
+            }
+
+            var oldEntities = string.Join(", ", simplification.AffectedEntities);
+            var newEntities = string.Join(", ", affectedEntities ?? new List<string>());
+            if (oldEntities != newEntities)
+            {
+                changes.Add(new FieldChange { Field = "AffectedEntities", OldValue = oldEntities, NewValue = newEntities });
+                simplification.AffectedEntities = affectedEntities ?? new List<string>();
+            }
+
+            var oldSites = string.Join(", ", simplification.AffectedSites);
+            var newSites = string.Join(", ", affectedSites ?? new List<string>());
+            if (oldSites != newSites)
+            {
+                changes.Add(new FieldChange { Field = "AffectedSites", OldValue = oldSites, NewValue = newSites });
+                simplification.AffectedSites = affectedSites ?? new List<string>();
+            }
+
+            var oldProcesses = string.Join(", ", simplification.AffectedProcesses);
+            var newProcesses = string.Join(", ", affectedProcesses ?? new List<string>());
+            if (oldProcesses != newProcesses)
+            {
+                changes.Add(new FieldChange { Field = "AffectedProcesses", OldValue = oldProcesses, NewValue = newProcesses });
+                simplification.AffectedProcesses = affectedProcesses ?? new List<string>();
+            }
+
+            if (simplification.ImpactLevel != impactLevel.ToLowerInvariant())
+            {
+                changes.Add(new FieldChange { Field = "ImpactLevel", OldValue = simplification.ImpactLevel, NewValue = impactLevel.ToLowerInvariant() });
+                simplification.ImpactLevel = impactLevel.ToLowerInvariant();
+            }
+
+            if (simplification.ImpactNotes != impactNotes)
+            {
+                changes.Add(new FieldChange { Field = "ImpactNotes", OldValue = simplification.ImpactNotes ?? "", NewValue = impactNotes ?? "" });
+                simplification.ImpactNotes = impactNotes;
+            }
+
+            simplification.UpdatedBy = updatedBy;
+            simplification.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                _auditLog.Add(new AuditLogEntry
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Timestamp = DateTime.UtcNow.ToString("O"),
+                    UserId = updatedBy,
+                    UserName = updatedBy,
+                    Action = "update",
+                    EntityType = "simplification",
+                    EntityId = simplification.Id,
+                    ChangeNote = $"Updated simplification '{title}'",
+                    Changes = changes
+                });
+            }
+
+            return (true, null, simplification);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) DeleteSimplification(string id, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var simplification = _simplifications.FirstOrDefault(s => s.Id == id);
+            if (simplification == null)
+            {
+                return (false, $"Simplification with ID '{id}' not found.");
+            }
+
+            // Mark as removed instead of hard delete (for audit trail)
+            simplification.Status = "removed";
+            simplification.UpdatedBy = deletedBy;
+            simplification.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Log to audit trail
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                UserId = deletedBy,
+                UserName = deletedBy,
+                Action = "delete",
+                EntityType = "simplification",
+                EntityId = simplification.Id,
+                ChangeNote = $"Removed simplification '{simplification.Title}'"
+            });
+
             return (true, null);
         }
     }
