@@ -19,7 +19,7 @@ export default function AuditTrailView() {
   
   // Filter state
   const [filters, setFilters] = useState<AuditLogFilters>({})
-  const [filterUserId, setFilterUserId] = useState<string>('')
+  const [filterUserId, setFilterUserId] = useState<string>('all')
   const [filterStartDate, setFilterStartDate] = useState<string>('')
   const [filterEndDate, setFilterEndDate] = useState<string>('')
 
@@ -52,7 +52,7 @@ export default function AuditTrailView() {
 
   function applyFilters() {
     const newFilters: AuditLogFilters = {}
-    if (filterUserId) newFilters.userId = filterUserId
+    if (filterUserId && filterUserId !== 'all') newFilters.userId = filterUserId
     if (filterStartDate) newFilters.startDate = filterStartDate
     if (filterEndDate) newFilters.endDate = filterEndDate
     
@@ -61,7 +61,7 @@ export default function AuditTrailView() {
   }
 
   function clearFilters() {
-    setFilterUserId('')
+    setFilterUserId('all')
     setFilterStartDate('')
     setFilterEndDate('')
     setFilters({})
@@ -129,7 +129,7 @@ export default function AuditTrailView() {
                       <SelectValue placeholder="All users" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All users</SelectItem>
+                      <SelectItem value="all">All users</SelectItem>
                       {users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.name}
