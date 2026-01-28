@@ -2194,7 +2194,7 @@ public sealed class InMemoryReportStore
         _auditLog.Add(entry);
     }
 
-    public IReadOnlyList<AuditLogEntry> GetAuditLog(string? entityType = null, string? entityId = null, string? userId = null, string? startDate = null, string? endDate = null)
+    public IReadOnlyList<AuditLogEntry> GetAuditLog(string? entityType = null, string? entityId = null, string? userId = null, string? action = null, string? startDate = null, string? endDate = null)
     {
         lock (_lock)
         {
@@ -2213,6 +2213,11 @@ public sealed class InMemoryReportStore
             if (!string.IsNullOrWhiteSpace(userId))
             {
                 query = query.Where(e => e.UserId == userId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(action))
+            {
+                query = query.Where(e => e.Action.Equals(action, StringComparison.OrdinalIgnoreCase));
             }
 
             if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var start))

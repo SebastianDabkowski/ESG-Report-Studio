@@ -354,6 +354,7 @@ export interface AuditLogFilters {
   entityType?: string
   entityId?: string
   userId?: string
+  action?: string
   startDate?: string
   endDate?: string
 }
@@ -363,6 +364,7 @@ export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
   if (filters?.entityType) params.append('entityType', filters.entityType)
   if (filters?.entityId) params.append('entityId', filters.entityId)
   if (filters?.userId) params.append('userId', filters.userId)
+  if (filters?.action) params.append('action', filters.action)
   if (filters?.startDate) params.append('startDate', filters.startDate)
   if (filters?.endDate) params.append('endDate', filters.endDate)
   
@@ -370,6 +372,62 @@ export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
   const path = queryString ? `audit-log?${queryString}` : 'audit-log'
   
   return requestJson<any[]>(path)
+}
+
+export async function exportAuditLogCsv(filters?: AuditLogFilters): Promise<void> {
+  const params = new URLSearchParams()
+  if (filters?.entityType) params.append('entityType', filters.entityType)
+  if (filters?.entityId) params.append('entityId', filters.entityId)
+  if (filters?.userId) params.append('userId', filters.userId)
+  if (filters?.action) params.append('action', filters.action)
+  if (filters?.startDate) params.append('startDate', filters.startDate)
+  if (filters?.endDate) params.append('endDate', filters.endDate)
+  
+  const queryString = params.toString()
+  const path = queryString ? `audit-log/export/csv?${queryString}` : 'audit-log/export/csv'
+  
+  const response = await fetch(buildUrl(path))
+  if (!response.ok) {
+    throw new Error('Failed to export audit log')
+  }
+  
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `audit-log-${new Date().toISOString().split('T')[0]}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
+export async function exportAuditLogJson(filters?: AuditLogFilters): Promise<void> {
+  const params = new URLSearchParams()
+  if (filters?.entityType) params.append('entityType', filters.entityType)
+  if (filters?.entityId) params.append('entityId', filters.entityId)
+  if (filters?.userId) params.append('userId', filters.userId)
+  if (filters?.action) params.append('action', filters.action)
+  if (filters?.startDate) params.append('startDate', filters.startDate)
+  if (filters?.endDate) params.append('endDate', filters.endDate)
+  
+  const queryString = params.toString()
+  const path = queryString ? `audit-log/export/json?${queryString}` : 'audit-log/export/json'
+  
+  const response = await fetch(buildUrl(path))
+  if (!response.ok) {
+    throw new Error('Failed to export audit log')
+  }
+  
+  const blob = await response.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `audit-log-${new Date().toISOString().split('T')[0]}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
 }
 
 // Dashboard API
