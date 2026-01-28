@@ -313,6 +313,13 @@ export async function requestChangesOnDataPoint(id: string, payload: RequestChan
   })
 }
 
+export async function updateDataPointStatus(id: string, payload: import('@/lib/types').UpdateDataPointStatusRequest): Promise<any> {
+  return requestJson<any>(`data-points/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 // Audit Log API methods
 export interface AuditLogFilters {
   entityType?: string

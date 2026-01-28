@@ -141,6 +141,22 @@ export interface AuditLogEntry {
   }[]
 }
 
+export interface MissingFieldDetail {
+  field: string
+  reason: string
+}
+
+export interface StatusValidationError {
+  message: string
+  missingFields: MissingFieldDetail[]
+}
+
+export interface UpdateDataPointStatusRequest {
+  completenessStatus: CompletenessStatus
+  updatedBy: string
+  changeNote?: string
+}
+
 export interface SectionSummary extends ReportSection {
   dataPointCount: number
   evidenceCount: number
