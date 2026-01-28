@@ -343,7 +343,7 @@ public sealed class InMemoryReportStore
             foreach (var summary in summaries)
             {
                 var sectionDataPoints = _dataPoints.Where(dp => dp.SectionId == summary.Id).ToList();
-                summary.ProgressStatus = CalculateProgressStatus(summary.Id, sectionDataPoints);
+                summary.ProgressStatus = CalculateProgressStatus(sectionDataPoints);
                 
                 // Update data point count (in case it's out of sync)
                 summary.DataPointCount = sectionDataPoints.Count;
@@ -2288,12 +2288,12 @@ public sealed class InMemoryReportStore
     /// <summary>
     /// Calculates the progress status of a section based on its data points.
     /// Status rules:
-    /// - "not-started": No data points exist or all data points have completenessStatus "missing"
+    /// - "not-started": No data points exist OR all data points have completenessStatus "missing" (but not if mixed with "not applicable")
     /// - "blocked": Any data point has reviewStatus "changes-requested"
     /// - "completed": All data points have completenessStatus "complete" or "not applicable"
     /// - "in-progress": Default when there are data points that don't match the above criteria
     /// </summary>
-    private string CalculateProgressStatus(string sectionId, List<DataPoint> sectionDataPoints)
+    private string CalculateProgressStatus(List<DataPoint> sectionDataPoints)
     {
         // No data points = not started
         if (sectionDataPoints.Count == 0)
@@ -2309,15 +2309,12 @@ public sealed class InMemoryReportStore
             return "blocked";
         }
 
-        // Check if all data points are either missing or not applicable
-        var allMissingOrNA = sectionDataPoints.All(dp => 
-            dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase) ||
-            dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
+        // Check if all data points are missing = not started
+        var allMissing = sectionDataPoints.All(dp => 
+            dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase));
         
-        if (allMissingOrNA && sectionDataPoints.All(dp => 
-            dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase)))
+        if (allMissing)
         {
-            // All are missing = not started
             return "not-started";
         }
 
