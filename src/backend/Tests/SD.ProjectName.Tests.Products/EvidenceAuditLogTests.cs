@@ -141,5 +141,125 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("create", createEntry.Action);
             Assert.Equal("user-1", createEntry.UserId);
         }
+
+        [Fact]
+        public void LinkEvidenceToDataPoint_ShouldLogAuditEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (isValid, errorMessage, evidence) = store.CreateEvidence(
+                sectionId,
+                "Test Evidence",
+                "Test description",
+                "test-file.pdf",
+                "/api/evidence/files/test-123",
+                null,
+                "user-1",
+                1024,
+                "checksum123",
+                "application/pdf"
+            );
+
+            // Create a data point to link to
+            var dataPoint = new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Type = "metric",
+                Unit = "kg",
+                OwnerId = "user-1",
+                CompletenessStatus = "empty",
+                EvidenceIds = new System.Collections.Generic.List<string>(),
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                UpdatedAt = DateTime.UtcNow.ToString("O")
+            };
+            
+            var dataPointsField = typeof(InMemoryReportStore).GetField("_dataPoints", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var dataPoints = dataPointsField!.GetValue(store) as System.Collections.Generic.List<DataPoint>;
+            dataPoints!.Add(dataPoint);
+
+            // Act
+            var (linkValid, linkError) = store.LinkEvidenceToDataPoint(evidence!.Id, dataPoint.Id, "user-2");
+
+            // Assert
+            Assert.True(linkValid);
+
+            var auditLog = store.GetAuditLog(entityType: "Evidence", entityId: evidence.Id);
+            Assert.Equal(2, auditLog.Count); // create + link
+            
+            var linkEntry = auditLog[0];
+            Assert.Equal("link", linkEntry.Action);
+            Assert.Equal("user-2", linkEntry.UserId);
+            Assert.Contains($"Linked evidence to data point {dataPoint.Id}", linkEntry.ChangeNote);
+        }
+
+        [Fact]
+        public void UnlinkEvidenceFromDataPoint_ShouldLogAuditEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (isValid, errorMessage, evidence) = store.CreateEvidence(
+                sectionId,
+                "Test Evidence",
+                "Test description",
+                "test-file.pdf",
+                "/api/evidence/files/test-123",
+                null,
+                "user-1",
+                1024,
+                "checksum123",
+                "application/pdf"
+            );
+
+            // Create a data point to link to
+            var dataPoint = new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Type = "metric",
+                Unit = "kg",
+                OwnerId = "user-1",
+                CompletenessStatus = "empty",
+                EvidenceIds = new System.Collections.Generic.List<string>(),
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                UpdatedAt = DateTime.UtcNow.ToString("O")
+            };
+            
+            var dataPointsField = typeof(InMemoryReportStore).GetField("_dataPoints", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var dataPoints = dataPointsField!.GetValue(store) as System.Collections.Generic.List<DataPoint>;
+            dataPoints!.Add(dataPoint);
+
+            // Link first
+            var (linkValid, linkError) = store.LinkEvidenceToDataPoint(evidence!.Id, dataPoint.Id, "user-2");
+            Assert.True(linkValid);
+
+            // Act - Unlink
+            var (unlinkValid, unlinkError) = store.UnlinkEvidenceFromDataPoint(evidence.Id, dataPoint.Id, "user-3");
+
+            // Assert
+            Assert.True(unlinkValid);
+
+            var auditLog = store.GetAuditLog(entityType: "Evidence", entityId: evidence.Id);
+            Assert.Equal(3, auditLog.Count); // create + link + unlink
+            
+            var unlinkEntry = auditLog[0];
+            Assert.Equal("unlink", unlinkEntry.Action);
+            Assert.Equal("user-3", unlinkEntry.UserId);
+            Assert.Contains($"Unlinked evidence from data point {dataPoint.Id}", unlinkEntry.ChangeNote);
+            
+            var linkEntry = auditLog[1];
+            Assert.Equal("link", linkEntry.Action);
+            Assert.Equal("user-2", linkEntry.UserId);
+        }
     }
 }

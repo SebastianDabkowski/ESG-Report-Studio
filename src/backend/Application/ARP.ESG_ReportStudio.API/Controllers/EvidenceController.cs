@@ -174,6 +174,11 @@ public sealed class EvidenceController : ControllerBase
     [HttpPost("{evidenceId}/link")]
     public ActionResult LinkEvidenceToDataPoint(string evidenceId, [FromBody] LinkEvidenceRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new { error = "UserId is required." });
+        }
+
         var (isValid, errorMessage) = _store.LinkEvidenceToDataPoint(evidenceId, request.DataPointId, request.UserId);
 
         if (!isValid)
@@ -190,6 +195,11 @@ public sealed class EvidenceController : ControllerBase
     [HttpPost("{evidenceId}/unlink")]
     public ActionResult UnlinkEvidenceFromDataPoint(string evidenceId, [FromBody] LinkEvidenceRequest request)
     {
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new { error = "UserId is required." });
+        }
+
         var (isValid, errorMessage) = _store.UnlinkEvidenceFromDataPoint(evidenceId, request.DataPointId, request.UserId);
 
         if (!isValid)
