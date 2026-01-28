@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useKV } from '@github/spark/hooks'
 import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, formatDate } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate } from '@/lib/helpers'
 import { getCompletenessStats } from '@/lib/api'
 
 interface DashboardProps {
@@ -415,6 +415,9 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                           <h4 className="font-medium text-sm">{section.title}</h4>
                           <Badge className={getStatusColor(section.status)} variant="secondary">
                             {section.status}
+                          </Badge>
+                          <Badge className={getProgressStatusColor(section.progressStatus)} variant="secondary">
+                            {getProgressStatusLabel(section.progressStatus)}
                           </Badge>
                         </div>
                         <p className="text-xs text-muted-foreground mb-3">{section.description}</p>

@@ -2,6 +2,8 @@ export type UserRole = 'admin' | 'report-owner' | 'contributor' | 'auditor'
 
 export type SectionStatus = 'draft' | 'in-review' | 'approved'
 
+export type ProgressStatus = 'not-started' | 'in-progress' | 'blocked' | 'completed'
+
 export type ReviewStatus = 'draft' | 'ready-for-review' | 'approved' | 'changes-requested'
 
 export type CompletenessLevel = 'empty' | 'partial' | 'complete'
@@ -146,6 +148,8 @@ export interface SectionSummary extends ReportSection {
   assumptionCount: number
   completenessPercentage: number
   ownerName: string
+  progressStatus: ProgressStatus
+}
 }
 
 export interface OrganizationalUnit {

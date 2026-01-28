@@ -335,9 +335,39 @@ public sealed class InMemoryReportStore
     {
         lock (_lock)
         {
-            return string.IsNullOrWhiteSpace(periodId)
+            var summaries = string.IsNullOrWhiteSpace(periodId)
                 ? _summaries.ToList()
                 : _summaries.Where(summary => summary.PeriodId == periodId).ToList();
+
+            // Update each summary with calculated progress status
+            foreach (var summary in summaries)
+            {
+                var sectionDataPoints = _dataPoints.Where(dp => dp.SectionId == summary.Id).ToList();
+                summary.ProgressStatus = CalculateProgressStatus(summary.Id, sectionDataPoints);
+                
+                // Update data point count (in case it's out of sync)
+                summary.DataPointCount = sectionDataPoints.Count;
+                
+                // Update completeness percentage
+                if (sectionDataPoints.Count > 0)
+                {
+                    var completeCount = sectionDataPoints.Count(dp => 
+                        dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase));
+                    var notApplicableCount = sectionDataPoints.Count(dp => 
+                        dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
+                    var totalRelevant = sectionDataPoints.Count - notApplicableCount;
+                    
+                    summary.CompletenessPercentage = totalRelevant > 0 
+                        ? (int)Math.Round((double)completeCount / totalRelevant * 100)
+                        : 100; // If all are N/A, consider 100% complete
+                }
+                else
+                {
+                    summary.CompletenessPercentage = 0;
+                }
+            }
+
+            return summaries;
         }
     }
 
@@ -2253,6 +2283,56 @@ public sealed class InMemoryReportStore
             "governance" => "Governance",
             _ => category
         };
+    }
+
+    /// <summary>
+    /// Calculates the progress status of a section based on its data points.
+    /// Status rules:
+    /// - "not-started": No data points exist or all data points have completenessStatus "missing"
+    /// - "blocked": Any data point has reviewStatus "changes-requested"
+    /// - "completed": All data points have completenessStatus "complete" or "not applicable"
+    /// - "in-progress": Default when there are data points that don't match the above criteria
+    /// </summary>
+    private string CalculateProgressStatus(string sectionId, List<DataPoint> sectionDataPoints)
+    {
+        // No data points = not started
+        if (sectionDataPoints.Count == 0)
+        {
+            return "not-started";
+        }
+
+        // Check if any data point is blocked (has changes requested)
+        var hasBlocked = sectionDataPoints.Any(dp => 
+            dp.ReviewStatus.Equals("changes-requested", StringComparison.OrdinalIgnoreCase));
+        if (hasBlocked)
+        {
+            return "blocked";
+        }
+
+        // Check if all data points are either missing or not applicable
+        var allMissingOrNA = sectionDataPoints.All(dp => 
+            dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase) ||
+            dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
+        
+        if (allMissingOrNA && sectionDataPoints.All(dp => 
+            dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase)))
+        {
+            // All are missing = not started
+            return "not-started";
+        }
+
+        // Check if all data points are complete or not applicable
+        var allCompleteOrNA = sectionDataPoints.All(dp => 
+            dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase) ||
+            dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
+        
+        if (allCompleteOrNA)
+        {
+            return "completed";
+        }
+
+        // Default: has some data points, not all complete, not blocked
+        return "in-progress";
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);

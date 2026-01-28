@@ -48,6 +48,17 @@ public sealed class SectionSummary : ReportSection
     public int AssumptionCount { get; set; }
     public int CompletenessPercentage { get; set; }
     public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Progress status derived from data point statuses.
+    /// Values: "not-started", "in-progress", "blocked", "completed"
+    /// Rules:
+    /// - not-started: No data points exist or all are "missing"
+    /// - in-progress: Has data points, some complete/incomplete, none blocked
+    /// - blocked: Has any data points with reviewStatus "changes-requested"
+    /// - completed: All required data points are "complete" or "not applicable"
+    /// </summary>
+    public string ProgressStatus { get; set; } = "not-started";
 }
 
 public sealed class CreateReportingPeriodRequest
