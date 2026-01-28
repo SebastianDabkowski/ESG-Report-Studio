@@ -333,3 +333,44 @@ public sealed class LinkEvidenceRequest
     /// </summary>
     public string DataPointId { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Represents a validation rule that can be applied to data points.
+/// </summary>
+public sealed class ValidationRule
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string RuleType { get; set; } = string.Empty; // "non-negative", "required-unit", "allowed-units", "value-within-period"
+    public string? TargetField { get; set; } // "value", "unit", etc.
+    public string? Parameters { get; set; } // JSON-encoded parameters (e.g., allowed units list, date range)
+    public string ErrorMessage { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new validation rule.
+/// </summary>
+public sealed class CreateValidationRuleRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string RuleType { get; set; } = string.Empty;
+    public string? TargetField { get; set; }
+    public string? Parameters { get; set; }
+    public string ErrorMessage { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing validation rule.
+/// </summary>
+public sealed class UpdateValidationRuleRequest
+{
+    public string RuleType { get; set; } = string.Empty;
+    public string? TargetField { get; set; }
+    public string? Parameters { get; set; }
+    public string ErrorMessage { get; set; } = string.Empty;
+    public bool IsActive { get; set; } = true;
+}

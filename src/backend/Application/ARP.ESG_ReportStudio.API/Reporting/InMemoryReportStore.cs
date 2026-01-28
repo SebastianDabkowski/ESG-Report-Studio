@@ -14,6 +14,7 @@ public sealed class InMemoryReportStore
     private readonly List<Assumption> _assumptions = new();
     private readonly List<Gap> _gaps = new();
     private readonly List<User> _users = new();
+    private readonly List<ValidationRule> _validationRules = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -833,6 +834,13 @@ public sealed class InMemoryReportStore
                 EvidenceIds = new List<string>()
             };
 
+            // Validate against validation rules
+            var (isValidAgainstRules, ruleErrorMessage) = ValidateDataPointAgainstRules(newDataPoint);
+            if (!isValidAgainstRules)
+            {
+                return (false, ruleErrorMessage, null);
+            }
+
             _dataPoints.Add(newDataPoint);
             return (true, null, newDataPoint);
         }
@@ -919,7 +927,7 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(completenessStatus))
             {
                 // Create temporary data point to calculate status (keeping existing evidence IDs)
-                var tempDataPoint = new DataPoint
+                var statusCalculationDataPoint = new DataPoint
                 {
                     Title = request.Title,
                     Content = request.Content,
@@ -927,7 +935,7 @@ public sealed class InMemoryReportStore
                     InformationType = request.InformationType,
                     EvidenceIds = dataPoint.EvidenceIds
                 };
-                completenessStatus = CalculateCompletenessStatus(tempDataPoint);
+                completenessStatus = CalculateCompletenessStatus(statusCalculationDataPoint);
             }
             else
             {
@@ -939,6 +947,36 @@ public sealed class InMemoryReportStore
                 }
             }
 
+            // Create a temporary copy for validation before modifying the actual data point
+            var tempDataPoint = new DataPoint
+            {
+                Id = dataPoint.Id,
+                SectionId = dataPoint.SectionId,
+                Type = request.Type,
+                Classification = request.Classification,
+                Title = request.Title,
+                Content = request.Content,
+                Value = request.Value,
+                Unit = request.Unit,
+                OwnerId = request.OwnerId,
+                ContributorIds = request.ContributorIds ?? new List<string>(),
+                Source = request.Source,
+                InformationType = request.InformationType,
+                Assumptions = request.Assumptions,
+                CompletenessStatus = completenessStatus,
+                CreatedAt = dataPoint.CreatedAt,
+                UpdatedAt = DateTime.UtcNow.ToString("O"),
+                EvidenceIds = dataPoint.EvidenceIds
+            };
+
+            // Validate against validation rules before applying changes
+            var (isValidAgainstRules, ruleErrorMessage) = ValidateDataPointAgainstRules(tempDataPoint);
+            if (!isValidAgainstRules)
+            {
+                return (false, ruleErrorMessage, null);
+            }
+
+            // Only update the actual data point if validation passes
             dataPoint.Type = request.Type;
             dataPoint.Classification = request.Classification;
             dataPoint.Title = request.Title;
@@ -1164,6 +1202,277 @@ public sealed class InMemoryReportStore
         {
             return _users.FirstOrDefault(u => u.Id == id);
         }
+    }
+
+    // Validation rule methods
+    public IReadOnlyList<ValidationRule> GetValidationRules(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return _validationRules.ToList();
+            }
+
+            return _validationRules.Where(r => r.SectionId == sectionId && r.IsActive).ToList();
+        }
+    }
+
+    public ValidationRule? GetValidationRule(string id)
+    {
+        lock (_lock)
+        {
+            return _validationRules.FirstOrDefault(r => r.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, ValidationRule? Rule) CreateValidationRule(CreateValidationRuleRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.SectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.RuleType))
+            {
+                return (false, "RuleType is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ErrorMessage))
+            {
+                return (false, "ErrorMessage is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.CreatedBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+
+            // Validate rule type
+            var validRuleTypes = new[] { "non-negative", "required-unit", "allowed-units", "value-within-period" };
+            if (!validRuleTypes.Contains(request.RuleType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"RuleType must be one of: {string.Join(", ", validRuleTypes)}.", null);
+            }
+
+            // Validate section exists
+            var sectionExists = _sections.Any(s => s.Id == request.SectionId);
+            if (!sectionExists)
+            {
+                return (false, $"Section with ID '{request.SectionId}' not found.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var newRule = new ValidationRule
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = request.SectionId,
+                RuleType = request.RuleType,
+                TargetField = request.TargetField,
+                Parameters = request.Parameters,
+                ErrorMessage = request.ErrorMessage,
+                IsActive = true,
+                CreatedBy = request.CreatedBy,
+                CreatedAt = now
+            };
+
+            _validationRules.Add(newRule);
+            return (true, null, newRule);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, ValidationRule? Rule) UpdateValidationRule(string id, UpdateValidationRuleRequest request)
+    {
+        lock (_lock)
+        {
+            var rule = _validationRules.FirstOrDefault(r => r.Id == id);
+            if (rule == null)
+            {
+                return (false, "ValidationRule not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.RuleType))
+            {
+                return (false, "RuleType is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ErrorMessage))
+            {
+                return (false, "ErrorMessage is required.", null);
+            }
+
+            // Validate rule type
+            var validRuleTypes = new[] { "non-negative", "required-unit", "allowed-units", "value-within-period" };
+            if (!validRuleTypes.Contains(request.RuleType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"RuleType must be one of: {string.Join(", ", validRuleTypes)}.", null);
+            }
+
+            rule.RuleType = request.RuleType;
+            rule.TargetField = request.TargetField;
+            rule.Parameters = request.Parameters;
+            rule.ErrorMessage = request.ErrorMessage;
+            rule.IsActive = request.IsActive;
+
+            return (true, null, rule);
+        }
+    }
+
+    public bool DeleteValidationRule(string id)
+    {
+        lock (_lock)
+        {
+            var rule = _validationRules.FirstOrDefault(r => r.Id == id);
+            if (rule == null)
+            {
+                return false;
+            }
+
+            _validationRules.Remove(rule);
+            return true;
+        }
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateDataPointAgainstRules(DataPoint dataPoint)
+    {
+        var rules = _validationRules.Where(r => r.SectionId == dataPoint.SectionId && r.IsActive).ToList();
+
+        foreach (var rule in rules)
+        {
+            var (isValid, errorMessage) = EvaluateValidationRule(rule, dataPoint);
+            if (!isValid)
+            {
+                return (false, errorMessage);
+            }
+        }
+
+        return (true, null);
+    }
+
+    private (bool IsValid, string? ErrorMessage) EvaluateValidationRule(ValidationRule rule, DataPoint dataPoint)
+    {
+        switch (rule.RuleType.ToLowerInvariant())
+        {
+            case "non-negative":
+                return ValidateNonNegative(rule, dataPoint);
+            
+            case "required-unit":
+                return ValidateRequiredUnit(rule, dataPoint);
+            
+            case "allowed-units":
+                return ValidateAllowedUnits(rule, dataPoint);
+            
+            case "value-within-period":
+                return ValidateValueWithinPeriod(rule, dataPoint);
+            
+            default:
+                return (true, null); // Unknown rule type, skip validation
+        }
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateNonNegative(ValidationRule rule, DataPoint dataPoint)
+    {
+        if (string.IsNullOrWhiteSpace(dataPoint.Value))
+        {
+            return (true, null); // Skip validation if no value
+        }
+
+        if (decimal.TryParse(dataPoint.Value, out var numericValue))
+        {
+            if (numericValue < 0)
+            {
+                return (false, rule.ErrorMessage);
+            }
+        }
+
+        return (true, null);
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateRequiredUnit(ValidationRule rule, DataPoint dataPoint)
+    {
+        if (string.IsNullOrWhiteSpace(dataPoint.Value))
+        {
+            return (true, null); // Skip validation if no value
+        }
+
+        if (string.IsNullOrWhiteSpace(dataPoint.Unit))
+        {
+            return (false, rule.ErrorMessage);
+        }
+
+        return (true, null);
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateAllowedUnits(ValidationRule rule, DataPoint dataPoint)
+    {
+        if (string.IsNullOrWhiteSpace(dataPoint.Unit))
+        {
+            return (true, null); // Skip validation if no unit
+        }
+
+        if (string.IsNullOrWhiteSpace(rule.Parameters))
+        {
+            return (true, null); // Skip if no allowed units specified
+        }
+
+        try
+        {
+            var allowedUnits = System.Text.Json.JsonSerializer.Deserialize<string[]>(rule.Parameters);
+            if (allowedUnits != null && allowedUnits.Length > 0)
+            {
+                if (!allowedUnits.Contains(dataPoint.Unit, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, rule.ErrorMessage);
+                }
+            }
+        }
+        catch
+        {
+            // Invalid JSON, skip validation
+            return (true, null);
+        }
+
+        return (true, null);
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateValueWithinPeriod(ValidationRule rule, DataPoint dataPoint)
+    {
+        if (string.IsNullOrWhiteSpace(dataPoint.Value))
+        {
+            return (true, null); // Skip validation if no value
+        }
+
+        // Get the reporting period for this data point's section
+        var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+        if (section == null)
+        {
+            return (true, null); // Skip if section not found
+        }
+
+        var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+        if (period == null)
+        {
+            return (true, null); // Skip if period not found
+        }
+
+        // Try to parse the value as a date
+        if (DateTime.TryParse(dataPoint.Value, out var valueDate))
+        {
+            if (DateTime.TryParse(period.StartDate, out var startDate) && 
+                DateTime.TryParse(period.EndDate, out var endDate))
+            {
+                if (valueDate < startDate || valueDate > endDate)
+                {
+                    return (false, rule.ErrorMessage);
+                }
+            }
+        }
+
+        return (true, null);
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);
