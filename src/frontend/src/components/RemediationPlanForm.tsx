@@ -47,7 +47,6 @@ export function RemediationPlanForm({
 }: RemediationPlanFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [selectedPriority, setSelectedPriority] = useState<'low' | 'medium' | 'high'>(plan?.priority || 'medium')
   const [selectedStatus, setSelectedStatus] = useState<'planned' | 'in-progress' | 'completed' | 'cancelled'>(plan?.status || 'planned')
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>(plan?.ownerId || '')
@@ -92,7 +91,6 @@ export function RemediationPlanForm({
   const onSubmit = async (data: RemediationPlanFormData) => {
     setIsSubmitting(true)
     setErrorMessage(null)
-    setSuccessMessage(null)
 
     try {
       if (isEditMode) {
@@ -106,7 +104,6 @@ export function RemediationPlanForm({
           status: selectedStatus
         }
         const updated = await updateRemediationPlan(plan.id, payload)
-        setSuccessMessage('Remediation plan updated successfully')
         onSuccess(updated)
       } else {
         const payload: CreateRemediationPlanPayload = {
@@ -122,7 +119,6 @@ export function RemediationPlanForm({
           dataPointId
         }
         const created = await createRemediationPlan(payload)
-        setSuccessMessage('Remediation plan created successfully')
         onSuccess(created)
       }
     } catch (error) {
@@ -138,13 +134,6 @@ export function RemediationPlanForm({
         <Alert variant="destructive">
           <WarningCircle className="h-4 w-4" />
           <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
-      )}
-      
-      {successMessage && (
-        <Alert>
-          <Check className="h-4 w-4" />
-          <AlertDescription>{successMessage}</AlertDescription>
         </Alert>
       )}
 

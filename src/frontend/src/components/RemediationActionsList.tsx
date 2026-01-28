@@ -94,17 +94,20 @@ export function RemediationActionsList({ remediationPlanId, users = [] }: Remedi
     const statusConfig = {
       pending: { variant: 'secondary' as const, label: 'Pending' },
       'in-progress': { variant: 'default' as const, label: 'In Progress' },
-      completed: { variant: 'success' as const, label: 'Completed' },
+      completed: { variant: 'default' as const, label: 'Completed', className: 'bg-green-100 text-green-800' },
       cancelled: { variant: 'destructive' as const, label: 'Cancelled' }
     }
     const config = statusConfig[status]
-    return <Badge variant={config.variant}>{config.label}</Badge>
+    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>
   }
 
   const isOverdue = (dueDate: string, status: RemediationAction['status']) => {
     if (status === 'completed' || status === 'cancelled') return false
     const due = new Date(dueDate)
     const now = new Date()
+    // Compare dates at start of day to avoid timezone issues
+    due.setHours(0, 0, 0, 0)
+    now.setHours(0, 0, 0, 0)
     return due < now
   }
 
@@ -112,6 +115,9 @@ export function RemediationActionsList({ remediationPlanId, users = [] }: Remedi
     if (status === 'completed' || status === 'cancelled') return false
     const due = new Date(dueDate)
     const now = new Date()
+    // Compare dates at start of day to avoid timezone issues
+    due.setHours(0, 0, 0, 0)
+    now.setHours(0, 0, 0, 0)
     const daysUntilDue = Math.ceil((due.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
     return daysUntilDue >= 0 && daysUntilDue <= 14 // Upcoming if within 14 days
   }
@@ -153,8 +159,8 @@ export function RemediationActionsList({ remediationPlanId, users = [] }: Remedi
                     {isOverdue(action.dueDate, action.status) && (
                       <Badge variant="destructive">Overdue</Badge>
                     )}
-                    {isUpcoming(action.dueDate, action.status) && (
-                      <Badge variant="warning">Due Soon</Badge>
+                    {!isOverdue(action.dueDate, action.status) && isUpcoming(action.dueDate, action.status) && (
+                      <Badge variant="default" className="bg-yellow-100 text-yellow-800">Due Soon</Badge>
                     )}
                   </div>
                   <p className="text-sm text-gray-600 mb-3">{action.description}</p>

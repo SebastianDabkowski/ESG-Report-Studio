@@ -40,7 +40,6 @@ export function RemediationActionForm({
 }: RemediationActionFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [selectedStatus, setSelectedStatus] = useState<'pending' | 'in-progress' | 'completed' | 'cancelled'>(action?.status || 'pending')
   const [selectedOwnerId, setSelectedOwnerId] = useState<string>(action?.ownerId || '')
 
@@ -82,7 +81,6 @@ export function RemediationActionForm({
   const onSubmit = async (data: RemediationActionFormData) => {
     setIsSubmitting(true)
     setErrorMessage(null)
-    setSuccessMessage(null)
 
     try {
       if (isEditMode) {
@@ -95,7 +93,6 @@ export function RemediationActionForm({
           status: selectedStatus
         }
         const updated = await updateRemediationAction(action.id, payload)
-        setSuccessMessage('Action updated successfully')
         onSuccess(updated)
       } else {
         const payload: CreateRemediationActionPayload = {
@@ -107,7 +104,6 @@ export function RemediationActionForm({
           dueDate: new Date(data.dueDate).toISOString()
         }
         const created = await createRemediationAction(payload)
-        setSuccessMessage('Action created successfully')
         onSuccess(created)
       }
     } catch (error) {
@@ -123,13 +119,6 @@ export function RemediationActionForm({
         <Alert variant="destructive">
           <WarningCircle className="h-4 w-4" />
           <AlertDescription>{errorMessage}</AlertDescription>
-        </Alert>
-      )}
-      
-      {successMessage && (
-        <Alert>
-          <Check className="h-4 w-4" />
-          <AlertDescription>{successMessage}</AlertDescription>
         </Alert>
       )}
 

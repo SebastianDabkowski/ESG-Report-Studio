@@ -107,11 +107,11 @@ export function RemediationPlansList({
     const statusConfig = {
       planned: { variant: 'secondary' as const, label: 'Planned' },
       'in-progress': { variant: 'default' as const, label: 'In Progress' },
-      completed: { variant: 'success' as const, label: 'Completed' },
+      completed: { variant: 'default' as const, label: 'Completed', className: 'bg-green-100 text-green-800' },
       cancelled: { variant: 'destructive' as const, label: 'Cancelled' }
     }
     const config = statusConfig[status]
-    return <Badge variant={config.variant}>{config.label}</Badge>
+    return <Badge variant={config.variant} className={config.className}>{config.label}</Badge>
   }
 
   const getPriorityBadge = (priority: RemediationPlan['priority']) => {
