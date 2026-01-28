@@ -4053,7 +4053,15 @@ public sealed class InMemoryReportStore
         _auditLog.Add(entry);
     }
 
-    public IReadOnlyList<AuditLogEntry> GetAuditLog(string? entityType = null, string? entityId = null, string? userId = null, string? action = null, string? startDate = null, string? endDate = null)
+    public IReadOnlyList<AuditLogEntry> GetAuditLog(
+        string? entityType = null, 
+        string? entityId = null, 
+        string? userId = null, 
+        string? action = null, 
+        string? startDate = null, 
+        string? endDate = null,
+        string? sectionId = null,
+        string? ownerId = null)
     {
         lock (_lock)
         {
@@ -4087,6 +4095,66 @@ public sealed class InMemoryReportStore
             if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
             {
                 query = query.Where(e => DateTime.Parse(e.Timestamp) <= end);
+            }
+
+            // Filter by section if provided
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                query = query.Where(e =>
+                {
+                    // Check if entity has a SectionId property
+                    if (e.EntityType.Equals("Gap", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var gap = _gaps.FirstOrDefault(g => g.Id == e.EntityId);
+                        return gap?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("Assumption", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var assumption = _assumptions.FirstOrDefault(a => a.Id == e.EntityId);
+                        return assumption?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("simplification", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var simplification = _simplifications.FirstOrDefault(s => s.Id == e.EntityId);
+                        return simplification?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("DataPoint", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == e.EntityId);
+                        return dataPoint?.SectionId == sectionId;
+                    }
+                    return false;
+                });
+            }
+
+            // Filter by owner if provided
+            if (!string.IsNullOrWhiteSpace(ownerId))
+            {
+                query = query.Where(e =>
+                {
+                    // Check if entity has an owner/creator
+                    if (e.EntityType.Equals("Gap", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var gap = _gaps.FirstOrDefault(g => g.Id == e.EntityId);
+                        return gap?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("Assumption", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var assumption = _assumptions.FirstOrDefault(a => a.Id == e.EntityId);
+                        return assumption?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("simplification", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var simplification = _simplifications.FirstOrDefault(s => s.Id == e.EntityId);
+                        return simplification?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("DataPoint", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == e.EntityId);
+                        return dataPoint?.OwnerId == ownerId;
+                    }
+                    return false;
+                });
             }
 
             return query.OrderByDescending(e => e.Timestamp).ToList();

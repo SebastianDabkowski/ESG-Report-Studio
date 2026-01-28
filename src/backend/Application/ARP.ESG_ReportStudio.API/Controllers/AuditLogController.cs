@@ -17,14 +17,16 @@ public sealed class AuditLogController : ControllerBase
     }
 
     /// <summary>
-    /// Get audit log entries with optional filtering by entity type, entity ID, user ID, action, and date range.
+    /// Get audit log entries with optional filtering by entity type, entity ID, user ID, action, date range, section, and owner.
     /// </summary>
-    /// <param name="entityType">Filter by entity type (e.g., "DataPoint")</param>
+    /// <param name="entityType">Filter by entity type (e.g., "DataPoint", "Gap", "Assumption")</param>
     /// <param name="entityId">Filter by specific entity ID</param>
     /// <param name="userId">Filter by user who made the change</param>
     /// <param name="action">Filter by action type (e.g., "update", "approve")</param>
     /// <param name="startDate">Filter by entries after this date (ISO 8601 format)</param>
     /// <param name="endDate">Filter by entries before this date (ISO 8601 format)</param>
+    /// <param name="sectionId">Filter by section ID (for entities that belong to a section)</param>
+    /// <param name="ownerId">Filter by owner/creator ID (for entities that have an owner)</param>
     /// <returns>List of audit log entries in reverse chronological order</returns>
     [HttpGet]
     public ActionResult<IReadOnlyList<AuditLogEntry>> GetAuditLog(
@@ -33,9 +35,11 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? userId = null,
         [FromQuery] string? action = null,
         [FromQuery] string? startDate = null,
-        [FromQuery] string? endDate = null)
+        [FromQuery] string? endDate = null,
+        [FromQuery] string? sectionId = null,
+        [FromQuery] string? ownerId = null)
     {
-        return Ok(_store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate));
+        return Ok(_store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId));
     }
 
     /// <summary>
@@ -48,9 +52,11 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? userId = null,
         [FromQuery] string? action = null,
         [FromQuery] string? startDate = null,
-        [FromQuery] string? endDate = null)
+        [FromQuery] string? endDate = null,
+        [FromQuery] string? sectionId = null,
+        [FromQuery] string? ownerId = null)
     {
-        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate);
+        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
         
         var csv = new StringBuilder();
         // Add UTF-8 BOM for better Excel compatibility
@@ -88,9 +94,11 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? userId = null,
         [FromQuery] string? action = null,
         [FromQuery] string? startDate = null,
-        [FromQuery] string? endDate = null)
+        [FromQuery] string? endDate = null,
+        [FromQuery] string? sectionId = null,
+        [FromQuery] string? ownerId = null)
     {
-        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate);
+        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
         
         var json = JsonSerializer.Serialize(entries, new JsonSerializerOptions 
         { 
@@ -101,6 +109,49 @@ public sealed class AuditLogController : ControllerBase
         var fileName = $"audit-log-{DateTime.UtcNow:yyyyMMdd-HHmmss}.json";
         
         return File(bytes, "application/json", fileName);
+    }
+
+    /// <summary>
+    /// Get chronological timeline of changes for a specific entity.
+    /// Returns audit log entries with before/after values for easy comparison.
+    /// </summary>
+    /// <param name="entityType">Type of entity (e.g., "Gap", "Assumption", "DataPoint")</param>
+    /// <param name="entityId">ID of the specific entity</param>
+    /// <returns>Timeline of changes in chronological order (oldest first) with before/after values</returns>
+    [HttpGet("timeline/{entityType}/{entityId}")]
+    public ActionResult<object> GetEntityTimeline(string entityType, string entityId)
+    {
+        var entries = _store.GetAuditLog(entityType: entityType, entityId: entityId);
+        
+        if (!entries.Any())
+        {
+            return NotFound(new { error = $"No audit history found for {entityType} with ID '{entityId}'." });
+        }
+
+        // Reverse to get chronological order (oldest first)
+        var timeline = entries.Reverse().Select(entry => new
+        {
+            entry.Id,
+            entry.Timestamp,
+            entry.UserId,
+            entry.UserName,
+            entry.Action,
+            entry.ChangeNote,
+            Changes = entry.Changes.Select(c => new
+            {
+                c.Field,
+                Before = c.OldValue,
+                After = c.NewValue
+            }).ToList()
+        }).ToList();
+
+        return Ok(new
+        {
+            EntityType = entityType,
+            EntityId = entityId,
+            TotalChanges = timeline.Count,
+            Timeline = timeline
+        });
     }
 
     private static string FormatCsvField(string? value)

@@ -447,5 +447,106 @@ namespace SD.ProjectName.Tests.Products
             Assert.Contains(updateEntry.Changes, c => c.Field == "Title");
             Assert.Contains(updateEntry.Changes, c => c.Field == "ImpactLevel" && c.OldValue == "medium" && c.NewValue == "high");
         }
+
+        [Fact]
+        public void GetAuditLog_WithSectionFilter_ShouldReturnFilteredResults()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create another section
+            var section2 = new ReportSection
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = snapshot.Periods.First().Id,
+                Title = "Second Section",
+                Category = "social",
+                Description = "Second section",
+                OwnerId = "user-2",
+                Status = "draft",
+                Completeness = "empty",
+                Order = 2
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section2);
+
+            // Create gaps in different sections
+            var (_, _, gap1) = store.CreateGap(sectionId, "Gap in Section 1", "Desc", "high", null, null, "user-1");
+            var (_, _, gap2) = store.CreateGap(section2.Id, "Gap in Section 2", "Desc", "medium", null, null, "user-1");
+            
+            // Update both to create more audit entries
+            store.UpdateGap(gap1!.Id, "Gap 1 Updated", "Desc", "high", null, null, "user-1", null);
+            store.UpdateGap(gap2!.Id, "Gap 2 Updated", "Desc", "medium", null, null, "user-1", null);
+
+            // Act
+            var section1Entries = store.GetAuditLog(sectionId: sectionId);
+            var section2Entries = store.GetAuditLog(sectionId: section2.Id);
+
+            // Assert
+            Assert.Equal(2, section1Entries.Count); // create + update for gap1
+            Assert.Equal(2, section2Entries.Count); // create + update for gap2
+            Assert.All(section1Entries, entry => Assert.Equal(gap1.Id, entry.EntityId));
+            Assert.All(section2Entries, entry => Assert.Equal(gap2.Id, entry.EntityId));
+        }
+
+        [Fact]
+        public void GetAuditLog_WithOwnerFilter_ShouldReturnFilteredResults()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create gaps with different owners
+            var (_, _, gap1) = store.CreateGap(sectionId, "Gap by User 1", "Desc", "high", null, null, "user-1");
+            var (_, _, gap2) = store.CreateGap(sectionId, "Gap by User 2", "Desc", "medium", null, null, "user-2");
+            
+            // Update them
+            store.UpdateGap(gap1!.Id, "Updated by User 1", "Desc", "high", null, null, "user-1", null);
+            store.UpdateGap(gap2!.Id, "Updated by User 2", "Desc", "medium", null, null, "user-2", null);
+
+            // Act
+            var user1Entries = store.GetAuditLog(ownerId: "user-1");
+            var user2Entries = store.GetAuditLog(ownerId: "user-2");
+
+            // Assert
+            Assert.Equal(2, user1Entries.Count); // create + update for gap1
+            Assert.Equal(2, user2Entries.Count); // create + update for gap2
+            Assert.All(user1Entries, entry => Assert.Equal(gap1.Id, entry.EntityId));
+            Assert.All(user2Entries, entry => Assert.Equal(gap2.Id, entry.EntityId));
+        }
+
+        [Fact]
+        public void GetAuditLog_WithCombinedFilters_ShouldReturnFilteredResults()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create gaps
+            var (_, _, gap1) = store.CreateGap(sectionId, "Gap 1", "Desc", "high", null, null, "user-1");
+            var (_, _, gap2) = store.CreateGap(sectionId, "Gap 2", "Desc", "medium", null, null, "user-2");
+            
+            // Update and resolve
+            store.UpdateGap(gap1!.Id, "Updated Gap 1", "Desc", "high", null, null, "user-1", null);
+            store.ResolveGap(gap1.Id, "user-1", "Resolved");
+
+            // Act - Filter by section, owner, and action
+            var resolveEntries = store.GetAuditLog(
+                sectionId: sectionId, 
+                ownerId: "user-1", 
+                action: "resolve");
+
+            // Assert
+            Assert.Single(resolveEntries);
+            Assert.Equal("resolve", resolveEntries.First().Action);
+            Assert.Equal(gap1.Id, resolveEntries.First().EntityId);
+        }
     }
 }
