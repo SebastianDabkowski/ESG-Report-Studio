@@ -998,3 +998,18 @@ export async function deleteDecision(id: string): Promise<{ message: string }> {
     method: 'DELETE'
   })
 }
+
+// Fragment Audit API
+export async function getFragmentAuditView(
+  fragmentType: string,
+  fragmentId: string
+): Promise<import('@/lib/types').FragmentAuditView> {
+  return requestJson<import('@/lib/types').FragmentAuditView>(`fragment-audit/${fragmentType}/${fragmentId}`)
+}
+
+export async function getStableFragmentIdentifier(
+  fragmentType: string,
+  fragmentId: string
+): Promise<{ stableFragmentIdentifier: string }> {
+  return requestJson<{ stableFragmentIdentifier: string }>(`fragment-audit/${fragmentType}/${fragmentId}/stable-identifier`)
+}

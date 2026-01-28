@@ -6896,4 +6896,371 @@ public sealed class InMemoryReportStore
     }
 
     #endregion
+
+    #region Fragment Audit
+
+    /// <summary>
+    /// Get audit view for a report fragment with full traceability.
+    /// </summary>
+    public FragmentAuditView? GetFragmentAuditView(string fragmentType, string fragmentId)
+    {
+        lock (_lock)
+        {
+            // Determine fragment type and retrieve the fragment
+            if (fragmentType.Equals("section", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetSectionAuditView(fragmentId);
+            }
+            else if (fragmentType.Equals("data-point", StringComparison.OrdinalIgnoreCase))
+            {
+                return GetDataPointAuditView(fragmentId);
+            }
+            
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Get audit view for a section fragment.
+    /// </summary>
+    private FragmentAuditView? GetSectionAuditView(string sectionId)
+    {
+        var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+        if (section == null) return null;
+
+        var auditView = new FragmentAuditView
+        {
+            FragmentType = "section",
+            FragmentId = sectionId,
+            StableFragmentIdentifier = section.CatalogCode ?? $"section-{sectionId}",
+            FragmentTitle = section.Title,
+            FragmentContent = section.Description,
+            SectionInfo = new FragmentSectionInfo
+            {
+                SectionId = sectionId,
+                SectionTitle = section.Title,
+                SectionCategory = section.Category,
+                CatalogCode = section.CatalogCode
+            }
+        };
+
+        // Get all data points in this section
+        var dataPoints = _dataPoints.Where(dp => dp.SectionId == sectionId).ToList();
+        
+        // Aggregate linked sources from all data points
+        var linkedSources = new List<LinkedSource>();
+        foreach (var dp in dataPoints)
+        {
+            foreach (var sourceRef in dp.SourceReferences)
+            {
+                linkedSources.Add(new LinkedSource
+                {
+                    SourceType = sourceRef.SourceType,
+                    SourceReference = sourceRef.SourceReference,
+                    Description = sourceRef.Description,
+                    OriginSystem = sourceRef.OriginSystem,
+                    OwnerId = sourceRef.OwnerId,
+                    OwnerName = sourceRef.OwnerName,
+                    LastUpdated = sourceRef.LastUpdated
+                });
+            }
+        }
+        auditView.LinkedSources = linkedSources.DistinctBy(s => new { s.SourceType, s.SourceReference }).ToList();
+
+        // Get linked evidence
+        var evidenceIds = dataPoints.SelectMany(dp => dp.EvidenceIds).Distinct().ToList();
+        auditView.LinkedEvidenceFiles = GetLinkedEvidenceList(evidenceIds);
+
+        // Get linked decisions
+        var decisionFragmentIds = dataPoints.Select(dp => dp.Id).ToList();
+        var linkedDecisions = new HashSet<string>();
+        foreach (var decision in _decisions)
+        {
+            if (decision.ReferencedByFragmentIds.Any(fragId => decisionFragmentIds.Contains(fragId)))
+            {
+                linkedDecisions.Add(decision.Id);
+            }
+        }
+        auditView.LinkedDecisions = GetLinkedDecisionsList(linkedDecisions.ToList());
+
+        // Get linked assumptions
+        var assumptionIds = _assumptions
+            .Where(a => a.SectionId == sectionId)
+            .Select(a => a.Id)
+            .ToList();
+        auditView.LinkedAssumptions = GetLinkedAssumptionsList(assumptionIds);
+
+        // Get linked gaps
+        var gaps = _gaps.Where(g => g.SectionId == sectionId).ToList();
+        auditView.LinkedGaps = gaps.Select(g => new LinkedGap
+        {
+            GapId = g.Id,
+            Title = g.Title,
+            Description = g.Description,
+            Impact = g.Impact,
+            Resolved = g.Resolved,
+            ImprovementPlan = g.ImprovementPlan
+        }).ToList();
+
+        // Check for provenance warnings
+        auditView.ProvenanceWarnings = CheckProvenanceCompleteness(auditView);
+        auditView.HasCompleteProvenance = !auditView.ProvenanceWarnings.Any(w => w.Severity == "error");
+
+        // Get audit trail
+        auditView.AuditTrail = _auditLog
+            .Where(e => e.EntityType.Equals("ReportSection", StringComparison.OrdinalIgnoreCase) && e.EntityId == sectionId)
+            .OrderByDescending(e => e.Timestamp)
+            .Take(20)
+            .ToList();
+
+        return auditView;
+    }
+
+    /// <summary>
+    /// Get audit view for a data point fragment.
+    /// </summary>
+    private FragmentAuditView? GetDataPointAuditView(string dataPointId)
+    {
+        var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == dataPointId);
+        if (dataPoint == null) return null;
+
+        var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+
+        var auditView = new FragmentAuditView
+        {
+            FragmentType = "data-point",
+            FragmentId = dataPointId,
+            StableFragmentIdentifier = $"dp-{section?.CatalogCode ?? dataPoint.SectionId}-{dataPointId}",
+            FragmentTitle = dataPoint.Title,
+            FragmentContent = dataPoint.Content,
+            SectionInfo = section != null ? new FragmentSectionInfo
+            {
+                SectionId = section.Id,
+                SectionTitle = section.Title,
+                SectionCategory = section.Category,
+                CatalogCode = section.CatalogCode
+            } : null
+        };
+
+        // Get linked sources
+        auditView.LinkedSources = dataPoint.SourceReferences.Select(sr => new LinkedSource
+        {
+            SourceType = sr.SourceType,
+            SourceReference = sr.SourceReference,
+            Description = sr.Description,
+            OriginSystem = sr.OriginSystem,
+            OwnerId = sr.OwnerId,
+            OwnerName = sr.OwnerName,
+            LastUpdated = sr.LastUpdated
+        }).ToList();
+
+        // Add estimate input sources if applicable
+        foreach (var inputSource in dataPoint.EstimateInputSources)
+        {
+            auditView.LinkedSources.Add(new LinkedSource
+            {
+                SourceType = inputSource.SourceType,
+                SourceReference = inputSource.SourceReference,
+                Description = inputSource.Description
+            });
+        }
+
+        // Get linked evidence
+        auditView.LinkedEvidenceFiles = GetLinkedEvidenceList(dataPoint.EvidenceIds);
+
+        // Get linked decisions
+        var linkedDecisionIds = _decisions
+            .Where(d => d.ReferencedByFragmentIds.Contains(dataPointId))
+            .Select(d => d.Id)
+            .ToList();
+        auditView.LinkedDecisions = GetLinkedDecisionsList(linkedDecisionIds);
+
+        // Get linked assumptions
+        var linkedAssumptionIds = _assumptions
+            .Where(a => a.LinkedDataPointIds.Contains(dataPointId))
+            .Select(a => a.Id)
+            .ToList();
+        auditView.LinkedAssumptions = GetLinkedAssumptionsList(linkedAssumptionIds);
+
+        // Check for related gaps
+        if (dataPoint.IsMissing || dataPoint.IsBlocked)
+        {
+            var gaps = _gaps.Where(g => g.SectionId == dataPoint.SectionId).ToList();
+            auditView.LinkedGaps = gaps.Select(g => new LinkedGap
+            {
+                GapId = g.Id,
+                Title = g.Title,
+                Description = g.Description,
+                Impact = g.Impact,
+                Resolved = g.Resolved,
+                ImprovementPlan = g.ImprovementPlan
+            }).ToList();
+        }
+
+        // Check for provenance warnings
+        auditView.ProvenanceWarnings = CheckProvenanceCompleteness(auditView);
+        auditView.HasCompleteProvenance = !auditView.ProvenanceWarnings.Any(w => w.Severity == "error");
+
+        // Get audit trail
+        auditView.AuditTrail = _auditLog
+            .Where(e => e.EntityType.Equals("DataPoint", StringComparison.OrdinalIgnoreCase) && e.EntityId == dataPointId)
+            .OrderByDescending(e => e.Timestamp)
+            .Take(20)
+            .ToList();
+
+        return auditView;
+    }
+
+    /// <summary>
+    /// Get linked evidence list from evidence IDs.
+    /// </summary>
+    private List<LinkedEvidence> GetLinkedEvidenceList(List<string> evidenceIds)
+    {
+        return _evidence
+            .Where(e => evidenceIds.Contains(e.Id))
+            .Select(e => new LinkedEvidence
+            {
+                EvidenceId = e.Id,
+                FileName = e.FileName ?? "Unknown",
+                Description = e.Description,
+                UploadedBy = e.UploadedBy,
+                UploadedAt = e.UploadedAt,
+                FileUrl = e.FileUrl,
+                Checksum = e.Checksum,
+                IntegrityStatus = e.IntegrityStatus
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Get linked decisions list from decision IDs.
+    /// </summary>
+    private List<LinkedDecision> GetLinkedDecisionsList(List<string> decisionIds)
+    {
+        return _decisions
+            .Where(d => decisionIds.Contains(d.Id))
+            .Select(d => new LinkedDecision
+            {
+                DecisionId = d.Id,
+                Title = d.Title,
+                DecisionText = d.DecisionText,
+                Status = d.Status,
+                Version = d.Version,
+                DecisionBy = d.CreatedBy,
+                DecisionDate = d.CreatedAt
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Get linked assumptions list from assumption IDs.
+    /// </summary>
+    private List<LinkedAssumption> GetLinkedAssumptionsList(List<string> assumptionIds)
+    {
+        return _assumptions
+            .Where(a => assumptionIds.Contains(a.Id))
+            .Select(a => new LinkedAssumption
+            {
+                AssumptionId = a.Id,
+                Title = a.Title,
+                Description = a.Description,
+                Status = a.Status,
+                Version = a.Version,
+                Methodology = a.Methodology,
+                CreatedBy = a.CreatedBy,
+                CreatedAt = a.CreatedAt
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Check for missing provenance and generate warnings.
+    /// </summary>
+    private List<ProvenanceWarning> CheckProvenanceCompleteness(FragmentAuditView auditView)
+    {
+        var warnings = new List<ProvenanceWarning>();
+
+        // Check for missing sources
+        if (!auditView.LinkedSources.Any())
+        {
+            warnings.Add(new ProvenanceWarning
+            {
+                MissingLinkType = "source",
+                Message = "No source references are linked to this fragment.",
+                Severity = "warning",
+                Recommendation = "Add source references to improve traceability and auditability."
+            });
+        }
+
+        // Check for missing evidence (for data-point fragments)
+        if (auditView.FragmentType == "data-point" && !auditView.LinkedEvidenceFiles.Any())
+        {
+            warnings.Add(new ProvenanceWarning
+            {
+                MissingLinkType = "evidence",
+                Message = "No evidence files are linked to this data point.",
+                Severity = "warning",
+                Recommendation = "Upload and link supporting evidence files to strengthen auditability."
+            });
+        }
+
+        // Check for unverified sources
+        var unverifiedSources = auditView.LinkedSources.Where(s => string.IsNullOrWhiteSpace(s.LastUpdated)).ToList();
+        if (unverifiedSources.Any())
+        {
+            warnings.Add(new ProvenanceWarning
+            {
+                MissingLinkType = "source",
+                Message = $"{unverifiedSources.Count} source reference(s) have not been verified recently.",
+                Severity = "info",
+                Recommendation = "Review and verify source references to ensure data accuracy."
+            });
+        }
+
+        // Check for evidence integrity issues
+        var failedIntegrityEvidence = auditView.LinkedEvidenceFiles
+            .Where(e => e.IntegrityStatus == "failed")
+            .ToList();
+        if (failedIntegrityEvidence.Any())
+        {
+            warnings.Add(new ProvenanceWarning
+            {
+                MissingLinkType = "evidence",
+                Message = $"{failedIntegrityEvidence.Count} evidence file(s) have failed integrity checks.",
+                Severity = "error",
+                Recommendation = "Re-upload evidence files or verify their integrity to ensure authenticity."
+            });
+        }
+
+        return warnings;
+    }
+
+    /// <summary>
+    /// Generate stable fragment identifier for a data point or section.
+    /// Used for export mapping.
+    /// </summary>
+    public string GenerateStableFragmentIdentifier(string fragmentType, string fragmentId)
+    {
+        lock (_lock)
+        {
+            if (fragmentType.Equals("section", StringComparison.OrdinalIgnoreCase))
+            {
+                var section = _sections.FirstOrDefault(s => s.Id == fragmentId);
+                return section?.CatalogCode ?? $"section-{fragmentId}";
+            }
+            else if (fragmentType.Equals("data-point", StringComparison.OrdinalIgnoreCase))
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == fragmentId);
+                if (dataPoint != null)
+                {
+                    var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+                    return $"dp-{section?.CatalogCode ?? dataPoint.SectionId}-{fragmentId}";
+                }
+            }
+            
+            return $"{fragmentType}-{fragmentId}";
+        }
+    }
+
+    #endregion
 }
