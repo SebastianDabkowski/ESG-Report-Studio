@@ -2128,3 +2128,38 @@ public sealed class GapDashboardSummary
     public int WithRemediationPlan { get; set; }
     public int WithoutRemediationPlan { get; set; }
 }
+
+/// <summary>
+/// Request to create a new gap.
+/// </summary>
+public sealed class CreateGapRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Impact { get; set; } = "medium"; // low, medium, high
+    public string? ImprovementPlan { get; set; }
+    public string? TargetDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing gap.
+/// </summary>
+public sealed class UpdateGapRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Impact { get; set; } = "medium"; // low, medium, high
+    public string? ImprovementPlan { get; set; }
+    public string? TargetDate { get; set; }
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Request to resolve a gap.
+/// </summary>
+public sealed class ResolveGapRequest
+{
+    public string? ResolutionNote { get; set; }
+}

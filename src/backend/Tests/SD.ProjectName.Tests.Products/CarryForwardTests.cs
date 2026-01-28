@@ -313,7 +313,7 @@ namespace SD.ProjectName.Tests.Products
                 "user1"
             );
             Assert.True(isValidAssumption2);
-            store.DeprecateAssumption(assumption2!.Id, null, "No longer valid");
+            store.DeprecateAssumption(assumption2!.Id, null, "No longer valid", "user1");
 
             // Act - Create period 2 with carry-forward
             var period2Request = new CreateReportingPeriodRequest
