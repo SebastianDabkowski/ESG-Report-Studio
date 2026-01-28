@@ -61,7 +61,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false)
   const [isRequestChangesDialogOpen, setIsRequestChangesDialogOpen] = useState(false)
-  const [reviewComments, setReviewComments] = useState('')
+  const [approveComments, setApproveComments] = useState('')
+  const [changesComments, setChangesComments] = useState('')
 
   // Fetch users on mount
   useEffect(() => {
@@ -246,7 +247,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     try {
       const payload = {
         reviewedBy: currentUser?.id || 'user-1',
-        reviewComments: reviewComments || undefined
+        reviewComments: approveComments || undefined
       }
       
       const updatedDataPoint = await approveDataPoint(selectedDataItem.id, payload)
@@ -258,7 +259,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
       
       setSelectedDataItem(updatedDataPoint)
       setIsApproveDialogOpen(false)
-      setReviewComments('')
+      setApproveComments('')
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to approve data point')
     } finally {
@@ -267,7 +268,9 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   }
 
   const handleRequestChanges = async () => {
-    if (!selectedDataItem || !reviewComments.trim()) {
+    if (!selectedDataItem) return
+    
+    if (!changesComments.trim()) {
       setSubmitError('Please provide feedback for the changes requested')
       return
     }
@@ -277,7 +280,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     try {
       const payload = {
         reviewedBy: currentUser?.id || 'user-1',
-        reviewComments: reviewComments
+        reviewComments: changesComments
       }
       
       const updatedDataPoint = await requestChangesOnDataPoint(selectedDataItem.id, payload)
@@ -289,7 +292,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
       
       setSelectedDataItem(updatedDataPoint)
       setIsRequestChangesDialogOpen(false)
-      setReviewComments('')
+      setChangesComments('')
     } catch (error) {
       setSubmitError(error instanceof Error ? error.message : 'Failed to request changes')
     } finally {
@@ -885,7 +888,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
 
               <DialogFooter className="flex-col sm:flex-row gap-2">
                 <div className="flex gap-2 flex-1">
-                  {selectedDataItem.reviewStatus === 'draft' && (
+                  {(selectedDataItem.reviewStatus === 'draft' || selectedDataItem.reviewStatus === 'changes-requested') && (
                     <Button 
                       variant="secondary" 
                       onClick={() => handleSubmitForReview(selectedDataItem)}
@@ -956,8 +959,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               <Textarea
                 id="approve-comments"
                 placeholder="Add any comments about the approval..."
-                value={reviewComments}
-                onChange={(e) => setReviewComments(e.target.value)}
+                value={approveComments}
+                onChange={(e) => setApproveComments(e.target.value)}
                 rows={3}
               />
             </div>
@@ -965,7 +968,7 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsApproveDialogOpen(false)
-              setReviewComments('')
+              setApproveComments('')
               setSubmitError(null)
             }}>
               Cancel
@@ -998,8 +1001,14 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               <Textarea
                 id="changes-comments"
                 placeholder="Explain what changes are needed..."
-                value={reviewComments}
-                onChange={(e) => setReviewComments(e.target.value)}
+                value={changesComments}
+                onChange={(e) => {
+                  setChangesComments(e.target.value)
+                  // Clear error when user starts typing
+                  if (submitError && e.target.value.trim()) {
+                    setSubmitError(null)
+                  }
+                }}
                 rows={4}
                 required
               />
@@ -1008,12 +1017,12 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
           <DialogFooter>
             <Button variant="outline" onClick={() => {
               setIsRequestChangesDialogOpen(false)
-              setReviewComments('')
+              setChangesComments('')
               setSubmitError(null)
             }}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleRequestChanges} disabled={isSubmitting || !reviewComments.trim()}>
+            <Button variant="destructive" onClick={handleRequestChanges} disabled={isSubmitting || !changesComments.trim()}>
               {isSubmitting ? 'Submitting...' : 'Request Changes'}
             </Button>
           </DialogFooter>

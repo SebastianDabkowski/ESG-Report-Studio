@@ -867,15 +867,24 @@ public sealed class InMemoryReportStore
                 return (false, "DataPoint not found.", null);
             }
 
-            // Check if data point is approved and enforce read-only (unless updating review status)
-            if (dataPoint.ReviewStatus == "approved" && request.ReviewStatus != "approved")
+            // Check if data point is approved and enforce read-only (unless updating review status ONLY)
+            if (dataPoint.ReviewStatus == "approved")
             {
-                // Allow status changes but not content changes for approved data points
-                if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
-                {
-                    // This is a status-only change, allow it
-                }
-                else
+                // Determine if this is a review status-only change
+                bool isReviewStatusOnlyChange = !string.IsNullOrWhiteSpace(request.ReviewStatus) &&
+                    request.Type == dataPoint.Type &&
+                    request.Classification == dataPoint.Classification &&
+                    request.Title == dataPoint.Title &&
+                    request.Content == dataPoint.Content &&
+                    request.Value == dataPoint.Value &&
+                    request.Unit == dataPoint.Unit &&
+                    request.OwnerId == dataPoint.OwnerId &&
+                    request.Source == dataPoint.Source &&
+                    request.InformationType == dataPoint.InformationType &&
+                    request.Assumptions == dataPoint.Assumptions &&
+                    request.CompletenessStatus == dataPoint.CompletenessStatus;
+                
+                if (!isReviewStatusOnlyChange)
                 {
                     return (false, "Cannot modify approved data points. Only admins can make changes to approved entries.", null);
                 }
