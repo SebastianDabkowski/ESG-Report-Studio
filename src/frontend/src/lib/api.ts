@@ -354,22 +354,64 @@ export interface AuditLogFilters {
   entityType?: string
   entityId?: string
   userId?: string
+  action?: string
   startDate?: string
   endDate?: string
 }
 
-export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
+function buildAuditLogQueryParams(filters?: AuditLogFilters): URLSearchParams {
   const params = new URLSearchParams()
   if (filters?.entityType) params.append('entityType', filters.entityType)
   if (filters?.entityId) params.append('entityId', filters.entityId)
   if (filters?.userId) params.append('userId', filters.userId)
+  if (filters?.action) params.append('action', filters.action)
   if (filters?.startDate) params.append('startDate', filters.startDate)
   if (filters?.endDate) params.append('endDate', filters.endDate)
+  return params
+}
+
+async function downloadFile(url: string, filename: string): Promise<void> {
+  const response = await fetch(url)
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => 'Unknown error')
+    throw new Error(`Export failed: ${response.status} ${response.statusText}. ${errorText}`)
+  }
   
+  const blob = await response.blob()
+  const blobUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(blobUrl)
+}
+
+export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
+  const params = buildAuditLogQueryParams(filters)
   const queryString = params.toString()
   const path = queryString ? `audit-log?${queryString}` : 'audit-log'
   
   return requestJson<any[]>(path)
+}
+
+export async function exportAuditLogCsv(filters?: AuditLogFilters): Promise<void> {
+  const params = buildAuditLogQueryParams(filters)
+  const queryString = params.toString()
+  const path = queryString ? `audit-log/export/csv?${queryString}` : 'audit-log/export/csv'
+  const filename = `audit-log-${new Date().toISOString().split('T')[0]}.csv`
+  
+  await downloadFile(buildUrl(path), filename)
+}
+
+export async function exportAuditLogJson(filters?: AuditLogFilters): Promise<void> {
+  const params = buildAuditLogQueryParams(filters)
+  const queryString = params.toString()
+  const path = queryString ? `audit-log/export/json?${queryString}` : 'audit-log/export/json'
+  const filename = `audit-log-${new Date().toISOString().split('T')[0]}.json`
+  
+  await downloadFile(buildUrl(path), filename)
 }
 
 // Dashboard API

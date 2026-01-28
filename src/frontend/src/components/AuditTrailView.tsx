@@ -4,28 +4,37 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ClockCounterClockwise, FunnelSimple } from '@phosphor-icons/react'
+import { ClockCounterClockwise, FunnelSimple, FileCsv, FileCode } from '@phosphor-icons/react'
 import type { AuditLogEntry, User } from '@/lib/types'
 import { formatDateTime } from '@/lib/helpers'
 import { useState, useEffect } from 'react'
-import { getAuditLog, getUsers, type AuditLogFilters } from '@/lib/api'
+import { getAuditLog, getUsers, exportAuditLogCsv, exportAuditLogJson, type AuditLogFilters } from '@/lib/api'
 
 export default function AuditTrailView() {
   const [auditLog, setAuditLog] = useState<AuditLogEntry[]>([])
+  const [allAuditLog, setAllAuditLog] = useState<AuditLogEntry[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
+  const [exporting, setExporting] = useState(false)
   
   // Filter state
   const [filters, setFilters] = useState<AuditLogFilters>({})
   const [filterUserId, setFilterUserId] = useState<string>('all')
+  const [filterAction, setFilterAction] = useState<string>('all')
+  const [filterEntityType, setFilterEntityType] = useState<string>('all')
   const [filterStartDate, setFilterStartDate] = useState<string>('')
   const [filterEndDate, setFilterEndDate] = useState<string>('')
+
+  // Extract unique actions and entity types from all audit log data (not filtered)
+  const uniqueActions = Array.from(new Set(allAuditLog.map(e => e.action))).sort()
+  const uniqueEntityTypes = Array.from(new Set(allAuditLog.map(e => e.entityType))).sort()
 
   useEffect(() => {
     loadData()
     loadUsers()
+    loadAllData()
   }, [filters])
 
   async function loadData() {
@@ -41,6 +50,16 @@ export default function AuditTrailView() {
     }
   }
 
+  async function loadAllData() {
+    try {
+      // Load unfiltered data for filter dropdowns
+      const data = await getAuditLog()
+      setAllAuditLog(data)
+    } catch (err) {
+      console.error('Failed to load all audit log data:', err)
+    }
+  }
+
   async function loadUsers() {
     try {
       const usersData = await getUsers()
@@ -53,6 +72,8 @@ export default function AuditTrailView() {
   function applyFilters() {
     const newFilters: AuditLogFilters = {}
     if (filterUserId && filterUserId !== 'all') newFilters.userId = filterUserId
+    if (filterAction && filterAction !== 'all') newFilters.action = filterAction
+    if (filterEntityType && filterEntityType !== 'all') newFilters.entityType = filterEntityType
     if (filterStartDate) newFilters.startDate = filterStartDate
     if (filterEndDate) newFilters.endDate = filterEndDate
     
@@ -61,9 +82,37 @@ export default function AuditTrailView() {
 
   function clearFilters() {
     setFilterUserId('all')
+    setFilterAction('all')
+    setFilterEntityType('all')
     setFilterStartDate('')
     setFilterEndDate('')
     setFilters({})
+  }
+
+  async function handleExportCsv() {
+    try {
+      setExporting(true)
+      setError(null)
+      await exportAuditLogCsv(filters)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to export CSV'
+      setError(`Export failed: ${errorMsg}. Please try again or contact support if the issue persists.`)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  async function handleExportJson() {
+    try {
+      setExporting(true)
+      setError(null)
+      await exportAuditLogJson(filters)
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Failed to export JSON'
+      setError(`Export failed: ${errorMsg}. Please try again or contact support if the issue persists.`)
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (loading) {
@@ -106,20 +155,40 @@ export default function AuditTrailView() {
               Complete history of all changes and actions
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <FunnelSimple size={16} className="mr-2" />
-            {showFilters ? 'Hide Filters' : 'Show Filters'}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportCsv}
+              disabled={exporting || auditLog.length === 0}
+            >
+              <FileCsv size={16} className="mr-2" />
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportJson}
+              disabled={exporting || auditLog.length === 0}
+            >
+              <FileCode size={16} className="mr-2" />
+              Export JSON
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <FunnelSimple size={16} className="mr-2" />
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </Button>
+          </div>
         </div>
 
         {showFilters && (
           <Card className="mt-4">
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="filter-user">Filter by User</Label>
                   <Select value={filterUserId} onValueChange={setFilterUserId}>
@@ -131,6 +200,40 @@ export default function AuditTrailView() {
                       {users.map(user => (
                         <SelectItem key={user.id} value={user.id}>
                           {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="filter-action">Filter by Action</Label>
+                  <Select value={filterAction} onValueChange={setFilterAction}>
+                    <SelectTrigger id="filter-action">
+                      <SelectValue placeholder="All actions" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All actions</SelectItem>
+                      {uniqueActions.map(action => (
+                        <SelectItem key={action} value={action}>
+                          {action}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="filter-entity-type">Filter by Entity Type</Label>
+                  <Select value={filterEntityType} onValueChange={setFilterEntityType}>
+                    <SelectTrigger id="filter-entity-type">
+                      <SelectValue placeholder="All entity types" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All entity types</SelectItem>
+                      {uniqueEntityTypes.map(entityType => (
+                        <SelectItem key={entityType} value={entityType}>
+                          {entityType}
                         </SelectItem>
                       ))}
                     </SelectContent>
