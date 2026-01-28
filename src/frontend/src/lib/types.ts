@@ -62,6 +62,7 @@ export interface ReportSection {
   approvedAt?: string
   approvedBy?: string
   order: number
+  catalogCode?: string
 }
 
 export interface DataPoint {
