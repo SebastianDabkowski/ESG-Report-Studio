@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { useKV } from '@github/spark/hooks'
 import DataPointForm from '@/components/DataPointForm'
 import DataPointEvidenceManager from '@/components/DataPointEvidenceManager'
+import DataPointNotes from '@/components/DataPointNotes'
 import EvidenceUploadForm from '@/components/EvidenceUploadForm'
 import ImportDataDialog from '@/components/ImportDataDialog'
 import { 
@@ -31,9 +32,9 @@ import {
   CheckCircle,
   XCircle
 } from '@phosphor-icons/react'
-import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
+import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence, DataPointNote } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
-import { getUsers, getDataPoints, createDataPoint, updateDataPoint, approveDataPoint, requestChangesOnDataPoint } from '@/lib/api'
+import { getUsers, getDataPoints, createDataPoint, updateDataPoint, approveDataPoint, requestChangesOnDataPoint, getDataPointNotes, createDataPointNote } from '@/lib/api'
 import { useEffect } from 'react'
 
 interface DataCollectionWorkspaceProps {
@@ -63,6 +64,8 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [isRequestChangesDialogOpen, setIsRequestChangesDialogOpen] = useState(false)
   const [approveComments, setApproveComments] = useState('')
   const [changesComments, setChangesComments] = useState('')
+  const [dataPointNotes, setDataPointNotes] = useState<DataPointNote[]>([])
+  const [isLoadingNotes, setIsLoadingNotes] = useState(false)
 
   // Fetch users on mount
   useEffect(() => {
@@ -77,6 +80,28 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     
     fetchUsers()
   }, [setUsers])
+
+  // Fetch notes when selectedDataItem changes
+  useEffect(() => {
+    const fetchNotes = async () => {
+      if (selectedDataItem) {
+        setIsLoadingNotes(true)
+        try {
+          const notes = await getDataPointNotes(selectedDataItem.id)
+          setDataPointNotes(notes)
+        } catch (error) {
+          console.error('Failed to fetch notes:', error)
+          setDataPointNotes([])
+        } finally {
+          setIsLoadingNotes(false)
+        }
+      } else {
+        setDataPointNotes([])
+      }
+    }
+    
+    fetchNotes()
+  }, [selectedDataItem])
 
   const activePeriod = periods?.find(p => p.status === 'active')
   const activeSections = sections?.filter(s => activePeriod && s.periodId === activePeriod.id) || []
@@ -378,6 +403,22 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     })
   }
 
+  const handleAddNote = async (content: string) => {
+    if (!selectedDataItem) return
+
+    try {
+      const newNote = await createDataPointNote(selectedDataItem.id, {
+        content,
+        createdBy: currentUser.id
+      })
+      
+      // Add the new note to the local state
+      setDataPointNotes([...dataPointNotes, newNote])
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to add note')
+    }
+  }
+
   const getDataItemEvidence = (dataPointId: string): Evidence[] => {
     const dataPoint = dataPoints?.find(dp => dp.id === dataPointId)
     if (!dataPoint || !dataPoint.evidenceIds.length) return []
@@ -509,6 +550,11 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                             {dp.classification && (
                               <Badge className={`${getClassificationColor(dp.classification)} text-xs`}>
                                 {dp.classification}
+                              </Badge>
+                            )}
+                            {dp.isBlocked && (
+                              <Badge variant="destructive" className="text-xs">
+                                Blocked
                               </Badge>
                             )}
                             <Badge 
@@ -836,6 +882,28 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                         </span>
                       </div>
                     )}
+                    {selectedDataItem.isBlocked && (
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-muted-foreground">Status:</span>
+                          <Badge variant="destructive">Blocked</Badge>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-muted-foreground">Blocker Reason:</span>
+                          <span className="font-medium text-sm bg-red-50 p-2 rounded border border-red-200">
+                            {selectedDataItem.blockerReason}
+                          </span>
+                        </div>
+                        {selectedDataItem.blockerDueDate && (
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Expected Resolution:</span>
+                            <span className="font-medium">
+                              {new Date(selectedDataItem.blockerDueDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                      </>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Created:</span>
                       <span className="font-medium">
@@ -858,6 +926,16 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                   allEvidence={evidence || []}
                   onLinkEvidence={handleLinkEvidence}
                   onUnlinkEvidence={handleUnlinkEvidence}
+                />
+
+                <Separator />
+
+                <DataPointNotes
+                  dataPointId={selectedDataItem.id}
+                  notes={dataPointNotes}
+                  currentUserId={currentUser.id}
+                  currentUserName={currentUser.name}
+                  onAddNote={handleAddNote}
                 />
 
                 <Separator />

@@ -18,6 +18,7 @@ public sealed class InMemoryReportStore
     private readonly List<AuditLogEntry> _auditLog = new();
     private readonly List<ReminderConfiguration> _reminderConfigurations = new();
     private readonly List<ReminderHistory> _reminderHistory = new();
+    private readonly List<DataPointNote> _dataPointNotes = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -1097,6 +1098,12 @@ public sealed class InMemoryReportStore
                 return (false, $"ReviewStatus must be one of: {string.Join(", ", validReviewStatuses)}.", null);
             }
             
+            // Validate blocker fields
+            if (request.IsBlocked && string.IsNullOrWhiteSpace(request.BlockerReason))
+            {
+                return (false, "BlockerReason is required when IsBlocked is true.", null);
+            }
+            
             var newDataPoint = new DataPoint
             {
                 Id = Guid.NewGuid().ToString(),
@@ -1117,7 +1124,10 @@ public sealed class InMemoryReportStore
                 CreatedAt = now,
                 UpdatedAt = now,
                 EvidenceIds = new List<string>(),
-                Deadline = request.Deadline
+                Deadline = request.Deadline,
+                IsBlocked = request.IsBlocked,
+                BlockerReason = request.BlockerReason,
+                BlockerDueDate = request.BlockerDueDate
             };
 
             // Validate against validation rules
@@ -1378,6 +1388,31 @@ public sealed class InMemoryReportStore
                 }
                 dataPoint.Deadline = request.Deadline;
             }
+            
+            // Validate blocker fields
+            if (request.IsBlocked && string.IsNullOrWhiteSpace(request.BlockerReason))
+            {
+                return (false, "BlockerReason is required when IsBlocked is true.", null);
+            }
+            
+            // Update blocker fields
+            if (dataPoint.IsBlocked != request.IsBlocked)
+            {
+                changes.Add(new FieldChange { Field = "IsBlocked", OldValue = dataPoint.IsBlocked.ToString(), NewValue = request.IsBlocked.ToString() });
+            }
+            dataPoint.IsBlocked = request.IsBlocked;
+            
+            if (dataPoint.BlockerReason != request.BlockerReason)
+            {
+                changes.Add(new FieldChange { Field = "BlockerReason", OldValue = dataPoint.BlockerReason ?? "", NewValue = request.BlockerReason ?? "" });
+            }
+            dataPoint.BlockerReason = request.BlockerReason;
+            
+            if (dataPoint.BlockerDueDate != request.BlockerDueDate)
+            {
+                changes.Add(new FieldChange { Field = "BlockerDueDate", OldValue = dataPoint.BlockerDueDate ?? "", NewValue = request.BlockerDueDate ?? "" });
+            }
+            dataPoint.BlockerDueDate = request.BlockerDueDate;
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -2461,6 +2496,75 @@ public sealed class InMemoryReportStore
 
         // Default: has some data points, not all complete, not blocked
         return "in-progress";
+    }
+
+    // DataPoint Note Management
+
+    public DataPointNote CreateDataPointNote(string dataPointId, CreateDataPointNoteRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                throw new InvalidOperationException($"Data point {dataPointId} not found.");
+            }
+
+            var user = _users.FirstOrDefault(u => u.Id == request.CreatedBy);
+            if (user == null)
+            {
+                throw new InvalidOperationException($"User {request.CreatedBy} not found.");
+            }
+
+            var note = new DataPointNote
+            {
+                Id = Guid.NewGuid().ToString(),
+                DataPointId = dataPointId,
+                Content = request.Content,
+                CreatedBy = request.CreatedBy,
+                CreatedByName = user.Name,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                UpdatedAt = DateTime.UtcNow.ToString("O")
+            };
+
+            _dataPointNotes.Add(note);
+
+            // Create audit log entry for note creation
+            CreateAuditLogEntry(
+                userId: request.CreatedBy,
+                userName: user.Name,
+                action: "create",
+                entityType: "DataPointNote",
+                entityId: note.Id,
+                changeNote: "Added note to data point",
+                changes: new List<FieldChange>
+                {
+                    new() { Field = "Content", OldValue = "", NewValue = request.Content },
+                    new() { Field = "DataPointId", OldValue = "", NewValue = dataPointId }
+                }
+            );
+
+            return note;
+        }
+    }
+
+    public List<DataPointNote> GetDataPointNotes(string dataPointId)
+    {
+        lock (_lock)
+        {
+            return _dataPointNotes
+                .Where(n => n.DataPointId == dataPointId)
+                .OrderBy(n => n.CreatedAt)
+                .ToList();
+        }
+    }
+
+    public DataPointNote? GetDataPointNote(string noteId)
+    {
+        lock (_lock)
+        {
+            return _dataPointNotes.FirstOrDefault(n => n.Id == noteId);
+        }
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);

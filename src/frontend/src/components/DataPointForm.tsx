@@ -29,6 +29,9 @@ const dataPointSchema = z.object({
     errorMap: () => ({ message: 'Completeness status is required' })
   }).optional(),
   changeNote: z.string().optional(),
+  isBlocked: z.boolean().default(false),
+  blockerReason: z.string().optional(),
+  blockerDueDate: z.string().optional(),
 }).refine((data) => {
   // Require assumptions when informationType is 'estimate'
   if (data.informationType === 'estimate' && (!data.assumptions || !data.assumptions.trim())) {
@@ -47,6 +50,15 @@ const dataPointSchema = z.object({
 }, {
   message: "An owner must be assigned before setting completeness status to 'complete'",
   path: ['ownerId']
+}).refine((data) => {
+  // Require blocker reason when isBlocked is true
+  if (data.isBlocked && (!data.blockerReason || !data.blockerReason.trim())) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Blocker reason is required when marking as blocked",
+  path: ['blockerReason']
 })
 
 type DataPointFormData = z.infer<typeof dataPointSchema>
@@ -93,6 +105,9 @@ export default function DataPointForm({
       assumptions: dataPoint.assumptions || '',
       completenessStatus: dataPoint.completenessStatus,
       changeNote: '',
+      isBlocked: dataPoint.isBlocked || false,
+      blockerReason: dataPoint.blockerReason || '',
+      blockerDueDate: dataPoint.blockerDueDate || '',
     } : {
       type: 'narrative',
       classification: 'fact',
@@ -102,12 +117,16 @@ export default function DataPointForm({
       assumptions: '',
       completenessStatus: undefined,
       changeNote: '',
+      isBlocked: false,
+      blockerReason: '',
+      blockerDueDate: '',
     }
   })
 
   const selectedType = watch('type')
   const selectedInformationType = watch('informationType')
   const selectedOwnerId = watch('ownerId')
+  const isBlocked = watch('isBlocked')
   
   // Remove owner from contributors when owner changes
   useEffect(() => {
@@ -362,6 +381,64 @@ export default function DataPointForm({
           </div>
           <p className="text-xs text-muted-foreground">Select users who will contribute to this data item</p>
         </div>
+      </div>
+
+      {/* Blocker Status */}
+      <div className="space-y-4 pt-4 border-t">
+        <h3 className="font-medium text-sm">Blocker Status</h3>
+        
+        {/* Is Blocked Checkbox */}
+        <div className="flex items-center space-x-2">
+          <Checkbox
+            id="isBlocked"
+            checked={isBlocked}
+            onCheckedChange={(checked) => setValue('isBlocked', checked === true)}
+          />
+          <label
+            htmlFor="isBlocked"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+          >
+            Mark as Blocked
+          </label>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Use this to indicate that work on this data point cannot proceed due to external dependencies or issues
+        </p>
+
+        {/* Blocker Reason (conditional) */}
+        {isBlocked && (
+          <>
+            <div className="space-y-2">
+              <Label htmlFor="blockerReason">Blocker Reason *</Label>
+              <Textarea
+                id="blockerReason"
+                {...register('blockerReason')}
+                placeholder="Describe what is blocking progress on this data point..."
+                rows={3}
+                className={errors.blockerReason ? 'border-red-500' : ''}
+              />
+              {errors.blockerReason && (
+                <p className="text-sm text-red-600">{errors.blockerReason.message}</p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Explain what needs to happen to unblock this data point
+              </p>
+            </div>
+
+            {/* Blocker Due Date (optional) */}
+            <div className="space-y-2">
+              <Label htmlFor="blockerDueDate">Expected Resolution Date (Optional)</Label>
+              <Input
+                id="blockerDueDate"
+                type="date"
+                {...register('blockerDueDate')}
+              />
+              <p className="text-xs text-muted-foreground">
+                When do you expect this blocker to be resolved?
+              </p>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Change Note (optional, for updates only) */}

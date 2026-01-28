@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -332,6 +332,18 @@ export async function requestChangesOnDataPoint(id: string, payload: RequestChan
 
 export async function updateDataPointStatus(id: string, payload: UpdateDataPointStatusRequest): Promise<any> {
   return requestJson<any>(`data-points/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+// Data Point Notes API methods
+export async function getDataPointNotes(dataPointId: string): Promise<DataPointNote[]> {
+  return requestJson<DataPointNote[]>(`data-points/${dataPointId}/notes`)
+}
+
+export async function createDataPointNote(dataPointId: string, payload: CreateDataPointNoteRequest): Promise<DataPointNote> {
+  return requestJson<DataPointNote>(`data-points/${dataPointId}/notes`, {
     method: 'POST',
     body: JSON.stringify(payload)
   })

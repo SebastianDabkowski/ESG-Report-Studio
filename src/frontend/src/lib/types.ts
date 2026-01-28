@@ -86,6 +86,25 @@ export interface DataPoint {
   createdAt: string
   updatedAt: string
   evidenceIds: string[]
+  deadline?: string
+  isBlocked: boolean
+  blockerReason?: string
+  blockerDueDate?: string
+}
+
+export interface DataPointNote {
+  id: string
+  dataPointId: string
+  content: string
+  createdBy: string
+  createdByName: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateDataPointNoteRequest {
+  content: string
+  createdBy: string
 }
 
 export interface Evidence {
