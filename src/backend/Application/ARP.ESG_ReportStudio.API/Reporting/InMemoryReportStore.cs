@@ -816,5 +816,167 @@ public sealed class InMemoryReportStore
         }
     }
 
+    // Evidence Management
+    public IReadOnlyList<Evidence> GetEvidence(string? sectionId = null)
+    {
+        lock (_lock)
+        {
+            return sectionId == null 
+                ? _evidence.ToList()
+                : _evidence.Where(e => e.SectionId == sectionId).ToList();
+        }
+    }
+
+    public Evidence? GetEvidenceById(string id)
+    {
+        lock (_lock)
+        {
+            return _evidence.FirstOrDefault(e => e.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Evidence? Evidence) CreateEvidence(
+        string sectionId, 
+        string title, 
+        string? description, 
+        string? fileName, 
+        string? fileUrl, 
+        string? sourceUrl,
+        string uploadedBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return (false, "SectionId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(uploadedBy))
+            {
+                return (false, "UploadedBy is required.", null);
+            }
+
+            // At least one of file or URL must be provided
+            if (string.IsNullOrWhiteSpace(fileName) && string.IsNullOrWhiteSpace(sourceUrl))
+            {
+                return (false, "Either a file or source URL must be provided.", null);
+            }
+
+            // Validate section exists
+            var sectionExists = _sections.Any(s => s.Id == sectionId);
+            if (!sectionExists)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            var newEvidence = new Evidence
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = title,
+                Description = description,
+                FileName = fileName,
+                FileUrl = fileUrl,
+                SourceUrl = sourceUrl,
+                UploadedBy = uploadedBy,
+                UploadedAt = DateTime.UtcNow.ToString("O"),
+                LinkedDataPoints = new List<string>()
+            };
+
+            _evidence.Add(newEvidence);
+            return (true, null, newEvidence);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) LinkEvidenceToDataPoint(string evidenceId, string dataPointId)
+    {
+        lock (_lock)
+        {
+            var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+            if (evidence == null)
+            {
+                return (false, $"Evidence with ID '{evidenceId}' not found.");
+            }
+
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, $"DataPoint with ID '{dataPointId}' not found.");
+            }
+
+            // Check if already linked
+            if (evidence.LinkedDataPoints.Contains(dataPointId))
+            {
+                return (false, "Evidence is already linked to this data point.");
+            }
+
+            if (dataPoint.EvidenceIds.Contains(evidenceId))
+            {
+                return (false, "Data point already has this evidence linked.");
+            }
+
+            // Link both ways
+            evidence.LinkedDataPoints.Add(dataPointId);
+            dataPoint.EvidenceIds.Add(evidenceId);
+
+            return (true, null);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage) UnlinkEvidenceFromDataPoint(string evidenceId, string dataPointId)
+    {
+        lock (_lock)
+        {
+            var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+            if (evidence == null)
+            {
+                return (false, $"Evidence with ID '{evidenceId}' not found.");
+            }
+
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, $"DataPoint with ID '{dataPointId}' not found.");
+            }
+
+            // Unlink both ways
+            evidence.LinkedDataPoints.Remove(dataPointId);
+            dataPoint.EvidenceIds.Remove(evidenceId);
+
+            return (true, null);
+        }
+    }
+
+    public bool DeleteEvidence(string id)
+    {
+        lock (_lock)
+        {
+            var evidence = _evidence.FirstOrDefault(e => e.Id == id);
+            if (evidence == null)
+            {
+                return false;
+            }
+
+            // Remove links from all data points
+            foreach (var dataPointId in evidence.LinkedDataPoints.ToList())
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+                if (dataPoint != null)
+                {
+                    dataPoint.EvidenceIds.Remove(id);
+                }
+            }
+
+            _evidence.Remove(evidence);
+            return true;
+        }
+    }
+
     private sealed record SectionTemplate(string Title, string Category, string Description);
 }

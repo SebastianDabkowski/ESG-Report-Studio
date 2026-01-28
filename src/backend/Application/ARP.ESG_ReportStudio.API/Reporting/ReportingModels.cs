@@ -273,3 +273,45 @@ public sealed class Gap
     public string CreatedAt { get; set; } = string.Empty;
     public bool Resolved { get; set; }
 }
+
+/// <summary>
+/// Request to create new evidence.
+/// </summary>
+public sealed class CreateEvidenceRequest
+{
+    /// <summary>
+    /// ID of the section this evidence belongs to.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Title of the evidence.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional description of the evidence.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Optional URL to external source.
+    /// </summary>
+    public string? SourceUrl { get; set; }
+
+    /// <summary>
+    /// User ID of the person uploading the evidence.
+    /// </summary>
+    public string UploadedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to link evidence to a data point.
+/// </summary>
+public sealed class LinkEvidenceRequest
+{
+    /// <summary>
+    /// ID of the data point to link to.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+}
