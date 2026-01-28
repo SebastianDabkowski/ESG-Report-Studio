@@ -548,5 +548,187 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("resolve", resolveEntries.First().Action);
             Assert.Equal(gap1.Id, resolveEntries.First().EntityId);
         }
+
+        [Fact]
+        public void GetEntityTimeline_ShouldReturnChronologicalChanges()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create a data point and update it multiple times
+            var (_, _, dataPoint) = store.CreateDataPoint(new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Test Metric",
+                Content = "Initial content",
+                OwnerId = "user-1",
+                CompletenessStatus = "complete",
+                ReviewStatus = "draft"
+            });
+
+            store.UpdateDataPoint(dataPoint!.Id, new UpdateDataPointRequest
+            {
+                Type = "metric",
+                Title = "Test Metric Updated",
+                Content = "Updated content",
+                OwnerId = "user-1",
+                CompletenessStatus = "complete",
+                ReviewStatus = "draft",
+                ChangeNote = "First update",
+                UpdatedBy = "user-1"
+            });
+
+            store.UpdateDataPoint(dataPoint.Id, new UpdateDataPointRequest
+            {
+                Type = "metric",
+                Title = "Test Metric Updated Again",
+                Content = "Final content",
+                OwnerId = "user-1",
+                CompletenessStatus = "complete",
+                ReviewStatus = "draft",
+                ChangeNote = "Second update",
+                UpdatedBy = "user-1"
+            });
+
+            // Act
+            var timeline = store.GetAuditLog(entityType: "DataPoint", entityId: dataPoint.Id);
+
+            // Assert
+            Assert.Equal(3, timeline.Count); // Create + 2 updates
+            var chronological = timeline.Reverse().ToList();
+            
+            // First entry should be creation
+            Assert.Equal("create", chronological[0].Action);
+            Assert.Contains(chronological[0].Changes, c => c.Field == "Title" && c.NewValue == "Test Metric");
+            
+            // Second entry should be first update
+            Assert.Equal("update", chronological[1].Action);
+            Assert.Equal("First update", chronological[1].ChangeNote);
+            Assert.Contains(chronological[1].Changes, c => c.Field == "Title" && c.OldValue == "Test Metric" && c.NewValue == "Test Metric Updated");
+            
+            // Third entry should be second update
+            Assert.Equal("update", chronological[2].Action);
+            Assert.Equal("Second update", chronological[2].ChangeNote);
+            Assert.Contains(chronological[2].Changes, c => c.Field == "Title" && c.OldValue == "Test Metric Updated" && c.NewValue == "Test Metric Updated Again");
+        }
+
+        [Fact]
+        public void CompareVersions_ShouldShowDifferencesBetweenTwoStates()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create and update an assumption
+            var (_, _, assumption) = store.CreateAssumption(
+                sectionId,
+                "Initial Title",
+                "Initial Description",
+                "Company-wide",
+                "2024-01-01",
+                "2024-12-31",
+                "Initial Methodology",
+                "Initial Limitations",
+                new List<string>(),
+                "Initial Rationale",
+                new List<AssumptionSource>(),
+                "user-1"
+            );
+
+            // Get first version (creation)
+            var auditLog = store.GetAuditLog(entityType: "Assumption", entityId: assumption!.Id);
+            var version1Id = auditLog.Last().Id; // Creation (oldest)
+
+            // Update the assumption
+            store.UpdateAssumption(
+                assumption.Id,
+                "Updated Title",
+                "Updated Description",
+                "Company-wide",
+                "2024-01-01",
+                "2024-12-31",
+                "Updated Methodology",
+                "Updated Limitations",
+                new List<string>(),
+                "Updated Rationale",
+                new List<AssumptionSource>(),
+                "user-2"
+            );
+
+            // Get second version (after update)
+            auditLog = store.GetAuditLog(entityType: "Assumption", entityId: assumption.Id);
+            var version2Id = auditLog.First().Id; // Latest update
+
+            // Act - Compare versions by reconstructing state
+            var chronological = auditLog.Reverse().ToList();
+            
+            // Build state at version 1
+            var stateV1 = new Dictionary<string, string?>();
+            var version1Entry = chronological.FirstOrDefault(e => e.Id == version1Id);
+            Assert.NotNull(version1Entry);
+            foreach (var change in version1Entry.Changes)
+            {
+                stateV1[change.Field] = change.NewValue;
+            }
+
+            // Build state at version 2
+            var stateV2 = new Dictionary<string, string?>();
+            foreach (var entry in chronological.Where(e => e.Id == version1Id || e.Id == version2Id))
+            {
+                foreach (var change in entry.Changes)
+                {
+                    stateV2[change.Field] = change.NewValue;
+                }
+            }
+
+            // Assert - Verify differences
+            Assert.Equal("Initial Title", stateV1.GetValueOrDefault("Title"));
+            Assert.Equal("Updated Title", stateV2.GetValueOrDefault("Title"));
+            
+            Assert.Equal("Initial Description", stateV1.GetValueOrDefault("Description"));
+            Assert.Equal("Updated Description", stateV2.GetValueOrDefault("Description"));
+            
+            Assert.Equal("Initial Methodology", stateV1.GetValueOrDefault("Methodology"));
+            Assert.Equal("Updated Methodology", stateV2.GetValueOrDefault("Methodology"));
+        }
+
+        [Fact]
+        public void Timeline_ShouldIncludeMetadataForDataPoints()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var snapshot = store.GetSnapshot();
+            var sectionId = snapshot.Sections.First().Id;
+
+            // Create a data point
+            var (_, _, dataPoint) = store.CreateDataPoint(new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Energy Consumption",
+                Content = "Test content",
+                OwnerId = "user-1",
+                CompletenessStatus = "complete",
+                ReviewStatus = "draft"
+            });
+
+            // Act - Get metadata
+            var dpFromStore = store.GetDataPoint(dataPoint!.Id);
+            var section = store.GetSection(sectionId);
+            var evidence = store.GetEvidenceForDataPoint(dataPoint.Id);
+            var notes = store.GetNotesForDataPoint(dataPoint.Id);
+
+            // Assert
+            Assert.NotNull(dpFromStore);
+            Assert.Equal("Energy Consumption", dpFromStore.Title);
+            Assert.NotNull(section);
+            Assert.Equal("Test Section", section.Title);
+            Assert.Empty(evidence); // No evidence added yet
+            Assert.Empty(notes); // No notes added yet
+        }
     }
 }
