@@ -401,6 +401,11 @@ public sealed class DataPoint
     public string? MissingReasonCategory { get; set; }
     public string? MissingFlaggedBy { get; set; }
     public string? MissingFlaggedAt { get; set; }
+    
+    // Estimate tracking
+    public string? EstimateType { get; set; }
+    public string? EstimateMethod { get; set; }
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>
@@ -429,6 +434,9 @@ public sealed class CreateDataPointRequest
     public bool IsMissing { get; set; }
     public string? MissingReason { get; set; }
     public string? MissingReasonCategory { get; set; }
+    public string? EstimateType { get; set; }
+    public string? EstimateMethod { get; set; }
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>
@@ -458,6 +466,9 @@ public sealed class UpdateDataPointRequest
     public bool IsMissing { get; set; }
     public string? MissingReason { get; set; }
     public string? MissingReasonCategory { get; set; }
+    public string? EstimateType { get; set; }
+    public string? EstimateMethod { get; set; }
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>
