@@ -105,7 +105,8 @@ public sealed class AssumptionsController : ControllerBase
         var (isValid, errorMessage) = _store.DeprecateAssumption(
             id,
             request.ReplacementAssumptionId,
-            request.Justification
+            request.Justification,
+            User?.Identity?.Name ?? "anonymous"
         );
 
         if (!isValid)
@@ -122,7 +123,10 @@ public sealed class AssumptionsController : ControllerBase
     [HttpPost("{assumptionId}/link")]
     public ActionResult LinkAssumptionToDataPoint(string assumptionId, [FromBody] LinkAssumptionRequest request)
     {
-        var (isValid, errorMessage) = _store.LinkAssumptionToDataPoint(assumptionId, request.DataPointId);
+        var (isValid, errorMessage) = _store.LinkAssumptionToDataPoint(
+            assumptionId, 
+            request.DataPointId,
+            User?.Identity?.Name ?? "anonymous");
 
         if (!isValid)
         {
@@ -138,7 +142,10 @@ public sealed class AssumptionsController : ControllerBase
     [HttpPost("{assumptionId}/unlink")]
     public ActionResult UnlinkAssumptionFromDataPoint(string assumptionId, [FromBody] LinkAssumptionRequest request)
     {
-        var (isValid, errorMessage) = _store.UnlinkAssumptionFromDataPoint(assumptionId, request.DataPointId);
+        var (isValid, errorMessage) = _store.UnlinkAssumptionFromDataPoint(
+            assumptionId, 
+            request.DataPointId,
+            User?.Identity?.Name ?? "anonymous");
 
         if (!isValid)
         {

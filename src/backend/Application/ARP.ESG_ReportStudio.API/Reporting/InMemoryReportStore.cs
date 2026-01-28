@@ -2956,6 +2956,56 @@ public sealed class InMemoryReportStore
                 }
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (assumption.Title != title)
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = assumption.Title, NewValue = title });
+            }
+
+            if (assumption.Description != description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = assumption.Description, NewValue = description });
+            }
+
+            if (assumption.Scope != scope)
+            {
+                changes.Add(new FieldChange { Field = "Scope", OldValue = assumption.Scope, NewValue = scope });
+            }
+
+            if (assumption.ValidityStartDate != validityStartDate)
+            {
+                changes.Add(new FieldChange { Field = "ValidityStartDate", OldValue = assumption.ValidityStartDate, NewValue = validityStartDate });
+            }
+
+            if (assumption.ValidityEndDate != validityEndDate)
+            {
+                changes.Add(new FieldChange { Field = "ValidityEndDate", OldValue = assumption.ValidityEndDate, NewValue = validityEndDate });
+            }
+
+            if (assumption.Methodology != methodology)
+            {
+                changes.Add(new FieldChange { Field = "Methodology", OldValue = assumption.Methodology, NewValue = methodology });
+            }
+
+            if (assumption.Limitations != limitations)
+            {
+                changes.Add(new FieldChange { Field = "Limitations", OldValue = assumption.Limitations, NewValue = limitations });
+            }
+
+            if (assumption.Rationale != rationale)
+            {
+                changes.Add(new FieldChange { Field = "Rationale", OldValue = assumption.Rationale ?? "", NewValue = rationale ?? "" });
+            }
+
+            var oldLinkedDataPoints = string.Join(", ", assumption.LinkedDataPointIds);
+            var newLinkedDataPoints = string.Join(", ", linkedDataPointIds);
+            if (oldLinkedDataPoints != newLinkedDataPoints)
+            {
+                changes.Add(new FieldChange { Field = "LinkedDataPointIds", OldValue = oldLinkedDataPoints, NewValue = newLinkedDataPoints });
+            }
+
             // Update fields
             assumption.Title = title;
             assumption.Description = description;
@@ -2971,6 +3021,14 @@ public sealed class InMemoryReportStore
             assumption.UpdatedBy = updatedBy;
             assumption.UpdatedAt = DateTime.UtcNow.ToString("O");
 
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                var userName = user?.Name ?? updatedBy;
+                CreateAuditLogEntry(updatedBy, userName, "update", "Assumption", assumption.Id, changes, $"Updated assumption '{title}'");
+            }
+
             return (true, null, assumption);
         }
     }
@@ -2978,7 +3036,8 @@ public sealed class InMemoryReportStore
     public (bool IsValid, string? ErrorMessage) DeprecateAssumption(
         string id,
         string? replacementAssumptionId,
-        string? justification)
+        string? justification,
+        string deprecatedBy)
     {
         lock (_lock)
         {
@@ -2999,6 +3058,9 @@ public sealed class InMemoryReportStore
                 return (false, "Either a replacement assumption or justification is required when deprecating an assumption.");
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
             // Validate replacement assumption exists if provided
             if (!string.IsNullOrWhiteSpace(replacementAssumptionId))
             {
@@ -3015,18 +3077,27 @@ public sealed class InMemoryReportStore
 
                 assumption.ReplacementAssumptionId = replacementAssumptionId;
                 assumption.Status = "deprecated";
+                changes.Add(new FieldChange { Field = "Status", OldValue = "active", NewValue = "deprecated" });
+                changes.Add(new FieldChange { Field = "ReplacementAssumptionId", OldValue = "", NewValue = replacementAssumptionId });
             }
             else
             {
                 assumption.DeprecationJustification = justification;
                 assumption.Status = "invalid";
+                changes.Add(new FieldChange { Field = "Status", OldValue = "active", NewValue = "invalid" });
+                changes.Add(new FieldChange { Field = "DeprecationJustification", OldValue = "", NewValue = justification ?? "" });
             }
+
+            // Log to audit trail
+            var user = _users.FirstOrDefault(u => u.Id == deprecatedBy);
+            var userName = user?.Name ?? deprecatedBy;
+            CreateAuditLogEntry(deprecatedBy, userName, "deprecate", "Assumption", assumption.Id, changes, justification);
 
             return (true, null);
         }
     }
 
-    public (bool IsValid, string? ErrorMessage) LinkAssumptionToDataPoint(string assumptionId, string dataPointId)
+    public (bool IsValid, string? ErrorMessage) LinkAssumptionToDataPoint(string assumptionId, string dataPointId, string linkedBy)
     {
         lock (_lock)
         {
@@ -3054,11 +3125,21 @@ public sealed class InMemoryReportStore
             }
 
             assumption.LinkedDataPointIds.Add(dataPointId);
+
+            // Log to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "LinkedDataPointIds", OldValue = "", NewValue = $"Added data point: {dataPointId}" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == linkedBy);
+            var userName = user?.Name ?? linkedBy;
+            CreateAuditLogEntry(linkedBy, userName, "link", "Assumption", assumption.Id, changes, $"Linked assumption to data point {dataPointId}");
+
             return (true, null);
         }
     }
 
-    public (bool IsValid, string? ErrorMessage) UnlinkAssumptionFromDataPoint(string assumptionId, string dataPointId)
+    public (bool IsValid, string? ErrorMessage) UnlinkAssumptionFromDataPoint(string assumptionId, string dataPointId, string unlinkedBy)
     {
         lock (_lock)
         {
@@ -3080,6 +3161,16 @@ public sealed class InMemoryReportStore
             }
 
             assumption.LinkedDataPointIds.Remove(dataPointId);
+
+            // Log to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "LinkedDataPointIds", OldValue = $"Removed data point: {dataPointId}", NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == unlinkedBy);
+            var userName = user?.Name ?? unlinkedBy;
+            CreateAuditLogEntry(unlinkedBy, userName, "unlink", "Assumption", assumption.Id, changes, $"Unlinked assumption from data point {dataPointId}");
+
             return (true, null);
         }
     }
@@ -3103,6 +3194,243 @@ public sealed class InMemoryReportStore
 
             _assumptions.Remove(assumption);
             return (true, null);
+        }
+    }
+
+    // Gap management methods
+    public Gap? GetGapById(string id)
+    {
+        lock (_lock)
+        {
+            return _gaps.FirstOrDefault(g => g.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Gap? Gap) CreateGap(
+        string sectionId,
+        string title,
+        string description,
+        string impact,
+        string? improvementPlan,
+        string? targetDate,
+        string createdBy)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(sectionId))
+            {
+                return (false, "Section ID is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            // Validate impact level
+            var validImpactLevels = new[] { "low", "medium", "high" };
+            if (string.IsNullOrWhiteSpace(impact) || !validImpactLevels.Contains(impact.ToLowerInvariant()))
+            {
+                return (false, "Impact must be one of: low, medium, high.", null);
+            }
+
+            // Validate section exists
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            var gap = new Gap
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Title = title,
+                Description = description,
+                Impact = impact.ToLowerInvariant(),
+                ImprovementPlan = improvementPlan,
+                TargetDate = targetDate,
+                CreatedBy = createdBy,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                Resolved = false
+            };
+
+            _gaps.Add(gap);
+
+            // Log creation to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = "", NewValue = title },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = description },
+                new FieldChange { Field = "Impact", OldValue = "", NewValue = impact.ToLowerInvariant() }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == createdBy);
+            var userName = user?.Name ?? createdBy;
+            CreateAuditLogEntry(createdBy, userName, "create", "Gap", gap.Id, changes, $"Created gap '{title}'");
+
+            return (true, null, gap);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Gap? Gap) UpdateGap(
+        string id,
+        string title,
+        string description,
+        string impact,
+        string? improvementPlan,
+        string? targetDate,
+        string updatedBy,
+        string? changeNote)
+    {
+        lock (_lock)
+        {
+            var gap = _gaps.FirstOrDefault(g => g.Id == id);
+            if (gap == null)
+            {
+                return (false, $"Gap with ID '{id}' not found.", null);
+            }
+
+            if (gap.Resolved)
+            {
+                return (false, "Cannot update a resolved gap. Reopen it first.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return (false, "Description is required.", null);
+            }
+
+            // Validate impact level
+            var validImpactLevels = new[] { "low", "medium", "high" };
+            if (string.IsNullOrWhiteSpace(impact) || !validImpactLevels.Contains(impact.ToLowerInvariant()))
+            {
+                return (false, "Impact must be one of: low, medium, high.", null);
+            }
+
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (gap.Title != title)
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = gap.Title, NewValue = title });
+            }
+
+            if (gap.Description != description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = gap.Description, NewValue = description });
+            }
+
+            if (gap.Impact != impact.ToLowerInvariant())
+            {
+                changes.Add(new FieldChange { Field = "Impact", OldValue = gap.Impact, NewValue = impact.ToLowerInvariant() });
+            }
+
+            if (gap.ImprovementPlan != improvementPlan)
+            {
+                changes.Add(new FieldChange { Field = "ImprovementPlan", OldValue = gap.ImprovementPlan ?? "", NewValue = improvementPlan ?? "" });
+            }
+
+            if (gap.TargetDate != targetDate)
+            {
+                changes.Add(new FieldChange { Field = "TargetDate", OldValue = gap.TargetDate ?? "", NewValue = targetDate ?? "" });
+            }
+
+            // Update fields
+            gap.Title = title;
+            gap.Description = description;
+            gap.Impact = impact.ToLowerInvariant();
+            gap.ImprovementPlan = improvementPlan;
+            gap.TargetDate = targetDate;
+
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                var userName = user?.Name ?? updatedBy;
+                CreateAuditLogEntry(updatedBy, userName, "update", "Gap", gap.Id, changes, changeNote ?? $"Updated gap '{title}'");
+            }
+
+            return (true, null, gap);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Gap? Gap) ResolveGap(
+        string id,
+        string resolvedBy,
+        string? resolutionNote)
+    {
+        lock (_lock)
+        {
+            var gap = _gaps.FirstOrDefault(g => g.Id == id);
+            if (gap == null)
+            {
+                return (false, $"Gap with ID '{id}' not found.", null);
+            }
+
+            if (gap.Resolved)
+            {
+                return (false, "Gap is already resolved.", null);
+            }
+
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Resolved", OldValue = "false", NewValue = "true" }
+            };
+
+            gap.Resolved = true;
+
+            // Log to audit trail
+            var user = _users.FirstOrDefault(u => u.Id == resolvedBy);
+            var userName = user?.Name ?? resolvedBy;
+            CreateAuditLogEntry(resolvedBy, userName, "resolve", "Gap", gap.Id, changes, resolutionNote ?? $"Resolved gap '{gap.Title}'");
+
+            return (true, null, gap);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, Gap? Gap) ReopenGap(
+        string id,
+        string reopenedBy,
+        string? reopenNote)
+    {
+        lock (_lock)
+        {
+            var gap = _gaps.FirstOrDefault(g => g.Id == id);
+            if (gap == null)
+            {
+                return (false, $"Gap with ID '{id}' not found.", null);
+            }
+
+            if (!gap.Resolved)
+            {
+                return (false, "Gap is not resolved.", null);
+            }
+
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Resolved", OldValue = "true", NewValue = "false" }
+            };
+
+            gap.Resolved = false;
+
+            // Log to audit trail
+            var user = _users.FirstOrDefault(u => u.Id == reopenedBy);
+            var userName = user?.Name ?? reopenedBy;
+            CreateAuditLogEntry(reopenedBy, userName, "reopen", "Gap", gap.Id, changes, reopenNote ?? $"Reopened gap '{gap.Title}'");
+
+            return (true, null, gap);
         }
     }
 
@@ -3725,7 +4053,15 @@ public sealed class InMemoryReportStore
         _auditLog.Add(entry);
     }
 
-    public IReadOnlyList<AuditLogEntry> GetAuditLog(string? entityType = null, string? entityId = null, string? userId = null, string? action = null, string? startDate = null, string? endDate = null)
+    public IReadOnlyList<AuditLogEntry> GetAuditLog(
+        string? entityType = null, 
+        string? entityId = null, 
+        string? userId = null, 
+        string? action = null, 
+        string? startDate = null, 
+        string? endDate = null,
+        string? sectionId = null,
+        string? ownerId = null)
     {
         lock (_lock)
         {
@@ -3759,6 +4095,66 @@ public sealed class InMemoryReportStore
             if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
             {
                 query = query.Where(e => DateTime.Parse(e.Timestamp) <= end);
+            }
+
+            // Filter by section if provided
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                query = query.Where(e =>
+                {
+                    // Check if entity has a SectionId property
+                    if (e.EntityType.Equals("Gap", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var gap = _gaps.FirstOrDefault(g => g.Id == e.EntityId);
+                        return gap?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("Assumption", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var assumption = _assumptions.FirstOrDefault(a => a.Id == e.EntityId);
+                        return assumption?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("simplification", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var simplification = _simplifications.FirstOrDefault(s => s.Id == e.EntityId);
+                        return simplification?.SectionId == sectionId;
+                    }
+                    else if (e.EntityType.Equals("DataPoint", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == e.EntityId);
+                        return dataPoint?.SectionId == sectionId;
+                    }
+                    return false;
+                });
+            }
+
+            // Filter by owner if provided
+            if (!string.IsNullOrWhiteSpace(ownerId))
+            {
+                query = query.Where(e =>
+                {
+                    // Check if entity has an owner/creator
+                    if (e.EntityType.Equals("Gap", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var gap = _gaps.FirstOrDefault(g => g.Id == e.EntityId);
+                        return gap?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("Assumption", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var assumption = _assumptions.FirstOrDefault(a => a.Id == e.EntityId);
+                        return assumption?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("simplification", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var simplification = _simplifications.FirstOrDefault(s => s.Id == e.EntityId);
+                        return simplification?.CreatedBy == ownerId;
+                    }
+                    else if (e.EntityType.Equals("DataPoint", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == e.EntityId);
+                        return dataPoint?.OwnerId == ownerId;
+                    }
+                    return false;
+                });
             }
 
             return query.OrderByDescending(e => e.Timestamp).ToList();
