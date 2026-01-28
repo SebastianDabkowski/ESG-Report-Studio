@@ -88,7 +88,7 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
           validityStartDate: data.validityStartDate,
           validityEndDate: data.validityEndDate,
           methodology: data.methodology,
-          limitations: data.limitations || '',
+          limitations: data.limitations && data.limitations.trim() ? data.limitations : '',
           linkedDataPointIds: assumption.linkedDataPointIds
         }
         const updated = await updateAssumption(assumption.id, payload)
@@ -103,7 +103,7 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
           validityStartDate: data.validityStartDate,
           validityEndDate: data.validityEndDate,
           methodology: data.methodology,
-          limitations: data.limitations || '',
+          limitations: data.limitations && data.limitations.trim() ? data.limitations : '',
           linkedDataPointIds
         }
         const created = await createAssumption(payload)

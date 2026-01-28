@@ -2311,6 +2311,11 @@ public sealed class InMemoryReportStore
                 return (false, "Validity end date is required.", null);
             }
 
+            if (string.IsNullOrWhiteSpace(methodology))
+            {
+                return (false, "Methodology is required.", null);
+            }
+
             if (string.IsNullOrWhiteSpace(sectionId))
             {
                 return (false, "SectionId is required.", null);
@@ -2419,6 +2424,11 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(validityEndDate))
             {
                 return (false, "Validity end date is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(methodology))
+            {
+                return (false, "Methodology is required.", null);
             }
 
             // Validate dates
@@ -2573,25 +2583,25 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public bool DeleteAssumption(string id)
+    public (bool IsValid, string? ErrorMessage) DeleteAssumption(string id)
     {
         lock (_lock)
         {
             var assumption = _assumptions.FirstOrDefault(a => a.Id == id);
             if (assumption == null)
             {
-                return false;
+                return (false, $"Assumption with ID '{id}' not found.");
             }
 
             // Don't allow deletion if used as replacement for other assumptions
             var usedAsReplacement = _assumptions.Any(a => a.ReplacementAssumptionId == id);
             if (usedAsReplacement)
             {
-                return false;
+                return (false, "Cannot delete assumption as it is used as a replacement for other assumptions.");
             }
 
             _assumptions.Remove(assumption);
-            return true;
+            return (true, null);
         }
     }
 

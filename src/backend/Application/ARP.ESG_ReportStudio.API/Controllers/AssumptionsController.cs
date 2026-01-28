@@ -150,10 +150,10 @@ public sealed class AssumptionsController : ControllerBase
     [HttpDelete("{id}")]
     public ActionResult DeleteAssumption(string id)
     {
-        var deleted = _store.DeleteAssumption(id);
-        if (!deleted)
+        var (isValid, errorMessage) = _store.DeleteAssumption(id);
+        if (!isValid)
         {
-            return NotFound(new { error = $"Assumption with ID '{id}' not found or is used as replacement for other assumptions." });
+            return NotFound(new { error = errorMessage });
         }
 
         return NoContent();

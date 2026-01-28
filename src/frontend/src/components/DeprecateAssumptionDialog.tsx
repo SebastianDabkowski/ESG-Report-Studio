@@ -16,8 +16,10 @@ const deprecateSchema = z.object({
   replacementAssumptionId: z.string().optional(),
   justification: z.string().optional()
 }).refine((data) => {
-  // Either replacement or justification is required
-  return !!data.replacementAssumptionId || (!!data.justification && data.justification.trim().length > 0)
+  // Either replacement (non-empty) or justification (non-empty) is required
+  const hasReplacement = !!data.replacementAssumptionId && data.replacementAssumptionId.trim().length > 0
+  const hasJustification = !!data.justification && data.justification.trim().length > 0
+  return hasReplacement || hasJustification
 }, {
   message: "Either a replacement assumption or justification is required",
   path: ['justification']
@@ -59,7 +61,11 @@ export function DeprecateAssumptionDialog({ assumption, availableAssumptions, on
 
     try {
       const payload: DeprecateAssumptionPayload = useReplacement
-        ? { replacementAssumptionId: data.replacementAssumptionId }
+        ? { 
+            replacementAssumptionId: data.replacementAssumptionId && data.replacementAssumptionId.trim() 
+              ? data.replacementAssumptionId 
+              : undefined
+          }
         : { justification: data.justification }
 
       await deprecateAssumption(assumption.id, payload)

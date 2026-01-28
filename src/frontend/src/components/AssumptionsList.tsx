@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -31,7 +31,7 @@ export function AssumptionsList({ sectionId }: AssumptionsListProps) {
   const [editingAssumption, setEditingAssumption] = useState<Assumption | undefined>()
   const [deprecatingAssumption, setDeprecatingAssumption] = useState<Assumption | undefined>()
 
-  const loadAssumptions = async () => {
+  const loadAssumptions = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
@@ -43,11 +43,11 @@ export function AssumptionsList({ sectionId }: AssumptionsListProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [sectionId])
 
   useEffect(() => {
     loadAssumptions()
-  }, [sectionId])
+  }, [loadAssumptions])
 
   const handleCreateNew = () => {
     setEditingAssumption(undefined)
