@@ -15,6 +15,7 @@ public sealed class InMemoryReportStore
     private readonly List<Gap> _gaps = new();
     private readonly List<User> _users = new();
     private readonly List<ValidationRule> _validationRules = new();
+    private readonly List<AuditLogEntry> _auditLog = new();
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -976,6 +977,42 @@ public sealed class InMemoryReportStore
                 return (false, ruleErrorMessage, null);
             }
 
+            // Capture changes for audit log
+            var changes = new List<FieldChange>();
+            
+            if (dataPoint.Type != request.Type)
+                changes.Add(new FieldChange { Field = "Type", OldValue = dataPoint.Type, NewValue = request.Type });
+            
+            if (dataPoint.Classification != request.Classification)
+                changes.Add(new FieldChange { Field = "Classification", OldValue = dataPoint.Classification ?? "", NewValue = request.Classification ?? "" });
+            
+            if (dataPoint.Title != request.Title)
+                changes.Add(new FieldChange { Field = "Title", OldValue = dataPoint.Title, NewValue = request.Title });
+            
+            if (dataPoint.Content != request.Content)
+                changes.Add(new FieldChange { Field = "Content", OldValue = dataPoint.Content, NewValue = request.Content });
+            
+            if (dataPoint.Value != request.Value)
+                changes.Add(new FieldChange { Field = "Value", OldValue = dataPoint.Value ?? "", NewValue = request.Value ?? "" });
+            
+            if (dataPoint.Unit != request.Unit)
+                changes.Add(new FieldChange { Field = "Unit", OldValue = dataPoint.Unit ?? "", NewValue = request.Unit ?? "" });
+            
+            if (dataPoint.OwnerId != request.OwnerId)
+                changes.Add(new FieldChange { Field = "OwnerId", OldValue = dataPoint.OwnerId, NewValue = request.OwnerId });
+            
+            if (dataPoint.Source != request.Source)
+                changes.Add(new FieldChange { Field = "Source", OldValue = dataPoint.Source, NewValue = request.Source });
+            
+            if (dataPoint.InformationType != request.InformationType)
+                changes.Add(new FieldChange { Field = "InformationType", OldValue = dataPoint.InformationType, NewValue = request.InformationType });
+            
+            if (dataPoint.Assumptions != request.Assumptions)
+                changes.Add(new FieldChange { Field = "Assumptions", OldValue = dataPoint.Assumptions ?? "", NewValue = request.Assumptions ?? "" });
+            
+            if (dataPoint.CompletenessStatus != completenessStatus)
+                changes.Add(new FieldChange { Field = "CompletenessStatus", OldValue = dataPoint.CompletenessStatus, NewValue = completenessStatus });
+
             // Only update the actual data point if validation passes
             dataPoint.Type = request.Type;
             dataPoint.Classification = request.Classification;
@@ -990,6 +1027,16 @@ public sealed class InMemoryReportStore
             dataPoint.Assumptions = request.Assumptions;
             dataPoint.CompletenessStatus = completenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Create audit log entry if there are changes
+            if (changes.Any())
+            {
+                var userId = request.UpdatedBy ?? "unknown";
+                var user = _users.FirstOrDefault(u => u.Id == userId);
+                var userName = user?.Name ?? "Unknown User";
+                
+                CreateAuditLogEntry(userId, userName, "update", "DataPoint", dataPoint.Id, changes, request.ChangeNote);
+            }
 
             return (true, null, dataPoint);
         }
@@ -1473,6 +1520,60 @@ public sealed class InMemoryReportStore
         }
 
         return (true, null);
+    }
+
+    // Audit Log Management
+    private void CreateAuditLogEntry(string userId, string userName, string action, string entityType, string entityId, List<FieldChange> changes, string? changeNote = null)
+    {
+        var entry = new AuditLogEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow.ToString("O"),
+            UserId = userId,
+            UserName = userName,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            ChangeNote = changeNote,
+            Changes = changes
+        };
+        
+        _auditLog.Add(entry);
+    }
+
+    public IReadOnlyList<AuditLogEntry> GetAuditLog(string? entityType = null, string? entityId = null, string? userId = null, string? startDate = null, string? endDate = null)
+    {
+        lock (_lock)
+        {
+            var query = _auditLog.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(entityType))
+            {
+                query = query.Where(e => e.EntityType.Equals(entityType, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(entityId))
+            {
+                query = query.Where(e => e.EntityId == entityId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                query = query.Where(e => e.UserId == userId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(startDate) && DateTime.TryParse(startDate, out var start))
+            {
+                query = query.Where(e => DateTime.Parse(e.Timestamp) >= start);
+            }
+
+            if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
+            {
+                query = query.Where(e => DateTime.Parse(e.Timestamp) <= end);
+            }
+
+            return query.OrderByDescending(e => e.Timestamp).ToList();
+        }
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);

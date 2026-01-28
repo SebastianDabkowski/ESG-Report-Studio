@@ -225,6 +225,8 @@ export interface UpdateDataPointPayload {
   informationType: string
   assumptions?: string
   completenessStatus: string
+  changeNote?: string
+  updatedBy?: string
 }
 
 export async function createDataPoint(payload: CreateDataPointPayload): Promise<any> {
@@ -245,4 +247,27 @@ export async function deleteDataPoint(id: string): Promise<void> {
   await requestJson<void>(`data-points/${id}`, {
     method: 'DELETE'
   })
+}
+
+// Audit Log API methods
+export interface AuditLogFilters {
+  entityType?: string
+  entityId?: string
+  userId?: string
+  startDate?: string
+  endDate?: string
+}
+
+export async function getAuditLog(filters?: AuditLogFilters): Promise<any[]> {
+  const params = new URLSearchParams()
+  if (filters?.entityType) params.append('entityType', filters.entityType)
+  if (filters?.entityId) params.append('entityId', filters.entityId)
+  if (filters?.userId) params.append('userId', filters.userId)
+  if (filters?.startDate) params.append('startDate', filters.startDate)
+  if (filters?.endDate) params.append('endDate', filters.endDate)
+  
+  const queryString = params.toString()
+  const path = queryString ? `audit-log?${queryString}` : 'audit-log'
+  
+  return requestJson<any[]>(path)
 }

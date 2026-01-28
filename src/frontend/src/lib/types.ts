@@ -125,7 +125,8 @@ export interface AuditLogEntry {
   action: string
   entityType: string
   entityId: string
-  changes?: {
+  changeNote?: string
+  changes: {
     field: string
     oldValue: string
     newValue: string
