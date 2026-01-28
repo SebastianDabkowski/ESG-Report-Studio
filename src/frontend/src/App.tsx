@@ -7,6 +7,7 @@ import OrganizationView from '@/components/OrganizationView'
 import OrganizationalStructureView from '@/components/OrganizationalStructureView'
 import PeriodsView from '@/components/PeriodsView'
 import SectionsView from '@/components/SectionsView'
+import DataCollectionWorkspace from '@/components/DataCollectionWorkspace'
 import EvidenceView from '@/components/EvidenceView'
 import AuditTrailView from '@/components/AuditTrailView'
 import { useKV } from '@github/spark/hooks'
@@ -62,6 +63,7 @@ function App() {
             <TabsTrigger value="organization">Organization</TabsTrigger>
             <TabsTrigger value="structure">Structure</TabsTrigger>
             <TabsTrigger value="periods">Periods</TabsTrigger>
+            <TabsTrigger value="data-collection">Data Collection</TabsTrigger>
             <TabsTrigger value="sections">Sections</TabsTrigger>
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
             <TabsTrigger value="audit">Audit Trail</TabsTrigger>
@@ -85,6 +87,10 @@ function App() {
 
           <TabsContent value="periods" className="space-y-6">
             <PeriodsView currentUser={currentUser} />
+          </TabsContent>
+
+          <TabsContent value="data-collection" className="space-y-6">
+            <DataCollectionWorkspace currentUser={currentUser} />
           </TabsContent>
 
           <TabsContent value="sections" className="space-y-6">
