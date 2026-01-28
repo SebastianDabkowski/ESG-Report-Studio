@@ -150,7 +150,6 @@ export interface SectionSummary extends ReportSection {
   ownerName: string
   progressStatus: ProgressStatus
 }
-}
 
 export interface OrganizationalUnit {
   id: string
