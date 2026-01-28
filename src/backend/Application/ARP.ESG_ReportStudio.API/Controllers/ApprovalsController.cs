@@ -7,6 +7,15 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for managing report approval workflows.
 /// </summary>
+/// <remarks>
+/// SECURITY NOTE: In production, this controller should have:
+/// - [Authorize] attribute at controller level for authenticated access
+/// - Role-based authorization checks to ensure:
+///   * Only report owners or admins can create approval requests
+///   * Only assigned approvers can submit decisions for their approval records
+///   * Users can only view approval requests they're involved in (as requester or approver)
+/// - Additional authorization checks in each method to validate user permissions
+/// </remarks>
 [ApiController]
 [Route("api/approvals")]
 public sealed class ApprovalsController : ControllerBase
@@ -131,6 +140,12 @@ public sealed class ApprovalsController : ControllerBase
     /// <summary>
     /// Gets all approval requests, optionally filtered by period or approver.
     /// </summary>
+    /// <remarks>
+    /// SECURITY NOTE: In production, add authorization to ensure users can only view:
+    /// - Approval requests they created (as requester)
+    /// - Approval requests where they are an approver
+    /// - All approval requests if user has admin/auditor role
+    /// </remarks>
     [HttpGet("requests")]
     public ActionResult<List<ApprovalRequest>> GetApprovalRequests(
         [FromQuery] string? periodId = null,

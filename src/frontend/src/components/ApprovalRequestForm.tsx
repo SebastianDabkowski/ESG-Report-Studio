@@ -65,8 +65,10 @@ export function ApprovalRequestForm({
     setIsSubmitting(true);
     try {
       await onSubmit(request);
+      // Success - parent component will handle navigation/UI update
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit approval request');
+    } finally {
       setIsSubmitting(false);
     }
   };

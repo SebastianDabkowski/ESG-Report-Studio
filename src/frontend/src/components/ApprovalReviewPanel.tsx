@@ -58,8 +58,10 @@ export function ApprovalReviewPanel({
 
     try {
       await onSubmitDecision(myApproval.id, decision, comment || undefined);
+      // Success - parent component will handle UI update
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit decision');
+    } finally {
       setIsSubmitting(false);
     }
   };
@@ -198,7 +200,7 @@ export function ApprovalReviewPanel({
         {myApproval && myApproval.status !== 'pending' && (
           <div className="bg-muted rounded-md p-4">
             <p className="text-sm font-medium">
-              You have {myApproval.status} this request
+              You {myApproval.status === 'approved' ? 'approved' : 'rejected'} this request
             </p>
             {myApproval.decidedAt && (
               <p className="text-sm text-muted-foreground mt-1">
