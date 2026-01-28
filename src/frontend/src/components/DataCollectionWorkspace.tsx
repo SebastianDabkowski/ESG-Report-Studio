@@ -9,6 +9,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useKV } from '@github/spark/hooks'
 import DataPointForm from '@/components/DataPointForm'
+import DataPointEvidenceManager from '@/components/DataPointEvidenceManager'
+import EvidenceUploadForm from '@/components/EvidenceUploadForm'
 import { 
   Leaf, 
   Users, 
@@ -20,7 +22,8 @@ import {
   Clock,
   User,
   FileText,
-  Plus
+  Plus,
+  UploadSimple
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor } from '@/lib/helpers'
@@ -34,11 +37,12 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [sections] = useKV<SectionSummary[]>('section-summaries', [])
   const [dataPoints, setDataPoints] = useKV<DataPoint[]>('data-points', [])
   const [gaps] = useKV<Gap[]>('gaps', [])
-  const [evidence] = useKV<Evidence[]>('evidence', [])
+  const [evidence, setEvidence] = useKV<Evidence[]>('evidence', [])
   
   const [selectedDataItem, setSelectedDataItem] = useState<DataPoint | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const [isFormOpen, setIsFormOpen] = useState(false)
+  const [isEvidenceUploadOpen, setIsEvidenceUploadOpen] = useState(false)
   const [editingDataPoint, setEditingDataPoint] = useState<DataPoint | null>(null)
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
@@ -120,6 +124,84 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     setSelectedSectionId(null)
   }
 
+  const handleUploadEvidence = (sectionId: string) => {
+    setSelectedSectionId(sectionId)
+    setIsEvidenceUploadOpen(true)
+  }
+
+  const handleEvidenceSubmit = async (formData: { title: string; description?: string; sourceUrl?: string; file?: File }) => {
+    if (!selectedSectionId) return
+
+    const newEvidence: Evidence = {
+      id: crypto.randomUUID(),
+      sectionId: selectedSectionId,
+      title: formData.title,
+      description: formData.description,
+      fileName: formData.file?.name,
+      fileUrl: formData.file ? `/api/evidence/files/${crypto.randomUUID()}/${formData.file.name}` : undefined,
+      sourceUrl: formData.sourceUrl,
+      uploadedBy: currentUser.id,
+      uploadedAt: new Date().toISOString(),
+      linkedDataPoints: []
+    }
+
+    setEvidence([...(evidence || []), newEvidence])
+    setIsEvidenceUploadOpen(false)
+    setSelectedSectionId(null)
+  }
+
+  const handleLinkEvidence = async (evidenceId: string) => {
+    if (!selectedDataItem) return
+
+    // Update evidence to add data point link
+    const updatedEvidence = evidence?.map(e =>
+      e.id === evidenceId
+        ? { ...e, linkedDataPoints: [...e.linkedDataPoints, selectedDataItem.id] }
+        : e
+    ) || []
+    setEvidence(updatedEvidence)
+
+    // Update data point to add evidence link
+    const updatedDataPoints = dataPoints?.map(dp =>
+      dp.id === selectedDataItem.id
+        ? { ...dp, evidenceIds: [...dp.evidenceIds, evidenceId] }
+        : dp
+    ) || []
+    setDataPoints(updatedDataPoints)
+
+    // Update selected data item to reflect the change
+    setSelectedDataItem({
+      ...selectedDataItem,
+      evidenceIds: [...selectedDataItem.evidenceIds, evidenceId]
+    })
+  }
+
+  const handleUnlinkEvidence = async (evidenceId: string) => {
+    if (!selectedDataItem) return
+
+    // Update evidence to remove data point link
+    const updatedEvidence = evidence?.map(e =>
+      e.id === evidenceId
+        ? { ...e, linkedDataPoints: e.linkedDataPoints.filter(id => id !== selectedDataItem.id) }
+        : e
+    ) || []
+    setEvidence(updatedEvidence)
+
+    // Update data point to remove evidence link
+    const updatedDataPoints = dataPoints?.map(dp =>
+      dp.id === selectedDataItem.id
+        ? { ...dp, evidenceIds: dp.evidenceIds.filter(id => id !== evidenceId) }
+        : dp
+    ) || []
+    setDataPoints(updatedDataPoints)
+
+    // Update selected data item to reflect the change
+    setSelectedDataItem({
+      ...selectedDataItem,
+      evidenceIds: selectedDataItem.evidenceIds.filter(id => id !== evidenceId)
+    })
+  }
+
   const getDataItemEvidence = (dataPointId: string): Evidence[] => {
     const dataPoint = dataPoints?.find(dp => dp.id === dataPointId)
     if (!dataPoint || !dataPoint.evidenceIds.length) return []
@@ -197,15 +279,26 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                   <div className="space-y-2">
                     <div className="flex items-center justify-between mb-2">
                       <h4 className="text-sm font-semibold text-muted-foreground">Data Items</h4>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleCreateDataPoint(section.id)}
-                        className="flex items-center gap-1"
-                      >
-                        <Plus size={16} />
-                        Add Data Point
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleUploadEvidence(section.id)}
+                          className="flex items-center gap-1"
+                        >
+                          <UploadSimple size={16} />
+                          Upload Evidence
+                        </Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          onClick={() => handleCreateDataPoint(section.id)}
+                          className="flex items-center gap-1"
+                        >
+                          <Plus size={16} />
+                          Add Data Point
+                        </Button>
+                      </div>
                     </div>
                     {sectionDataPoints.map(dp => (
                       <div 
@@ -249,7 +342,16 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                         No data items have been added to this section yet.
                       </AlertDescription>
                     </Alert>
-                    <div className="mt-2">
+                    <div className="mt-2 flex gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleUploadEvidence(section.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <UploadSimple size={16} />
+                        Upload Evidence
+                      </Button>
                       <Button 
                         variant="outline" 
                         size="sm" 
@@ -451,30 +553,14 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                   </div>
                 </div>
 
-                {selectedDataItem.evidenceIds.length > 0 && (
-                  <>
-                    <Separator />
-                    <div>
-                      <h4 className="text-sm font-semibold mb-2 flex items-center gap-1">
-                        <PaperclipHorizontal size={16} />
-                        Evidence ({selectedDataItem.evidenceIds.length})
-                      </h4>
-                      <div className="space-y-2">
-                        {getDataItemEvidence(selectedDataItem.id).map(ev => (
-                          <div key={ev.id} className="border border-border rounded-lg p-3">
-                            <p className="font-medium text-sm">{ev.title}</p>
-                            {ev.description && (
-                              <p className="text-xs text-muted-foreground mt-1">{ev.description}</p>
-                            )}
-                            {ev.fileName && (
-                              <p className="text-xs font-mono mt-1 text-blue-600">{ev.fileName}</p>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </>
-                )}
+                <Separator />
+
+                <DataPointEvidenceManager
+                  dataPoint={selectedDataItem}
+                  allEvidence={evidence || []}
+                  onLinkEvidence={handleLinkEvidence}
+                  onUnlinkEvidence={handleUnlinkEvidence}
+                />
 
                 <Separator />
 
@@ -535,6 +621,29 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               dataPoint={editingDataPoint || undefined}
               onSubmit={handleFormSubmit}
               onCancel={handleFormCancel}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Evidence Upload Dialog */}
+      <Dialog open={isEvidenceUploadOpen} onOpenChange={setIsEvidenceUploadOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Upload Evidence</DialogTitle>
+            <DialogDescription>
+              Upload a file or provide a reference URL to support your ESG disclosures.
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSectionId && (
+            <EvidenceUploadForm
+              sectionId={selectedSectionId}
+              uploadedBy={currentUser.id}
+              onSubmit={handleEvidenceSubmit}
+              onCancel={() => {
+                setIsEvidenceUploadOpen(false)
+                setSelectedSectionId(null)
+              }}
             />
           )}
         </DialogContent>
