@@ -735,3 +735,67 @@ export async function deleteRemediationAction(id: string): Promise<void> {
     method: 'DELETE'
   })
 }
+
+// ==================== Completion Exceptions ====================
+
+export async function getCompletionExceptions(
+  sectionId?: string,
+  status?: string
+): Promise<import('@/lib/types').CompletionException[]> {
+  const params = new URLSearchParams()
+  if (sectionId) params.append('sectionId', sectionId)
+  if (status) params.append('status', status)
+  
+  const url = params.toString() 
+    ? `completion-exceptions?${params.toString()}` 
+    : 'completion-exceptions'
+  
+  return requestJson<import('@/lib/types').CompletionException[]>(url)
+}
+
+export async function getCompletionException(id: string): Promise<import('@/lib/types').CompletionException> {
+  return requestJson<import('@/lib/types').CompletionException>(`completion-exceptions/${id}`)
+}
+
+export async function createCompletionException(
+  payload: import('@/lib/types').CreateCompletionExceptionRequest
+): Promise<import('@/lib/types').CompletionException> {
+  return requestJson<import('@/lib/types').CompletionException>('completion-exceptions', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function approveCompletionException(
+  id: string,
+  payload: import('@/lib/types').ApproveCompletionExceptionRequest
+): Promise<import('@/lib/types').CompletionException> {
+  return requestJson<import('@/lib/types').CompletionException>(`completion-exceptions/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function rejectCompletionException(
+  id: string,
+  payload: import('@/lib/types').RejectCompletionExceptionRequest
+): Promise<import('@/lib/types').CompletionException> {
+  return requestJson<import('@/lib/types').CompletionException>(`completion-exceptions/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteCompletionException(id: string): Promise<void> {
+  await requestJson<void>(`completion-exceptions/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getCompletenessValidationReport(
+  periodId: string
+): Promise<import('@/lib/types').CompletenessValidationReport> {
+  return requestJson<import('@/lib/types').CompletenessValidationReport>(
+    `completion-exceptions/validation-report?periodId=${periodId}`
+  )
+}

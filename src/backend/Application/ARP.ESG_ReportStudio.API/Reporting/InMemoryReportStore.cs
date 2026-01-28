@@ -25,6 +25,7 @@ public sealed class InMemoryReportStore
     private readonly List<EscalationHistory> _escalationHistory = new();
     private readonly List<RemediationPlan> _remediationPlans = new();
     private readonly List<RemediationAction> _remediationActions = new();
+    private readonly List<CompletionException> _completionExceptions = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -60,6 +61,15 @@ public sealed class InMemoryReportStore
         "missing", 
         "estimated", 
         "provided" 
+    };
+
+    // Valid exception types for completeness validation
+    private static readonly string[] ValidExceptionTypes = new[]
+    {
+        "missing-data",
+        "estimated-data",
+        "simplified-scope",
+        "other"
     };
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
@@ -4772,6 +4782,374 @@ public sealed class InMemoryReportStore
 
             _remediationActions.Remove(action);
             return true;
+        }
+    }
+
+    // ==================== Completion Exceptions ====================
+
+    /// <summary>
+    /// Gets all completion exceptions, optionally filtered by section or status.
+    /// </summary>
+    public IReadOnlyList<CompletionException> GetCompletionExceptions(string? sectionId = null, string? status = null)
+    {
+        lock (_lock)
+        {
+            var exceptions = _completionExceptions.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                exceptions = exceptions.Where(e => e.SectionId == sectionId);
+            }
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                exceptions = exceptions.Where(e => e.Status.Equals(status, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return exceptions.ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets a specific completion exception by ID.
+    /// </summary>
+    public CompletionException? GetCompletionException(string id)
+    {
+        lock (_lock)
+        {
+            return _completionExceptions.FirstOrDefault(e => e.Id == id);
+        }
+    }
+
+    /// <summary>
+    /// Creates a new completion exception.
+    /// </summary>
+    public (bool isValid, string? errorMessage, CompletionException? exception) CreateCompletionException(CreateCompletionExceptionRequest request)
+    {
+        lock (_lock)
+        {
+            // Validation
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ExceptionType))
+            {
+                return (false, "Exception type is required.", null);
+            }
+
+            // Normalize exception type to lowercase for consistent storage
+            var normalizedExceptionType = request.ExceptionType.ToLowerInvariant();
+
+            if (!ValidExceptionTypes.Contains(normalizedExceptionType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"Exception type must be one of: {string.Join(", ", ValidExceptionTypes)}.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Justification))
+            {
+                return (false, "Justification is required.", null);
+            }
+
+            if (request.Justification.Length < 10)
+            {
+                return (false, "Justification must be at least 10 characters.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SectionId))
+            {
+                return (false, "Section ID is required.", null);
+            }
+
+            var section = _sections.FirstOrDefault(s => s.Id == request.SectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{request.SectionId}' not found.", null);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.DataPointId))
+            {
+                var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == request.DataPointId);
+                if (dataPoint == null)
+                {
+                    return (false, $"Data point with ID '{request.DataPointId}' not found.", null);
+                }
+
+                if (dataPoint.SectionId != request.SectionId)
+                {
+                    return (false, "Data point does not belong to the specified section.", null);
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(request.RequestedBy))
+            {
+                return (false, "Requested by user is required.", null);
+            }
+
+            var exception = new CompletionException
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = request.SectionId,
+                DataPointId = request.DataPointId,
+                Title = request.Title,
+                ExceptionType = normalizedExceptionType,
+                Justification = request.Justification,
+                Status = "pending",
+                RequestedBy = request.RequestedBy,
+                RequestedAt = DateTime.UtcNow.ToString("o"),
+                ExpiresAt = request.ExpiresAt
+            };
+
+            _completionExceptions.Add(exception);
+
+            var user = _users.FirstOrDefault(u => u.Id == request.RequestedBy);
+            CreateAuditLogEntry(
+                request.RequestedBy,
+                user?.Name ?? request.RequestedBy,
+                "created",
+                "CompletionException",
+                exception.Id,
+                new List<FieldChange>(),
+                $"Created completion exception: {exception.Title} for section {section.Title}");
+
+            return (true, null, exception);
+        }
+    }
+
+    /// <summary>
+    /// Approves a completion exception.
+    /// </summary>
+    public (bool isValid, string? errorMessage, CompletionException? exception) ApproveCompletionException(string id, ApproveCompletionExceptionRequest request)
+    {
+        lock (_lock)
+        {
+            var exception = _completionExceptions.FirstOrDefault(e => e.Id == id);
+            if (exception == null)
+            {
+                return (false, $"Completion exception with ID '{id}' not found.", null);
+            }
+
+            if (exception.Status != "pending")
+            {
+                return (false, $"Cannot approve exception with status '{exception.Status}'. Only pending exceptions can be approved.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ApprovedBy))
+            {
+                return (false, "Approver user ID is required.", null);
+            }
+
+            exception.Status = "accepted";
+            exception.ApprovedBy = request.ApprovedBy;
+            exception.ApprovedAt = DateTime.UtcNow.ToString("o");
+            exception.ReviewComments = request.ReviewComments;
+
+            var user = _users.FirstOrDefault(u => u.Id == request.ApprovedBy);
+            CreateAuditLogEntry(
+                request.ApprovedBy,
+                user?.Name ?? request.ApprovedBy,
+                "approved",
+                "CompletionException",
+                exception.Id,
+                new List<FieldChange>(),
+                $"Approved completion exception: {exception.Title}");
+
+            return (true, null, exception);
+        }
+    }
+
+    /// <summary>
+    /// Rejects a completion exception.
+    /// </summary>
+    public (bool isValid, string? errorMessage, CompletionException? exception) RejectCompletionException(string id, RejectCompletionExceptionRequest request)
+    {
+        lock (_lock)
+        {
+            var exception = _completionExceptions.FirstOrDefault(e => e.Id == id);
+            if (exception == null)
+            {
+                return (false, $"Completion exception with ID '{id}' not found.", null);
+            }
+
+            if (exception.Status != "pending")
+            {
+                return (false, $"Cannot reject exception with status '{exception.Status}'. Only pending exceptions can be rejected.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.RejectedBy))
+            {
+                return (false, "Rejector user ID is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.ReviewComments))
+            {
+                return (false, "Review comments are required when rejecting an exception.", null);
+            }
+
+            exception.Status = "rejected";
+            exception.RejectedBy = request.RejectedBy;
+            exception.RejectedAt = DateTime.UtcNow.ToString("o");
+            exception.ReviewComments = request.ReviewComments;
+
+            var user = _users.FirstOrDefault(u => u.Id == request.RejectedBy);
+            CreateAuditLogEntry(
+                request.RejectedBy,
+                user?.Name ?? request.RejectedBy,
+                "rejected",
+                "CompletionException",
+                exception.Id,
+                new List<FieldChange>(),
+                $"Rejected completion exception: {exception.Title}");
+
+            return (true, null, exception);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a completion exception.
+    /// Only pending exceptions should be deleted to preserve audit trail.
+    /// </summary>
+    public bool DeleteCompletionException(string id)
+    {
+        lock (_lock)
+        {
+            var exception = _completionExceptions.FirstOrDefault(e => e.Id == id);
+            if (exception == null)
+            {
+                return false;
+            }
+
+            // Only allow deletion of pending exceptions to preserve audit trail
+            if (exception.Status != "pending")
+            {
+                return false;
+            }
+
+            _completionExceptions.Remove(exception);
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Generates a completeness validation report with exceptions breakdown.
+    /// </summary>
+    public CompletenessValidationReport GetCompletenessValidationReport(string periodId)
+    {
+        lock (_lock)
+        {
+            var sections = _sections.Where(s => s.PeriodId == periodId).ToList();
+            var sectionDetails = new List<SectionCompletenessDetail>();
+
+            foreach (var section in sections)
+            {
+                var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+                var exceptions = _completionExceptions
+                    .Where(e => e.SectionId == section.Id && e.Status == "accepted")
+                    .ToList();
+
+                var missingItems = dataPoints
+                    .Where(dp => dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase))
+                    .Select(dp => new DataPointSummary
+                    {
+                        Id = dp.Id,
+                        Title = dp.Title,
+                        CompletenessStatus = dp.CompletenessStatus,
+                        MissingReason = dp.MissingReason
+                    })
+                    .ToList();
+
+                var estimatedItems = dataPoints
+                    .Where(dp => dp.InformationType.Equals("estimate", StringComparison.OrdinalIgnoreCase))
+                    .Select(dp => new DataPointSummary
+                    {
+                        Id = dp.Id,
+                        Title = dp.Title,
+                        CompletenessStatus = dp.CompletenessStatus,
+                        EstimateType = dp.EstimateType,
+                        ConfidenceLevel = dp.ConfidenceLevel
+                    })
+                    .ToList();
+
+                var simplifications = _simplifications
+                    .Where(s => s.SectionId == section.Id && s.Status == "active")
+                    .ToList();
+
+                var simplifiedItems = new List<DataPointSummary>();
+                if (simplifications.Any())
+                {
+                    // Create a summary item for each simplification
+                    foreach (var simplification in simplifications)
+                    {
+                        simplifiedItems.Add(new DataPointSummary
+                        {
+                            Id = simplification.Id,
+                            Title = simplification.Title,
+                            CompletenessStatus = "simplified"
+                        });
+                    }
+                }
+
+                sectionDetails.Add(new SectionCompletenessDetail
+                {
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    MissingItems = missingItems,
+                    EstimatedItems = estimatedItems,
+                    SimplifiedItems = simplifiedItems,
+                    AcceptedExceptions = exceptions
+                });
+            }
+
+            // Calculate summary statistics
+            var allDataPoints = _dataPoints.Where(dp => 
+                sections.Any(s => s.Id == dp.SectionId)).ToList();
+            
+            var totalDataPoints = allDataPoints.Count;
+            var missingCount = allDataPoints.Count(dp => 
+                dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase));
+            var estimatedCount = allDataPoints.Count(dp => 
+                dp.InformationType.Equals("estimate", StringComparison.OrdinalIgnoreCase));
+            var simplifiedCount = _simplifications.Count(s => 
+                sections.Any(sec => sec.Id == s.SectionId) && s.Status == "active");
+            
+            var acceptedExceptionsCount = _completionExceptions.Count(e => 
+                sections.Any(s => s.Id == e.SectionId) && e.Status == "accepted");
+            var pendingExceptionsCount = _completionExceptions.Count(e => 
+                sections.Any(s => s.Id == e.SectionId) && e.Status == "pending");
+
+            var completeCount = allDataPoints.Count(dp => 
+                dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase) ||
+                dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase));
+
+            var completenessPercentage = totalDataPoints > 0 
+                ? (double)completeCount / totalDataPoints * 100 
+                : 0;
+
+            // Calculate completeness with accepted exceptions excluded
+            var totalRelevantWithExceptions = totalDataPoints - acceptedExceptionsCount;
+            var completenessWithExceptionsPercentage = totalRelevantWithExceptions > 0 
+                ? (double)completeCount / totalRelevantWithExceptions * 100 
+                : 0;
+
+            return new CompletenessValidationReport
+            {
+                PeriodId = periodId,
+                Sections = sectionDetails,
+                Summary = new CompletenessValidationSummary
+                {
+                    TotalSections = sections.Count,
+                    TotalDataPoints = totalDataPoints,
+                    MissingCount = missingCount,
+                    EstimatedCount = estimatedCount,
+                    SimplifiedCount = simplifiedCount,
+                    AcceptedExceptionsCount = acceptedExceptionsCount,
+                    PendingExceptionsCount = pendingExceptionsCount,
+                    CompletenessPercentage = Math.Round(completenessPercentage, 2),
+                    CompletenessWithExceptionsPercentage = Math.Round(completenessWithExceptionsPercentage, 2)
+                }
+            };
         }
     }
 }

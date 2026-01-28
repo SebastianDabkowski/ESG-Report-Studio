@@ -1757,3 +1757,188 @@ public sealed class CompleteRemediationActionRequest
     public string? CompletionNotes { get; set; }
     public List<string> EvidenceIds { get; set; } = new();
 }
+
+/// <summary>
+/// Represents an approved exception for report completeness validation.
+/// Allows controlled gaps with explicit justification and approval.
+/// </summary>
+public sealed class CompletionException
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reference to data point that has the exception (if applicable).
+    /// </summary>
+    public string? DataPointId { get; set; }
+    
+    /// <summary>
+    /// Title of the exception.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of exception: "missing-data", "estimated-data", "simplified-scope", "other".
+    /// </summary>
+    public string ExceptionType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed justification for why this exception is necessary.
+    /// </summary>
+    public string Justification { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Status: "pending", "accepted", "rejected".
+    /// </summary>
+    public string Status { get; set; } = "pending";
+    
+    /// <summary>
+    /// User who requested the exception.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the exception was requested.
+    /// </summary>
+    public string RequestedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who approved the exception (required when status is "accepted").
+    /// </summary>
+    public string? ApprovedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the exception was approved.
+    /// </summary>
+    public string? ApprovedAt { get; set; }
+    
+    /// <summary>
+    /// User who rejected the exception (if applicable).
+    /// </summary>
+    public string? RejectedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the exception was rejected.
+    /// </summary>
+    public string? RejectedAt { get; set; }
+    
+    /// <summary>
+    /// Optional comments from approver/rejector.
+    /// </summary>
+    public string? ReviewComments { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 date when this exception expires (optional).
+    /// After this date, the exception should be re-evaluated.
+    /// </summary>
+    public string? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Request to create a new completion exception.
+/// </summary>
+public sealed class CreateCompletionExceptionRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string? DataPointId { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string ExceptionType { get; set; } = string.Empty;
+    public string Justification { get; set; } = string.Empty;
+    public string RequestedBy { get; set; } = string.Empty;
+    public string? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Request to approve a completion exception.
+/// </summary>
+public sealed class ApproveCompletionExceptionRequest
+{
+    public string ApprovedBy { get; set; } = string.Empty;
+    public string? ReviewComments { get; set; }
+}
+
+/// <summary>
+/// Request to reject a completion exception.
+/// </summary>
+public sealed class RejectCompletionExceptionRequest
+{
+    public string RejectedBy { get; set; } = string.Empty;
+    public string ReviewComments { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Completeness validation report with exceptions breakdown.
+/// </summary>
+public sealed class CompletenessValidationReport
+{
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Sections broken down by completeness issues.
+    /// </summary>
+    public List<SectionCompletenessDetail> Sections { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics for the report.
+    /// </summary>
+    public CompletenessValidationSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Completeness details for a specific section.
+/// </summary>
+public sealed class SectionCompletenessDetail
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string SectionTitle { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of missing data points in this section.
+    /// </summary>
+    public List<DataPointSummary> MissingItems { get; set; } = new();
+    
+    /// <summary>
+    /// List of estimated data points in this section.
+    /// </summary>
+    public List<DataPointSummary> EstimatedItems { get; set; } = new();
+    
+    /// <summary>
+    /// List of simplified/boundary limited data points in this section.
+    /// </summary>
+    public List<DataPointSummary> SimplifiedItems { get; set; } = new();
+    
+    /// <summary>
+    /// Accepted exceptions for this section.
+    /// </summary>
+    public List<CompletionException> AcceptedExceptions { get; set; } = new();
+}
+
+/// <summary>
+/// Summary of a data point for validation reporting.
+/// </summary>
+public sealed class DataPointSummary
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+    public string? MissingReason { get; set; }
+    public string? EstimateType { get; set; }
+    public string? ConfidenceLevel { get; set; }
+}
+
+/// <summary>
+/// Summary statistics for completeness validation.
+/// </summary>
+public sealed class CompletenessValidationSummary
+{
+    public int TotalSections { get; set; }
+    public int TotalDataPoints { get; set; }
+    public int MissingCount { get; set; }
+    public int EstimatedCount { get; set; }
+    public int SimplifiedCount { get; set; }
+    public int AcceptedExceptionsCount { get; set; }
+    public int PendingExceptionsCount { get; set; }
+    public double CompletenessPercentage { get; set; }
+    public double CompletenessWithExceptionsPercentage { get; set; }
+}
