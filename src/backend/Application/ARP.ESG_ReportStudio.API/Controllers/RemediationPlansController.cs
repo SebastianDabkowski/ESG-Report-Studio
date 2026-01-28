@@ -117,7 +117,7 @@ public sealed class RemediationPlansController : ControllerBase
     [HttpDelete("{id}")]
     public ActionResult DeleteRemediationPlan(string id)
     {
-        var deleted = _store.DeleteRemediationPlan(id);
+        var deleted = _store.DeleteRemediationPlan(id, User?.Identity?.Name ?? "anonymous");
         if (!deleted)
         {
             return NotFound(new { error = $"Remediation plan with ID '{id}' not found." });
@@ -233,7 +233,7 @@ public sealed class RemediationPlansController : ControllerBase
     [HttpDelete("actions/{id}")]
     public ActionResult DeleteRemediationAction(string id)
     {
-        var deleted = _store.DeleteRemediationAction(id);
+        var deleted = _store.DeleteRemediationAction(id, User?.Identity?.Name ?? "anonymous");
         if (!deleted)
         {
             return NotFound(new { error = $"Remediation action with ID '{id}' not found." });

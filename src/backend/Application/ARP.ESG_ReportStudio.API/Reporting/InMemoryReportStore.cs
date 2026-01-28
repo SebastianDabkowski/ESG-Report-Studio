@@ -3778,17 +3778,15 @@ public sealed class InMemoryReportStore
             _simplifications.Add(simplification);
 
             // Log to audit trail
-            _auditLog.Add(new AuditLogEntry
+            var changes = new List<FieldChange>
             {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow.ToString("O"),
-                UserId = createdBy,
-                UserName = createdBy,
-                Action = "create",
-                EntityType = "simplification",
-                EntityId = simplification.Id,
-                ChangeNote = $"Created simplification '{title}' for section {sectionId}"
-            });
+                new FieldChange { Field = "Title", OldValue = "", NewValue = title },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = description },
+                new FieldChange { Field = "ImpactLevel", OldValue = "", NewValue = impactLevel.ToLowerInvariant() }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == createdBy);
+            var userName = user?.Name ?? createdBy;
+            CreateAuditLogEntry(createdBy, userName, "create", "Simplification", simplification.Id, changes, $"Created simplification '{title}'");
 
             return (true, null, simplification);
         }
@@ -3903,18 +3901,9 @@ public sealed class InMemoryReportStore
             // Log to audit trail if there were changes
             if (changes.Count > 0)
             {
-                _auditLog.Add(new AuditLogEntry
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    Timestamp = DateTime.UtcNow.ToString("O"),
-                    UserId = updatedBy,
-                    UserName = updatedBy,
-                    Action = "update",
-                    EntityType = "simplification",
-                    EntityId = simplification.Id,
-                    ChangeNote = $"Updated simplification '{title}'",
-                    Changes = changes
-                });
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                var userName = user?.Name ?? updatedBy;
+                CreateAuditLogEntry(updatedBy, userName, "update", "Simplification", simplification.Id, changes, $"Updated simplification '{title}'");
             }
 
             return (true, null, simplification);
@@ -3937,17 +3926,13 @@ public sealed class InMemoryReportStore
             simplification.UpdatedAt = DateTime.UtcNow.ToString("O");
 
             // Log to audit trail
-            _auditLog.Add(new AuditLogEntry
+            var changes = new List<FieldChange>
             {
-                Id = Guid.NewGuid().ToString(),
-                Timestamp = DateTime.UtcNow.ToString("O"),
-                UserId = deletedBy,
-                UserName = deletedBy,
-                Action = "delete",
-                EntityType = "simplification",
-                EntityId = simplification.Id,
-                ChangeNote = $"Removed simplification '{simplification.Title}'"
-            });
+                new FieldChange { Field = "Title", OldValue = simplification.Title, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "Simplification", simplification.Id, changes, $"Removed simplification '{simplification.Title}'");
 
             return (true, null);
         }
@@ -5433,6 +5418,18 @@ public sealed class InMemoryReportStore
             };
 
             _remediationPlans.Add(newPlan);
+
+            // Log to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = "", NewValue = title },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = description },
+                new FieldChange { Field = "Priority", OldValue = "", NewValue = priority }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == createdBy);
+            var userName = user?.Name ?? createdBy;
+            CreateAuditLogEntry(createdBy, userName, "create", "RemediationPlan", newPlan.Id, changes, $"Created remediation plan '{title}'");
+
             return (true, null, newPlan);
         }
     }
@@ -5477,6 +5474,11 @@ public sealed class InMemoryReportStore
                 return (false, "Owner is required.", null);
             }
 
+            if (string.IsNullOrWhiteSpace(updatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+
             // Validate priority
             var validPriorities = new[] { "low", "medium", "high" };
             if (!validPriorities.Contains(priority))
@@ -5491,6 +5493,35 @@ public sealed class InMemoryReportStore
                 return (false, "Status must be 'planned', 'in-progress', 'completed', or 'cancelled'.", null);
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (plan.Title != title)
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = plan.Title, NewValue = title });
+            }
+
+            if (plan.Description != description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = plan.Description, NewValue = description });
+            }
+
+            if (plan.TargetPeriod != targetPeriod)
+            {
+                changes.Add(new FieldChange { Field = "TargetPeriod", OldValue = plan.TargetPeriod, NewValue = targetPeriod });
+            }
+
+            if (plan.Priority != priority)
+            {
+                changes.Add(new FieldChange { Field = "Priority", OldValue = plan.Priority, NewValue = priority });
+            }
+
+            if (plan.Status != status)
+            {
+                changes.Add(new FieldChange { Field = "Status", OldValue = plan.Status, NewValue = status });
+            }
+
+            // Update fields
             plan.Title = title;
             plan.Description = description;
             plan.TargetPeriod = targetPeriod;
@@ -5500,6 +5531,14 @@ public sealed class InMemoryReportStore
             plan.Status = status;
             plan.UpdatedBy = updatedBy;
             plan.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                var userName = user?.Name ?? updatedBy;
+                CreateAuditLogEntry(updatedBy, userName, "update", "RemediationPlan", plan.Id, changes, $"Updated remediation plan '{title}'");
+            }
 
             return (true, null, plan);
         }
@@ -5537,7 +5576,7 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public bool DeleteRemediationPlan(string id)
+    public bool DeleteRemediationPlan(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -5546,6 +5585,15 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            // Log deletion to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = plan.Title, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "RemediationPlan", plan.Id, changes, $"Deleted remediation plan '{plan.Title}'");
 
             // Delete associated actions first
             var actions = _remediationActions.Where(a => a.RemediationPlanId == id).ToList();
@@ -5647,6 +5695,18 @@ public sealed class InMemoryReportStore
             };
 
             _remediationActions.Add(newAction);
+
+            // Log to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = "", NewValue = title },
+                new FieldChange { Field = "Description", OldValue = "", NewValue = description },
+                new FieldChange { Field = "DueDate", OldValue = "", NewValue = dueDate }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == createdBy);
+            var userName = user?.Name ?? createdBy;
+            CreateAuditLogEntry(createdBy, userName, "create", "RemediationAction", newAction.Id, changes, $"Created remediation action '{title}'");
+
             return (true, null, newAction);
         }
     }
@@ -5690,6 +5750,11 @@ public sealed class InMemoryReportStore
                 return (false, "Due date is required.", null);
             }
 
+            if (string.IsNullOrWhiteSpace(updatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+
             // Validate due date format
             if (!DateTime.TryParse(dueDate, out _))
             {
@@ -5703,6 +5768,30 @@ public sealed class InMemoryReportStore
                 return (false, "Status must be 'pending', 'in-progress', 'completed', or 'cancelled'.", null);
             }
 
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+
+            if (action.Title != title)
+            {
+                changes.Add(new FieldChange { Field = "Title", OldValue = action.Title, NewValue = title });
+            }
+
+            if (action.Description != description)
+            {
+                changes.Add(new FieldChange { Field = "Description", OldValue = action.Description, NewValue = description });
+            }
+
+            if (action.DueDate != dueDate)
+            {
+                changes.Add(new FieldChange { Field = "DueDate", OldValue = action.DueDate, NewValue = dueDate });
+            }
+
+            if (action.Status != status)
+            {
+                changes.Add(new FieldChange { Field = "Status", OldValue = action.Status, NewValue = status });
+            }
+
+            // Update fields
             action.Title = title;
             action.Description = description;
             action.OwnerId = ownerId;
@@ -5711,6 +5800,14 @@ public sealed class InMemoryReportStore
             action.Status = status;
             action.UpdatedBy = updatedBy;
             action.UpdatedAt = DateTime.UtcNow.ToString("O");
+
+            // Log to audit trail if there were changes
+            if (changes.Count > 0)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == updatedBy);
+                var userName = user?.Name ?? updatedBy;
+                CreateAuditLogEntry(updatedBy, userName, "update", "RemediationAction", action.Id, changes, $"Updated remediation action '{title}'");
+            }
 
             return (true, null, action);
         }
@@ -5762,7 +5859,7 @@ public sealed class InMemoryReportStore
         }
     }
 
-    public bool DeleteRemediationAction(string id)
+    public bool DeleteRemediationAction(string id, string deletedBy)
     {
         lock (_lock)
         {
@@ -5771,6 +5868,15 @@ public sealed class InMemoryReportStore
             {
                 return false;
             }
+
+            // Log deletion to audit trail
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Title", OldValue = action.Title, NewValue = "" }
+            };
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? deletedBy;
+            CreateAuditLogEntry(deletedBy, userName, "delete", "RemediationAction", action.Id, changes, $"Deleted remediation action '{action.Title}'");
 
             _remediationActions.Remove(action);
             return true;
