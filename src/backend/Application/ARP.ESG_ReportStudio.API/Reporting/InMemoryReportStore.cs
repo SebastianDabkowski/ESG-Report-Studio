@@ -7595,6 +7595,24 @@ public sealed class InMemoryReportStore
                 // Check for estimates without required fields
                 if (dataPoint.InformationType == "estimate")
                 {
+                    if (string.IsNullOrWhiteSpace(dataPoint.EstimateType))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "missing-required-field",
+                            Severity = "error",
+                            Message = $"Estimate data point '{dataPoint.Title}' is missing EstimateType.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "EstimateType",
+                            ExpectedValue = "point, range, proxy-based, or extrapolated",
+                            ActualValue = "null or empty",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+
                     if (string.IsNullOrWhiteSpace(dataPoint.EstimateMethod))
                     {
                         issues.Add(new ValidationIssue

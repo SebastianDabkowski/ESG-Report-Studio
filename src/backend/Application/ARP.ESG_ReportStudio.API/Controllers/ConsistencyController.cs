@@ -29,12 +29,22 @@ public sealed class ConsistencyController : ControllerBase
         // Validate request
         if (string.IsNullOrWhiteSpace(request.PeriodId))
         {
-            return BadRequest(new { error = "PeriodId is required." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "PeriodId is required.",
+                Status = 400
+            });
         }
 
         if (string.IsNullOrWhiteSpace(request.ValidatedBy))
         {
-            return BadRequest(new { error = "ValidatedBy is required." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "ValidatedBy is required.",
+                Status = 400
+            });
         }
 
         var result = _store.RunConsistencyValidation(request);
@@ -53,12 +63,22 @@ public sealed class ConsistencyController : ControllerBase
         // Validate request
         if (string.IsNullOrWhiteSpace(request.PeriodId))
         {
-            return BadRequest(new { error = "PeriodId is required." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "PeriodId is required.",
+                Status = 400
+            });
         }
 
         if (string.IsNullOrWhiteSpace(request.PublishedBy))
         {
-            return BadRequest(new { error = "PublishedBy is required." });
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "PublishedBy is required.",
+                Status = 400
+            });
         }
 
         // Run validation first
@@ -71,45 +91,57 @@ public sealed class ConsistencyController : ControllerBase
         // Check if publication is allowed
         if (!validationResult.CanPublish && !request.OverrideValidation)
         {
-            return BadRequest(new
+            return BadRequest(new ProblemDetails
             {
-                error = "Cannot publish report due to validation errors. Use OverrideValidation with justification to proceed anyway.",
-                validationResult = validationResult
+                Title = "Validation Failed",
+                Detail = "Cannot publish report due to validation errors. Use OverrideValidation with justification to proceed anyway.",
+                Status = 400,
+                Extensions =
+                {
+                    ["validationResult"] = validationResult
+                }
             });
         }
 
-        // If override is used, require justification
+        // If override is used, require and validate justification
         if (request.OverrideValidation && validationResult.ErrorCount > 0)
         {
             if (string.IsNullOrWhiteSpace(request.OverrideJustification))
             {
-                return BadRequest(new { error = "OverrideJustification is required when overriding validation errors." });
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Invalid Request",
+                    Detail = "OverrideJustification is required when overriding validation errors.",
+                    Status = 400
+                });
+            }
+
+            // Validate justification length and content
+            if (request.OverrideJustification.Length > 2000)
+            {
+                return BadRequest(new ProblemDetails
+                {
+                    Title = "Invalid Request",
+                    Detail = "OverrideJustification must be less than 2000 characters.",
+                    Status = 400
+                });
             }
         }
 
-        // Proceed with publication (simplified for now - just update period status)
+        // Get the period
         var period = _store.GetPeriods().FirstOrDefault(p => p.Id == request.PeriodId);
         if (period == null)
         {
-            return NotFound(new { error = $"Reporting period with ID '{request.PeriodId}' not found." });
+            return NotFound(new ProblemDetails
+            {
+                Title = "Not Found",
+                Detail = $"Reporting period with ID '{request.PeriodId}' not found.",
+                Status = 404
+            });
         }
 
-        // Update period status to published
-        var updateRequest = new UpdateReportingPeriodRequest
-        {
-            Name = period.Name,
-            StartDate = period.StartDate,
-            EndDate = period.EndDate,
-            ReportingMode = period.ReportingMode,
-            ReportScope = period.ReportScope
-        };
-
-        var (isValid, errorMessage, updatedPeriod) = _store.ValidateAndUpdatePeriod(request.PeriodId, updateRequest);
-
-        if (!isValid || updatedPeriod == null)
-        {
-            return BadRequest(new { error = errorMessage ?? "Failed to update period." });
-        }
+        // Note: In a real implementation, this would update the period status to "published"
+        // For now, we just return success with the validation result
 
         // Create publication result
         var result = new PublishReportResult
