@@ -28,6 +28,7 @@ const dataPointSchema = z.object({
   estimateType: z.enum(['point', 'range', 'proxy-based', 'extrapolated']).optional(),
   estimateMethod: z.string().optional(),
   confidenceLevel: z.enum(['low', 'medium', 'high']).optional(),
+  estimateInputs: z.string().optional(),
   completenessStatus: z.enum(['missing', 'incomplete', 'complete', 'not applicable'], {
     errorMap: () => ({ message: 'Completeness status is required' })
   }).optional(),
@@ -136,6 +137,7 @@ export default function DataPointForm({
       estimateType: dataPoint.estimateType,
       estimateMethod: dataPoint.estimateMethod || '',
       confidenceLevel: dataPoint.confidenceLevel,
+      estimateInputs: dataPoint.estimateInputs || '',
       completenessStatus: dataPoint.completenessStatus,
       changeNote: '',
       isBlocked: dataPoint.isBlocked || false,
@@ -151,6 +153,7 @@ export default function DataPointForm({
       estimateType: undefined,
       estimateMethod: '',
       confidenceLevel: undefined,
+      estimateInputs: '',
       completenessStatus: undefined,
       changeNote: '',
       isBlocked: false,
@@ -409,6 +412,20 @@ export default function DataPointForm({
                 )}
                 <p className="text-xs text-muted-foreground">
                   Indicate your confidence in the accuracy of this estimate
+                </p>
+              </div>
+
+              {/* Estimate Inputs */}
+              <div className="space-y-2">
+                <Label htmlFor="estimateInputs">Input Data and Sources</Label>
+                <Textarea
+                  id="estimateInputs"
+                  {...register('estimateInputs')}
+                  placeholder="Document the input data used in this estimate (e.g., 'Energy consumption: 1000 kWh from meter reading, Emission factor: 0.5 kg CO2/kWh from national grid data')..."
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  List the inputs and their sources for provenance tracking
                 </p>
               </div>
             </>

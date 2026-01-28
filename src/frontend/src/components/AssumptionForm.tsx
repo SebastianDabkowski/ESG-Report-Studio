@@ -18,7 +18,8 @@ const assumptionSchema = z.object({
   validityStartDate: z.string().min(1, 'Validity start date is required'),
   validityEndDate: z.string().min(1, 'Validity end date is required'),
   methodology: z.string().min(1, 'Methodology is required'),
-  limitations: z.string().optional()
+  limitations: z.string().optional(),
+  rationale: z.string().optional()
 }).refine((data) => {
   // Validate that end date is after start date
   if (data.validityStartDate && data.validityEndDate) {
@@ -62,7 +63,8 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
       validityStartDate: assumption.validityStartDate,
       validityEndDate: assumption.validityEndDate,
       methodology: assumption.methodology,
-      limitations: assumption.limitations || ''
+      limitations: assumption.limitations || '',
+      rationale: assumption.rationale || ''
     } : {
       title: '',
       description: '',
@@ -70,7 +72,8 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
       validityStartDate: '',
       validityEndDate: '',
       methodology: '',
-      limitations: ''
+      limitations: '',
+      rationale: ''
     }
   })
 
@@ -89,6 +92,8 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
           validityEndDate: data.validityEndDate,
           methodology: data.methodology,
           limitations: data.limitations && data.limitations.trim() ? data.limitations : '',
+          rationale: data.rationale && data.rationale.trim() ? data.rationale : undefined,
+          sources: assumption.sources || [],
           linkedDataPointIds: assumption.linkedDataPointIds
         }
         const updated = await updateAssumption(assumption.id, payload)
@@ -104,6 +109,8 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
           validityEndDate: data.validityEndDate,
           methodology: data.methodology,
           limitations: data.limitations && data.limitations.trim() ? data.limitations : '',
+          rationale: data.rationale && data.rationale.trim() ? data.rationale : undefined,
+          sources: [],
           linkedDataPointIds
         }
         const created = await createAssumption(payload)
@@ -216,6 +223,19 @@ export function AssumptionForm({ sectionId, assumption, linkedDataPointIds = [],
           />
           <p className="text-sm text-slate-500 mt-1">
             Document any known limitations, uncertainties, or constraints
+          </p>
+        </div>
+
+        <div>
+          <Label htmlFor="rationale">Rationale</Label>
+          <Textarea
+            id="rationale"
+            {...register('rationale')}
+            placeholder="Explain why this assumption was made and how it was derived"
+            rows={3}
+          />
+          <p className="text-sm text-slate-500 mt-1">
+            Provide detailed reasoning for auditors to understand the provenance of this assumption
           </p>
         </div>
       </div>
