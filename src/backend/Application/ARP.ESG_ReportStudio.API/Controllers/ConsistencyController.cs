@@ -140,8 +140,19 @@ public sealed class ConsistencyController : ControllerBase
             });
         }
 
-        // Note: In a real implementation, this would update the period status to "published"
-        // For now, we just return success with the validation result
+        // Log publish action to audit trail
+        var publishAction = request.OverrideValidation && validationResult.ErrorCount > 0 ? "publish-override" : "publish";
+        var changeNote = request.OverrideValidation && validationResult.ErrorCount > 0
+            ? $"Published with validation override. Justification: {request.OverrideJustification}"
+            : "Published report successfully";
+        
+        _store.LogPublishAction(
+            request.PeriodId,
+            request.PublishedBy,
+            publishAction,
+            changeNote,
+            validationResult.ErrorCount,
+            validationResult.WarningCount);
 
         // Create publication result
         var result = new PublishReportResult

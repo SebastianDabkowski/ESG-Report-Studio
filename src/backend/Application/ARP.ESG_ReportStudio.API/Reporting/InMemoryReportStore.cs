@@ -4551,6 +4551,23 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public void LogPublishAction(string periodId, string publishedBy, string action, string changeNote, int errorCount, int warningCount)
+    {
+        lock (_lock)
+        {
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Status", OldValue = "draft", NewValue = "published" },
+                new FieldChange { Field = "ErrorCount", OldValue = errorCount.ToString(), NewValue = "0" },
+                new FieldChange { Field = "WarningCount", OldValue = warningCount.ToString(), NewValue = warningCount.ToString() }
+            };
+            
+            var user = _users.FirstOrDefault(u => u.Id == publishedBy);
+            var userName = user?.Name ?? publishedBy;
+            CreateAuditLogEntry(publishedBy, userName, action, "ReportingPeriod", periodId, changes, changeNote);
+        }
+    }
+
     // Reminder management methods
     public ReminderConfiguration? GetReminderConfiguration(string periodId)
     {
