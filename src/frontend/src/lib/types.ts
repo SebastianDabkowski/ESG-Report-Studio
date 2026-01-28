@@ -10,6 +10,10 @@ export type CompletenessLevel = 'empty' | 'partial' | 'complete'
 
 export type CompletenessStatus = 'missing' | 'incomplete' | 'complete' | 'not applicable'
 
+export type EstimateType = 'point' | 'range' | 'proxy-based' | 'extrapolated'
+
+export type ConfidenceLevel = 'low' | 'medium' | 'high'
+
 export type Classification = 'fact' | 'declaration' | 'plan'
 
 export type ContentType = 'narrative' | 'metric' | 'evidence' | 'assumption' | 'gap'
@@ -96,6 +100,9 @@ export interface DataPoint {
   missingReasonCategory?: string
   missingFlaggedBy?: string
   missingFlaggedAt?: string
+  estimateType?: EstimateType
+  estimateMethod?: string
+  confidenceLevel?: ConfidenceLevel
 }
 
 export interface DataPointNote {

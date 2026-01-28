@@ -401,6 +401,21 @@ public sealed class DataPoint
     public string? MissingReasonCategory { get; set; }
     public string? MissingFlaggedBy { get; set; }
     public string? MissingFlaggedAt { get; set; }
+    
+    /// <summary>
+    /// Type of estimate when InformationType is 'estimate'. Options: point, range, proxy-based, extrapolated.
+    /// </summary>
+    public string? EstimateType { get; set; }
+    
+    /// <summary>
+    /// Description of the methodology used to derive the estimate.
+    /// </summary>
+    public string? EstimateMethod { get; set; }
+    
+    /// <summary>
+    /// Confidence level in the accuracy of the estimate. Options: low, medium, high.
+    /// </summary>
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>
@@ -429,6 +444,18 @@ public sealed class CreateDataPointRequest
     public bool IsMissing { get; set; }
     public string? MissingReason { get; set; }
     public string? MissingReasonCategory { get; set; }
+    /// <summary>
+    /// Type of estimate when InformationType is 'estimate'. Required for estimates. Options: point, range, proxy-based, extrapolated.
+    /// </summary>
+    public string? EstimateType { get; set; }
+    /// <summary>
+    /// Description of the methodology used to derive the estimate. Required for estimates.
+    /// </summary>
+    public string? EstimateMethod { get; set; }
+    /// <summary>
+    /// Confidence level in the accuracy of the estimate. Required for estimates. Options: low, medium, high.
+    /// </summary>
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>
@@ -458,6 +485,18 @@ public sealed class UpdateDataPointRequest
     public bool IsMissing { get; set; }
     public string? MissingReason { get; set; }
     public string? MissingReasonCategory { get; set; }
+    /// <summary>
+    /// Type of estimate when InformationType is 'estimate'. Required for estimates. Options: point, range, proxy-based, extrapolated.
+    /// </summary>
+    public string? EstimateType { get; set; }
+    /// <summary>
+    /// Description of the methodology used to derive the estimate. Required for estimates.
+    /// </summary>
+    public string? EstimateMethod { get; set; }
+    /// <summary>
+    /// Confidence level in the accuracy of the estimate. Required for estimates. Options: low, medium, high.
+    /// </summary>
+    public string? ConfidenceLevel { get; set; }
 }
 
 /// <summary>

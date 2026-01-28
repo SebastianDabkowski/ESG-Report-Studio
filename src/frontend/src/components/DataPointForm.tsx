@@ -25,6 +25,9 @@ const dataPointSchema = z.object({
     errorMap: () => ({ message: 'Information type is required' })
   }),
   assumptions: z.string().optional(),
+  estimateType: z.enum(['point', 'range', 'proxy-based', 'extrapolated']).optional(),
+  estimateMethod: z.string().optional(),
+  confidenceLevel: z.enum(['low', 'medium', 'high']).optional(),
   completenessStatus: z.enum(['missing', 'incomplete', 'complete', 'not applicable'], {
     errorMap: () => ({ message: 'Completeness status is required' })
   }).optional(),
@@ -41,6 +44,33 @@ const dataPointSchema = z.object({
 }, {
   message: "Assumptions field is required when Information Type is 'estimate'",
   path: ['assumptions']
+}).refine((data) => {
+  // Require estimate type when informationType is 'estimate'
+  if (data.informationType === 'estimate' && !data.estimateType) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Estimate type is required for estimates",
+  path: ['estimateType']
+}).refine((data) => {
+  // Require estimate method when informationType is 'estimate'
+  if (data.informationType === 'estimate' && (!data.estimateMethod || !data.estimateMethod.trim())) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Estimate method is required for estimates",
+  path: ['estimateMethod']
+}).refine((data) => {
+  // Require confidence level when informationType is 'estimate'
+  if (data.informationType === 'estimate' && !data.confidenceLevel) {
+    return false;
+  }
+  return true;
+}, {
+  message: "Confidence level is required for estimates",
+  path: ['confidenceLevel']
 }).refine((data) => {
   // Require owner when completeness status is 'complete'
   if (data.completenessStatus === 'complete' && (!data.ownerId || !data.ownerId.trim())) {
@@ -103,6 +133,9 @@ export default function DataPointForm({
       source: dataPoint.source,
       informationType: dataPoint.informationType,
       assumptions: dataPoint.assumptions || '',
+      estimateType: dataPoint.estimateType,
+      estimateMethod: dataPoint.estimateMethod || '',
+      confidenceLevel: dataPoint.confidenceLevel,
       completenessStatus: dataPoint.completenessStatus,
       changeNote: '',
       isBlocked: dataPoint.isBlocked || false,
@@ -115,6 +148,9 @@ export default function DataPointForm({
       source: '',
       informationType: 'fact',
       assumptions: '',
+      estimateType: undefined,
+      estimateMethod: '',
+      confidenceLevel: undefined,
       completenessStatus: undefined,
       changeNote: '',
       isBlocked: false,
@@ -134,6 +170,15 @@ export default function DataPointForm({
       setContributorIds(prev => prev.filter(id => id !== selectedOwnerId))
     }
   }, [selectedOwnerId, contributorIds])
+  
+  // Clear estimate fields when informationType changes away from 'estimate'
+  useEffect(() => {
+    if (selectedInformationType !== 'estimate') {
+      setValue('estimateType', undefined)
+      setValue('estimateMethod', '')
+      setValue('confidenceLevel', undefined)
+    }
+  }, [selectedInformationType, setValue])
   
   const handleToggleContributor = (userId: string) => {
     setContributorIds(prev =>
@@ -282,22 +327,91 @@ export default function DataPointForm({
 
           {/* Assumptions (required for estimate) */}
           {selectedInformationType === 'estimate' && (
-            <div className="space-y-2">
-              <Label htmlFor="assumptions">Assumptions *</Label>
-              <Textarea
-                id="assumptions"
-                {...register('assumptions')}
-                placeholder="Describe the assumptions used for this estimate..."
-                rows={3}
-                className={errors.assumptions ? 'border-red-500' : ''}
-              />
-              {errors.assumptions && (
-                <p className="text-sm text-red-600">{errors.assumptions.message}</p>
-              )}
-              <p className="text-xs text-muted-foreground">
-                Required for estimates to ensure transparency and auditability
-              </p>
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="assumptions">Assumptions *</Label>
+                <Textarea
+                  id="assumptions"
+                  {...register('assumptions')}
+                  placeholder="Describe the assumptions used for this estimate..."
+                  rows={3}
+                  className={errors.assumptions ? 'border-red-500' : ''}
+                />
+                {errors.assumptions && (
+                  <p className="text-sm text-red-600">{errors.assumptions.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Required for estimates to ensure transparency and auditability
+                </p>
+              </div>
+
+              {/* Estimate Type */}
+              <div className="space-y-2">
+                <Label htmlFor="estimateType">Estimate Type *</Label>
+                <Select
+                  value={watch('estimateType') || ''}
+                  onValueChange={(value) => setValue('estimateType', value as 'point' | 'range' | 'proxy-based' | 'extrapolated')}
+                >
+                  <SelectTrigger id="estimateType" className={errors.estimateType ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select estimate type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="point">Point Estimate</SelectItem>
+                    <SelectItem value="range">Range Estimate</SelectItem>
+                    <SelectItem value="proxy-based">Proxy-Based</SelectItem>
+                    <SelectItem value="extrapolated">Extrapolated</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.estimateType && (
+                  <p className="text-sm text-red-600">{errors.estimateType.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Select the type of estimation method used
+                </p>
+              </div>
+
+              {/* Estimate Method */}
+              <div className="space-y-2">
+                <Label htmlFor="estimateMethod">Estimation Method *</Label>
+                <Textarea
+                  id="estimateMethod"
+                  {...register('estimateMethod')}
+                  placeholder="Describe the methodology used to derive this estimate..."
+                  rows={3}
+                  className={errors.estimateMethod ? 'border-red-500' : ''}
+                />
+                {errors.estimateMethod && (
+                  <p className="text-sm text-red-600">{errors.estimateMethod.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Explain how the estimate was calculated or derived
+                </p>
+              </div>
+
+              {/* Confidence Level */}
+              <div className="space-y-2">
+                <Label htmlFor="confidenceLevel">Confidence Level *</Label>
+                <Select
+                  value={watch('confidenceLevel') || ''}
+                  onValueChange={(value) => setValue('confidenceLevel', value as 'low' | 'medium' | 'high')}
+                >
+                  <SelectTrigger id="confidenceLevel" className={errors.confidenceLevel ? 'border-red-500' : ''}>
+                    <SelectValue placeholder="Select confidence level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+                {errors.confidenceLevel && (
+                  <p className="text-sm text-red-600">{errors.confidenceLevel.message}</p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  Indicate your confidence in the accuracy of this estimate
+                </p>
+              </div>
+            </>
           )}
 
           {/* Completeness Status */}

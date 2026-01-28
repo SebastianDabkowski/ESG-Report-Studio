@@ -34,6 +34,23 @@ public sealed class InMemoryReportStore
         "other"
     };
 
+    // Valid estimate types
+    private static readonly string[] ValidEstimateTypes = new[] 
+    { 
+        "point", 
+        "range", 
+        "proxy-based", 
+        "extrapolated" 
+    };
+
+    // Valid confidence levels
+    private static readonly string[] ValidConfidenceLevels = new[] 
+    { 
+        "low", 
+        "medium", 
+        "high" 
+    };
+
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
         new("Energy & Emissions", "environmental", "Energy consumption, GHG emissions, carbon footprint"),
@@ -1160,6 +1177,18 @@ public sealed class InMemoryReportStore
             {
                 return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
             }
+            
+            // Validate estimate fields when informationType is 'estimate'
+            var (isEstimateValid, estimateError) = ValidateEstimateFields(
+                request.InformationType, 
+                request.EstimateType, 
+                request.EstimateMethod, 
+                request.ConfidenceLevel);
+            
+            if (!isEstimateValid)
+            {
+                return (false, estimateError, null);
+            }
 
             // Auto-calculate completeness status if not provided or if it's empty
             string completenessStatus = request.CompletenessStatus;
@@ -1264,7 +1293,10 @@ public sealed class InMemoryReportStore
                 MissingReason = request.MissingReason,
                 MissingReasonCategory = request.MissingReasonCategory?.ToLowerInvariant(),
                 MissingFlaggedBy = request.IsMissing ? "system" : null, // Will be set properly when flagged via API
-                MissingFlaggedAt = request.IsMissing ? now : null
+                MissingFlaggedAt = request.IsMissing ? now : null,
+                EstimateType = request.EstimateType?.ToLowerInvariant(),
+                EstimateMethod = request.EstimateMethod,
+                ConfidenceLevel = request.ConfidenceLevel?.ToLowerInvariant()
             };
 
             // Validate against validation rules
@@ -1377,6 +1409,18 @@ public sealed class InMemoryReportStore
                 && string.IsNullOrWhiteSpace(request.Assumptions))
             {
                 return (false, "Assumptions field is required when InformationType is 'estimate'.", null);
+            }
+            
+            // Validate estimate fields when informationType is 'estimate'
+            var (isEstimateValid2, estimateError2) = ValidateEstimateFields(
+                request.InformationType, 
+                request.EstimateType, 
+                request.EstimateMethod, 
+                request.ConfidenceLevel);
+            
+            if (!isEstimateValid2)
+            {
+                return (false, estimateError2, null);
             }
 
             // Auto-calculate completeness status if not provided or if it's empty
@@ -1596,6 +1640,27 @@ public sealed class InMemoryReportStore
                 changes.Add(new FieldChange { Field = "MissingReasonCategory", OldValue = dataPoint.MissingReasonCategory ?? "", NewValue = normalizedCategory ?? "" });
             }
             dataPoint.MissingReasonCategory = normalizedCategory;
+            
+            // Update estimate fields
+            var normalizedEstimateType = request.EstimateType?.ToLowerInvariant();
+            if (dataPoint.EstimateType != normalizedEstimateType)
+            {
+                changes.Add(new FieldChange { Field = "EstimateType", OldValue = dataPoint.EstimateType ?? "", NewValue = normalizedEstimateType ?? "" });
+            }
+            dataPoint.EstimateType = normalizedEstimateType;
+            
+            if (dataPoint.EstimateMethod != request.EstimateMethod)
+            {
+                changes.Add(new FieldChange { Field = "EstimateMethod", OldValue = dataPoint.EstimateMethod ?? "", NewValue = request.EstimateMethod ?? "" });
+            }
+            dataPoint.EstimateMethod = request.EstimateMethod;
+            
+            var normalizedConfidenceLevel = request.ConfidenceLevel?.ToLowerInvariant();
+            if (dataPoint.ConfidenceLevel != normalizedConfidenceLevel)
+            {
+                changes.Add(new FieldChange { Field = "ConfidenceLevel", OldValue = dataPoint.ConfidenceLevel ?? "", NewValue = normalizedConfidenceLevel ?? "" });
+            }
+            dataPoint.ConfidenceLevel = normalizedConfidenceLevel;
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -2348,6 +2413,44 @@ public sealed class InMemoryReportStore
             {
                 return (false, errorMessage);
             }
+        }
+
+        return (true, null);
+    }
+
+    private (bool IsValid, string? ErrorMessage) ValidateEstimateFields(string informationType, string? estimateType, string? estimateMethod, string? confidenceLevel)
+    {
+        if (!informationType.Equals("estimate", StringComparison.OrdinalIgnoreCase))
+        {
+            return (true, null);
+        }
+
+        // Validate estimate type
+        if (string.IsNullOrWhiteSpace(estimateType))
+        {
+            return (false, "EstimateType is required when InformationType is 'estimate'.");
+        }
+        
+        if (!ValidEstimateTypes.Contains(estimateType, StringComparer.OrdinalIgnoreCase))
+        {
+            return (false, $"EstimateType must be one of: {string.Join(", ", ValidEstimateTypes)}.");
+        }
+        
+        // Validate estimate method
+        if (string.IsNullOrWhiteSpace(estimateMethod))
+        {
+            return (false, "EstimateMethod is required when InformationType is 'estimate'.");
+        }
+        
+        // Validate confidence level
+        if (string.IsNullOrWhiteSpace(confidenceLevel))
+        {
+            return (false, "ConfidenceLevel is required when InformationType is 'estimate'.");
+        }
+        
+        if (!ValidConfidenceLevels.Contains(confidenceLevel, StringComparer.OrdinalIgnoreCase))
+        {
+            return (false, $"ConfidenceLevel must be one of: {string.Join(", ", ValidConfidenceLevels)}.");
         }
 
         return (true, null);

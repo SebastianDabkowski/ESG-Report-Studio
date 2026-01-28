@@ -346,6 +346,9 @@ namespace SD.ProjectName.Tests.Products
                 Source = "Updated Source",
                 InformationType = "estimate",
                 Assumptions = "These are test assumptions for the estimate",
+                EstimateType = "point",
+                EstimateMethod = "Test estimation method",
+                ConfidenceLevel = "medium",
                 CompletenessStatus = "complete"
             };
 
@@ -452,6 +455,9 @@ namespace SD.ProjectName.Tests.Products
                 Source = "Calculation Model",
                 InformationType = "estimate",
                 Assumptions = "Based on average employee commute distance and home energy usage patterns",
+                EstimateType = "extrapolated",
+                EstimateMethod = "Employee survey data extrapolated using industry benchmarks",
+                ConfidenceLevel = "medium",
                 CompletenessStatus = "complete"
             };
 
