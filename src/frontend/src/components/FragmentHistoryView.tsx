@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ClockCounterClockwise, ArrowsLeftRight, File, ChatCircle } from '@phosphor-icons/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getEntityTimeline, type EntityTimeline } from '@/lib/api'
 import { formatDateTime } from '@/lib/helpers'
 import VersionComparisonView from './VersionComparisonView'
@@ -26,11 +26,7 @@ export default function FragmentHistoryView({
   const [selectedVersions, setSelectedVersions] = useState<string[]>([])
   const [showComparison, setShowComparison] = useState(false)
 
-  useEffect(() => {
-    loadTimeline()
-  }, [entityType, entityId])
-
-  async function loadTimeline() {
+  const loadTimeline = useCallback(async () => {
     try {
       setLoading(true)
       const data = await getEntityTimeline(entityType, entityId)
@@ -41,7 +37,11 @@ export default function FragmentHistoryView({
     } finally {
       setLoading(false)
     }
-  }
+  }, [entityType, entityId])
+
+  useEffect(() => {
+    loadTimeline()
+  }, [loadTimeline])
 
   function handleVersionSelect(versionId: string) {
     setSelectedVersions(prev => {

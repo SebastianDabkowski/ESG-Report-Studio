@@ -2,7 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ArrowsLeftRight, ArrowLeft } from '@phosphor-icons/react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { compareVersions, type VersionComparison } from '@/lib/api'
 import { formatDateTime } from '@/lib/helpers'
 
@@ -25,11 +25,7 @@ export default function VersionComparisonView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    loadComparison()
-  }, [entityType, entityId, fromVersion, toVersion])
-
-  async function loadComparison() {
+  const loadComparison = useCallback(async () => {
     try {
       setLoading(true)
       const data = await compareVersions(entityType, entityId, fromVersion, toVersion)
@@ -40,7 +36,11 @@ export default function VersionComparisonView({
     } finally {
       setLoading(false)
     }
-  }
+  }, [entityType, entityId, fromVersion, toVersion])
+
+  useEffect(() => {
+    loadComparison()
+  }, [loadComparison])
 
   function getChangeTypeColor(changeType: string): string {
     switch (changeType) {

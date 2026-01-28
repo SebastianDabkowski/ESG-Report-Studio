@@ -200,6 +200,11 @@ public sealed class AuditLogController : ControllerBase
         var fromIndex = chronologicalEntries.FindIndex(e => e.Id == fromVersion);
         var toIndex = chronologicalEntries.FindIndex(e => e.Id == toVersion);
 
+        if (fromIndex == -1 || toIndex == -1)
+        {
+            return NotFound(new { error = "Version entries not found in chronological timeline." });
+        }
+
         if (fromIndex > toIndex)
         {
             return BadRequest(new { error = "fromVersion must be earlier than toVersion." });
