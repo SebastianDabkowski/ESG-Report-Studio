@@ -168,3 +168,108 @@ public sealed class UpdateSectionCatalogItemRequest
     /// </summary>
     public string Description { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Represents an ESG data point entry with metadata for auditability.
+/// </summary>
+public sealed class DataPoint
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string Type { get; set; } = "narrative";
+    public string? Classification { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string? Value { get; set; }
+    public string? Unit { get; set; }
+    public string OwnerId { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string InformationType { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string UpdatedAt { get; set; } = string.Empty;
+    public List<string> EvidenceIds { get; set; } = new();
+}
+
+/// <summary>
+/// Request to create a new data point.
+/// </summary>
+public sealed class CreateDataPointRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Type { get; set; } = "narrative";
+    public string? Classification { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string? Value { get; set; }
+    public string? Unit { get; set; }
+    public string OwnerId { get; set; } = string.Empty;
+    public string Source { get; set; } = string.Empty;
+    public string InformationType { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing data point.
+/// </summary>
+public sealed class UpdateDataPointRequest
+{
+    public string Type { get; set; } = "narrative";
+    public string? Classification { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string? Value { get; set; }
+    public string? Unit { get; set; }
+    public string Source { get; set; } = string.Empty;
+    public string InformationType { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents evidence supporting an ESG data point.
+/// </summary>
+public sealed class Evidence
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string? FileUrl { get; set; }
+    public string? FileName { get; set; }
+    public string? SourceUrl { get; set; }
+    public string UploadedBy { get; set; } = string.Empty;
+    public string UploadedAt { get; set; } = string.Empty;
+    public List<string> LinkedDataPoints { get; set; } = new();
+}
+
+/// <summary>
+/// Represents an assumption or estimation for an ESG data point.
+/// </summary>
+public sealed class Assumption
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string? DataPointId { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string Methodology { get; set; } = string.Empty;
+    public string Limitations { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents a data gap that needs to be addressed.
+/// </summary>
+public sealed class Gap
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Impact { get; set; } = "medium";
+    public string? ImprovementPlan { get; set; }
+    public string? TargetDate { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public bool Resolved { get; set; }
+}

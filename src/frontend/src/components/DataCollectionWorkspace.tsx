@@ -8,6 +8,7 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
 import { useKV } from '@github/spark/hooks'
+import DataPointForm from '@/components/DataPointForm'
 import { 
   Leaf, 
   Users, 
@@ -18,7 +19,8 @@ import {
   Info,
   Clock,
   User,
-  FileText
+  FileText,
+  Plus
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor } from '@/lib/helpers'
@@ -30,12 +32,15 @@ interface DataCollectionWorkspaceProps {
 export default function DataCollectionWorkspace({ currentUser }: DataCollectionWorkspaceProps) {
   const [periods] = useKV<ReportingPeriod[]>('reporting-periods', [])
   const [sections] = useKV<SectionSummary[]>('section-summaries', [])
-  const [dataPoints] = useKV<DataPoint[]>('data-points', [])
+  const [dataPoints, setDataPoints] = useKV<DataPoint[]>('data-points', [])
   const [gaps] = useKV<Gap[]>('gaps', [])
   const [evidence] = useKV<Evidence[]>('evidence', [])
   
   const [selectedDataItem, setSelectedDataItem] = useState<DataPoint | null>(null)
   const [isDetailOpen, setIsDetailOpen] = useState(false)
+  const [isFormOpen, setIsFormOpen] = useState(false)
+  const [editingDataPoint, setEditingDataPoint] = useState<DataPoint | null>(null)
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<'environmental' | 'social' | 'governance'>('environmental')
 
   const activePeriod = periods?.find(p => p.status === 'active')
@@ -64,6 +69,55 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const handleOpenDataItem = (dataPoint: DataPoint) => {
     setSelectedDataItem(dataPoint)
     setIsDetailOpen(true)
+  }
+
+  const handleCreateDataPoint = (sectionId: string) => {
+    setSelectedSectionId(sectionId)
+    setEditingDataPoint(null)
+    setIsFormOpen(true)
+  }
+
+  const handleEditDataPoint = (dataPoint: DataPoint) => {
+    setEditingDataPoint(dataPoint)
+    setSelectedSectionId(dataPoint.sectionId)
+    setIsFormOpen(true)
+    setIsDetailOpen(false)
+  }
+
+  const handleFormSubmit = async (formData: Omit<DataPoint, 'id' | 'sectionId' | 'ownerId' | 'createdAt' | 'updatedAt' | 'evidenceIds'>) => {
+    const now = new Date().toISOString()
+    
+    if (editingDataPoint) {
+      // Update existing data point
+      const updatedDataPoints = dataPoints?.map(dp => 
+        dp.id === editingDataPoint.id
+          ? { ...dp, ...formData, updatedAt: now }
+          : dp
+      ) || []
+      setDataPoints(updatedDataPoints)
+    } else {
+      // Create new data point
+      const newDataPoint: DataPoint = {
+        id: crypto.randomUUID(),
+        sectionId: selectedSectionId!,
+        ...formData,
+        ownerId: currentUser.id,
+        createdAt: now,
+        updatedAt: now,
+        evidenceIds: []
+      }
+      setDataPoints([...(dataPoints || []), newDataPoint])
+    }
+    
+    setIsFormOpen(false)
+    setEditingDataPoint(null)
+    setSelectedSectionId(null)
+  }
+
+  const handleFormCancel = () => {
+    setIsFormOpen(false)
+    setEditingDataPoint(null)
+    setSelectedSectionId(null)
   }
 
   const getDataItemEvidence = (dataPointId: string): Evidence[] => {
@@ -141,7 +195,18 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
 
                 {sectionDataPoints.length > 0 ? (
                   <div className="space-y-2">
-                    <h4 className="text-sm font-semibold text-muted-foreground mb-2">Data Items</h4>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-muted-foreground">Data Items</h4>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleCreateDataPoint(section.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Plus size={16} />
+                        Add Data Point
+                      </Button>
+                    </div>
                     {sectionDataPoints.map(dp => (
                       <div 
                         key={dp.id} 
@@ -177,12 +242,25 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                     ))}
                   </div>
                 ) : (
-                  <Alert>
-                    <Info size={16} />
-                    <AlertDescription>
-                      No data items have been added to this section yet.
-                    </AlertDescription>
-                  </Alert>
+                  <div>
+                    <Alert>
+                      <Info size={16} />
+                      <AlertDescription>
+                        No data items have been added to this section yet.
+                      </AlertDescription>
+                    </Alert>
+                    <div className="mt-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => handleCreateDataPoint(section.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Plus size={16} />
+                        Add First Data Point
+                      </Button>
+                    </div>
+                  </div>
                 )}
 
                 {sectionGaps.length > 0 && (
@@ -347,6 +425,18 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                       </div>
                     )}
                     <div className="flex justify-between">
+                      <span className="text-muted-foreground">Source:</span>
+                      <span className="font-medium">{selectedDataItem.source}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Information Type:</span>
+                      <span className="font-medium capitalize">{selectedDataItem.informationType}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Completeness:</span>
+                      <span className="font-medium capitalize">{selectedDataItem.completenessStatus}</span>
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-muted-foreground">Created:</span>
                       <span className="font-medium">
                         {new Date(selectedDataItem.createdAt).toLocaleDateString()}
@@ -413,12 +503,40 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDetailOpen(false)} autoFocus>
+                <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
                   Close
+                </Button>
+                <Button onClick={() => handleEditDataPoint(selectedDataItem)}>
+                  Edit Data Point
                 </Button>
               </DialogFooter>
             </>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Data Point Form Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingDataPoint ? 'Edit Data Point' : 'Create Data Point'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingDataPoint 
+                ? 'Update the data point with required metadata for auditability.' 
+                : 'Add a new data point with required metadata for auditability.'}
+            </DialogDescription>
+          </DialogHeader>
+          {selectedSectionId && (
+            <DataPointForm
+              sectionId={selectedSectionId}
+              ownerId={currentUser.id}
+              dataPoint={editingDataPoint || undefined}
+              onSubmit={handleFormSubmit}
+              onCancel={handleFormCancel}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
