@@ -394,6 +394,13 @@ public sealed class DataPoint
     public bool IsBlocked { get; set; }
     public string? BlockerReason { get; set; }
     public string? BlockerDueDate { get; set; }
+    
+    // Missing data tracking
+    public bool IsMissing { get; set; }
+    public string? MissingReason { get; set; }
+    public string? MissingReasonCategory { get; set; }
+    public string? MissingFlaggedBy { get; set; }
+    public string? MissingFlaggedAt { get; set; }
 }
 
 /// <summary>
@@ -419,6 +426,9 @@ public sealed class CreateDataPointRequest
     public bool IsBlocked { get; set; }
     public string? BlockerReason { get; set; }
     public string? BlockerDueDate { get; set; }
+    public bool IsMissing { get; set; }
+    public string? MissingReason { get; set; }
+    public string? MissingReasonCategory { get; set; }
 }
 
 /// <summary>
@@ -445,6 +455,9 @@ public sealed class UpdateDataPointRequest
     public bool IsBlocked { get; set; }
     public string? BlockerReason { get; set; }
     public string? BlockerDueDate { get; set; }
+    public bool IsMissing { get; set; }
+    public string? MissingReason { get; set; }
+    public string? MissingReasonCategory { get; set; }
 }
 
 /// <summary>
@@ -496,6 +509,44 @@ public sealed class UpdateDataPointStatusRequest
     
     /// <summary>
     /// Optional note explaining the reason for the change.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Request to flag a data point as missing with a reason.
+/// </summary>
+public sealed class FlagMissingDataRequest
+{
+    /// <summary>
+    /// User ID of the person flagging the data as missing.
+    /// </summary>
+    public string FlaggedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Category for why data is missing. Must be one of: "not-measured", "not-applicable", 
+    /// "unavailable-from-supplier", "data-quality-issue", "system-limitation", "other".
+    /// </summary>
+    public string MissingReasonCategory { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed reason or additional context (free text).
+    /// </summary>
+    public string MissingReason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to unflag a data point (mark it as no longer missing).
+/// </summary>
+public sealed class UnflagMissingDataRequest
+{
+    /// <summary>
+    /// User ID of the person unflagging the data.
+    /// </summary>
+    public string UnflaggedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining why data is now available.
     /// </summary>
     public string? ChangeNote { get; set; }
 }
