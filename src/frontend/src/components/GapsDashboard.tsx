@@ -18,7 +18,6 @@ import type {
   GapDashboardResponse
 } from '@/lib/types'
 import { getGapsDashboard } from '@/lib/api'
-import { formatDate } from '@/lib/helpers'
 
 interface GapsDashboardProps {
   currentUser: User
@@ -43,6 +42,7 @@ export default function GapsDashboard({ currentUser }: GapsDashboardProps) {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   
   const activePeriod = (periods || []).find(p => p.status === 'active')
+  const activePeriodId = activePeriod?.id
   const activeSections = (sections || []).filter(s => activePeriod && s.periodId === activePeriod.id)
   
   // Fetch dashboard data when filters or sorting change
@@ -52,7 +52,7 @@ export default function GapsDashboard({ currentUser }: GapsDashboardProps) {
       setError(null)
       
       try {
-        const periodId = selectedPeriod === 'all' ? activePeriod?.id : selectedPeriod
+        const periodId = selectedPeriod === 'all' ? activePeriodId : selectedPeriod
         const data = await getGapsDashboard({
           periodId,
           status: selectedStatus === 'all' ? undefined : selectedStatus as 'open' | 'resolved',
@@ -71,7 +71,7 @@ export default function GapsDashboard({ currentUser }: GapsDashboardProps) {
     }
     
     fetchDashboard()
-  }, [selectedPeriod, selectedStatus, selectedSection, selectedDuePeriod, sortBy, sortOrder, activePeriod])
+  }, [selectedPeriod, selectedStatus, selectedSection, selectedDuePeriod, sortBy, sortOrder, activePeriodId])
   
   const toggleSort = (field: 'risk' | 'dueDate' | 'section') => {
     if (sortBy === field) {

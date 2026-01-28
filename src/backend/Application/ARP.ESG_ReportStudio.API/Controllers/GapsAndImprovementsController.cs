@@ -57,7 +57,7 @@ public sealed class GapsAndImprovementsController : ControllerBase
     /// <param name="sectionId">Optional section ID to filter by</param>
     /// <param name="ownerId">Optional owner ID to filter by</param>
     /// <param name="duePeriod">Optional due period to filter by (matches targetDate or remediation plan targetPeriod)</param>
-    /// <param name="sortBy">Sort field: risk, dueDate (default: risk)</param>
+    /// <param name="sortBy">Sort field: risk, dueDate, section (default: risk)</param>
     /// <param name="sortOrder">Sort order: asc, desc (default: desc for risk, asc for dueDate)</param>
     /// <returns>Gap dashboard with filtered and sorted results</returns>
     [HttpGet("dashboard")]
@@ -70,6 +70,20 @@ public sealed class GapsAndImprovementsController : ControllerBase
         [FromQuery] string sortBy = "risk",
         [FromQuery] string sortOrder = "desc")
     {
+        // Validate sortBy parameter
+        var validSortBy = new[] { "risk", "dueDate", "section", "impact", "duePeriod" };
+        if (!validSortBy.Contains(sortBy.ToLowerInvariant()))
+        {
+            sortBy = "risk";
+        }
+        
+        // Validate sortOrder parameter
+        var validSortOrder = new[] { "asc", "desc" };
+        if (!validSortOrder.Contains(sortOrder.ToLowerInvariant()))
+        {
+            sortOrder = "desc";
+        }
+        
         var currentUserId = "user-1"; // Placeholder for authentication
         var dashboard = _store.GetGapsDashboard(periodId, status, sectionId, ownerId, duePeriod, sortBy, sortOrder, currentUserId);
         return Ok(dashboard);
