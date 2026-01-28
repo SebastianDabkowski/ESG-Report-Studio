@@ -2,6 +2,8 @@ export type UserRole = 'admin' | 'report-owner' | 'contributor' | 'auditor'
 
 export type SectionStatus = 'draft' | 'in-review' | 'approved'
 
+export type ReviewStatus = 'draft' | 'ready-for-review' | 'approved' | 'changes-requested'
+
 export type CompletenessLevel = 'empty' | 'partial' | 'complete'
 
 export type CompletenessStatus = 'missing' | 'incomplete' | 'complete' | 'not applicable'
@@ -75,6 +77,10 @@ export interface DataPoint {
   informationType: string
   assumptions?: string
   completenessStatus: CompletenessStatus
+  reviewStatus: ReviewStatus
+  reviewedBy?: string
+  reviewedAt?: string
+  reviewComments?: string
   createdAt: string
   updatedAt: string
   evidenceIds: string[]

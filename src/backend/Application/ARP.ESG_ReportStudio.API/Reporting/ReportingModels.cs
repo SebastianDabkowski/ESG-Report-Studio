@@ -199,6 +199,10 @@ public sealed class DataPoint
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
+    public string ReviewStatus { get; set; } = "draft";
+    public string? ReviewedBy { get; set; }
+    public string? ReviewedAt { get; set; }
+    public string? ReviewComments { get; set; }
     public string CreatedAt { get; set; } = string.Empty;
     public string UpdatedAt { get; set; } = string.Empty;
     public List<string> EvidenceIds { get; set; } = new();
@@ -222,6 +226,7 @@ public sealed class CreateDataPointRequest
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
+    public string ReviewStatus { get; set; } = "draft";
 }
 
 /// <summary>
@@ -241,8 +246,41 @@ public sealed class UpdateDataPointRequest
     public string InformationType { get; set; } = string.Empty;
     public string? Assumptions { get; set; }
     public string CompletenessStatus { get; set; } = string.Empty;
+    public string? ReviewStatus { get; set; }
     public string? ChangeNote { get; set; }
     public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Request to approve a data point.
+/// </summary>
+public sealed class ApproveDataPointRequest
+{
+    /// <summary>
+    /// User ID of the reviewer approving the data point.
+    /// </summary>
+    public string ReviewedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional comments from the reviewer.
+    /// </summary>
+    public string? ReviewComments { get; set; }
+}
+
+/// <summary>
+/// Request to request changes on a data point.
+/// </summary>
+public sealed class RequestChangesRequest
+{
+    /// <summary>
+    /// User ID of the reviewer requesting changes.
+    /// </summary>
+    public string ReviewedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Feedback explaining what changes are needed.
+    /// </summary>
+    public string ReviewComments { get; set; } = string.Empty;
 }
 
 /// <summary>

@@ -210,6 +210,7 @@ export interface CreateDataPointPayload {
   informationType: string
   assumptions?: string
   completenessStatus: string
+  reviewStatus?: string
 }
 
 export interface UpdateDataPointPayload {
@@ -225,8 +226,19 @@ export interface UpdateDataPointPayload {
   informationType: string
   assumptions?: string
   completenessStatus: string
+  reviewStatus?: string
   changeNote?: string
   updatedBy?: string
+}
+
+export interface ApproveDataPointPayload {
+  reviewedBy: string
+  reviewComments?: string
+}
+
+export interface RequestChangesPayload {
+  reviewedBy: string
+  reviewComments: string
 }
 
 export async function createDataPoint(payload: CreateDataPointPayload): Promise<any> {
@@ -246,6 +258,20 @@ export async function updateDataPoint(id: string, payload: UpdateDataPointPayloa
 export async function deleteDataPoint(id: string): Promise<void> {
   await requestJson<void>(`data-points/${id}`, {
     method: 'DELETE'
+  })
+}
+
+export async function approveDataPoint(id: string, payload: ApproveDataPointPayload): Promise<any> {
+  return requestJson<any>(`data-points/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function requestChangesOnDataPoint(id: string, payload: RequestChangesPayload): Promise<any> {
+  return requestJson<any>(`data-points/${id}/request-changes`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
   })
 }
 

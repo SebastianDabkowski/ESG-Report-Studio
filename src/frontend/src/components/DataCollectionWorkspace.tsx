@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Separator } from '@/components/ui/separator'
+import { Textarea } from '@/components/ui/textarea'
+import { Label } from '@/components/ui/label'
 import { useKV } from '@github/spark/hooks'
 import DataPointForm from '@/components/DataPointForm'
 import DataPointEvidenceManager from '@/components/DataPointEvidenceManager'
@@ -25,11 +27,13 @@ import {
   FileText,
   Plus,
   UploadSimple,
-  FileArrowDown
+  FileArrowDown,
+  CheckCircle,
+  XCircle
 } from '@phosphor-icons/react'
 import type { User as UserType, ReportingPeriod, SectionSummary, DataPoint, Gap, Evidence } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getClassificationColor, getCompletenessStatusColor } from '@/lib/helpers'
-import { getUsers, getDataPoints, createDataPoint, updateDataPoint } from '@/lib/api'
+import { getUsers, getDataPoints, createDataPoint, updateDataPoint, approveDataPoint, requestChangesOnDataPoint } from '@/lib/api'
 import { useEffect } from 'react'
 
 interface DataCollectionWorkspaceProps {
@@ -55,6 +59,10 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
   const [showMyItemsOnly, setShowMyItemsOnly] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false)
+  const [isRequestChangesDialogOpen, setIsRequestChangesDialogOpen] = useState(false)
+  const [approveComments, setApproveComments] = useState('')
+  const [changesComments, setChangesComments] = useState('')
 
   // Fetch users on mount
   useEffect(() => {
@@ -191,6 +199,105 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
     setEditingDataPoint(null)
     setSelectedSectionId(null)
     setSubmitError(null)
+  }
+
+  const handleSubmitForReview = async (dataPoint: DataPoint) => {
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const payload = {
+        type: dataPoint.type,
+        classification: dataPoint.classification,
+        title: dataPoint.title,
+        content: dataPoint.content,
+        value: dataPoint.value,
+        unit: dataPoint.unit,
+        ownerId: dataPoint.ownerId,
+        contributorIds: dataPoint.contributorIds || [],
+        source: dataPoint.source,
+        informationType: dataPoint.informationType,
+        assumptions: dataPoint.assumptions,
+        completenessStatus: dataPoint.completenessStatus,
+        reviewStatus: 'ready-for-review',
+        updatedBy: currentUser?.id || 'user-1'
+      }
+      
+      const updatedDataPoint = await updateDataPoint(dataPoint.id, payload)
+      
+      // Update local state
+      setDataPoints(dataPoints?.map(dp => 
+        dp.id === dataPoint.id ? updatedDataPoint : dp
+      ) || [])
+      
+      if (selectedDataItem?.id === dataPoint.id) {
+        setSelectedDataItem(updatedDataPoint)
+      }
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to submit for review')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleApprove = async () => {
+    if (!selectedDataItem) return
+    
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const payload = {
+        reviewedBy: currentUser?.id || 'user-1',
+        reviewComments: approveComments || undefined
+      }
+      
+      const updatedDataPoint = await approveDataPoint(selectedDataItem.id, payload)
+      
+      // Update local state
+      setDataPoints(dataPoints?.map(dp => 
+        dp.id === selectedDataItem.id ? updatedDataPoint : dp
+      ) || [])
+      
+      setSelectedDataItem(updatedDataPoint)
+      setIsApproveDialogOpen(false)
+      setApproveComments('')
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to approve data point')
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleRequestChanges = async () => {
+    if (!selectedDataItem) return
+    
+    if (!changesComments.trim()) {
+      setSubmitError('Please provide feedback for the changes requested')
+      return
+    }
+    
+    setIsSubmitting(true)
+    setSubmitError(null)
+    try {
+      const payload = {
+        reviewedBy: currentUser?.id || 'user-1',
+        reviewComments: changesComments
+      }
+      
+      const updatedDataPoint = await requestChangesOnDataPoint(selectedDataItem.id, payload)
+      
+      // Update local state
+      setDataPoints(dataPoints?.map(dp => 
+        dp.id === selectedDataItem.id ? updatedDataPoint : dp
+      ) || [])
+      
+      setSelectedDataItem(updatedDataPoint)
+      setIsRequestChangesDialogOpen(false)
+      setChangesComments('')
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to request changes')
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleUploadEvidence = (sectionId: string) => {
@@ -404,6 +511,19 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                                 {dp.classification}
                               </Badge>
                             )}
+                            <Badge 
+                              variant={
+                                dp.reviewStatus === 'approved' ? 'default' :
+                                dp.reviewStatus === 'ready-for-review' ? 'secondary' :
+                                dp.reviewStatus === 'changes-requested' ? 'destructive' :
+                                'outline'
+                              }
+                              className="text-xs capitalize"
+                            >
+                              {dp.reviewStatus === 'ready-for-review' ? 'In Review' : 
+                               dp.reviewStatus === 'changes-requested' ? 'Changes Needed' :
+                               dp.reviewStatus}
+                            </Badge>
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground line-clamp-2">{dp.content}</p>
@@ -676,6 +796,46 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                         {selectedDataItem.completenessStatus}
                       </Badge>
                     </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-muted-foreground">Review Status:</span>
+                      <Badge 
+                        variant={
+                          selectedDataItem.reviewStatus === 'approved' ? 'default' :
+                          selectedDataItem.reviewStatus === 'ready-for-review' ? 'secondary' :
+                          selectedDataItem.reviewStatus === 'changes-requested' ? 'destructive' :
+                          'outline'
+                        }
+                        className="capitalize"
+                      >
+                        {selectedDataItem.reviewStatus === 'ready-for-review' ? 'In Review' : 
+                         selectedDataItem.reviewStatus === 'changes-requested' ? 'Changes Needed' :
+                         selectedDataItem.reviewStatus}
+                      </Badge>
+                    </div>
+                    {selectedDataItem.reviewedBy && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Reviewed By:</span>
+                        <span className="font-medium">
+                          {users?.find(u => u.id === selectedDataItem.reviewedBy)?.name || 'Unknown'}
+                        </span>
+                      </div>
+                    )}
+                    {selectedDataItem.reviewedAt && (
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Reviewed At:</span>
+                        <span className="font-medium">
+                          {new Date(selectedDataItem.reviewedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    )}
+                    {selectedDataItem.reviewComments && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-muted-foreground">Review Comments:</span>
+                        <span className="font-medium text-sm bg-blue-50 p-2 rounded border border-blue-200">
+                          {selectedDataItem.reviewComments}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Created:</span>
                       <span className="font-medium">
@@ -726,16 +886,146 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                 </div>
               </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
-                  Close
-                </Button>
-                <Button onClick={() => handleEditDataPoint(selectedDataItem)}>
-                  Edit Data Point
-                </Button>
+              <DialogFooter className="flex-col sm:flex-row gap-2">
+                <div className="flex gap-2 flex-1">
+                  {(selectedDataItem.reviewStatus === 'draft' || selectedDataItem.reviewStatus === 'changes-requested') && (
+                    <Button 
+                      variant="secondary" 
+                      onClick={() => handleSubmitForReview(selectedDataItem)}
+                      disabled={isSubmitting}
+                      className="flex items-center gap-1"
+                    >
+                      <CheckCircle size={16} />
+                      Submit for Review
+                    </Button>
+                  )}
+                  {selectedDataItem.reviewStatus === 'ready-for-review' && (currentUser.role === 'admin' || currentUser.role === 'report-owner') && (
+                    <>
+                      <Button 
+                        variant="default" 
+                        onClick={() => setIsApproveDialogOpen(true)}
+                        disabled={isSubmitting}
+                        className="flex items-center gap-1"
+                      >
+                        <CheckCircle size={16} />
+                        Approve
+                      </Button>
+                      <Button 
+                        variant="destructive" 
+                        onClick={() => setIsRequestChangesDialogOpen(true)}
+                        disabled={isSubmitting}
+                        className="flex items-center gap-1"
+                      >
+                        <XCircle size={16} />
+                        Request Changes
+                      </Button>
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setIsDetailOpen(false)}>
+                    Close
+                  </Button>
+                  {selectedDataItem.reviewStatus !== 'approved' && (
+                    <Button onClick={() => handleEditDataPoint(selectedDataItem)}>
+                      Edit Data Point
+                    </Button>
+                  )}
+                </div>
               </DialogFooter>
             </>
           ) : null}
+        </DialogContent>
+      </Dialog>
+
+      {/* Approve Dialog */}
+      <Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Data Point</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve this data point? Once approved, it will become read-only for non-admin users.
+            </DialogDescription>
+          </DialogHeader>
+          {submitError && (
+            <Alert variant="destructive">
+              <WarningCircle size={16} className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="approve-comments">Comments (optional)</Label>
+              <Textarea
+                id="approve-comments"
+                placeholder="Add any comments about the approval..."
+                value={approveComments}
+                onChange={(e) => setApproveComments(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsApproveDialogOpen(false)
+              setApproveComments('')
+              setSubmitError(null)
+            }}>
+              Cancel
+            </Button>
+            <Button onClick={handleApprove} disabled={isSubmitting}>
+              {isSubmitting ? 'Approving...' : 'Approve'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request Changes Dialog */}
+      <Dialog open={isRequestChangesDialogOpen} onOpenChange={setIsRequestChangesDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Request Changes</DialogTitle>
+            <DialogDescription>
+              Please provide feedback on what changes are needed. The assignee will be notified.
+            </DialogDescription>
+          </DialogHeader>
+          {submitError && (
+            <Alert variant="destructive">
+              <WarningCircle size={16} className="h-4 w-4" />
+              <AlertDescription>{submitError}</AlertDescription>
+            </Alert>
+          )}
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="changes-comments">Feedback *</Label>
+              <Textarea
+                id="changes-comments"
+                placeholder="Explain what changes are needed..."
+                value={changesComments}
+                onChange={(e) => {
+                  setChangesComments(e.target.value)
+                  // Clear error when user starts typing
+                  if (submitError && e.target.value.trim()) {
+                    setSubmitError(null)
+                  }
+                }}
+                rows={4}
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setIsRequestChangesDialogOpen(false)
+              setChangesComments('')
+              setSubmitError(null)
+            }}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleRequestChanges} disabled={isSubmitting || !changesComments.trim()}>
+              {isSubmitting ? 'Submitting...' : 'Request Changes'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
