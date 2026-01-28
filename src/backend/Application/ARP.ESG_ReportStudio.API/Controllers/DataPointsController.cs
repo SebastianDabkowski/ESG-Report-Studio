@@ -69,4 +69,30 @@ public sealed class DataPointsController : ControllerBase
 
         return NoContent();
     }
+
+    [HttpPost("{id}/approve")]
+    public ActionResult<DataPoint> ApproveDataPoint(string id, [FromBody] ApproveDataPointRequest request)
+    {
+        var (isValid, errorMessage, dataPoint) = _store.ApproveDataPoint(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
+
+    [HttpPost("{id}/request-changes")]
+    public ActionResult<DataPoint> RequestChanges(string id, [FromBody] RequestChangesRequest request)
+    {
+        var (isValid, errorMessage, dataPoint) = _store.RequestChanges(id, request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
 }

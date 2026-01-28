@@ -814,6 +814,15 @@ public sealed class InMemoryReportStore
             }
 
             var now = DateTime.UtcNow.ToString("O");
+            
+            // Validate reviewStatus if provided
+            var validReviewStatuses = new[] { "draft", "ready-for-review", "approved", "changes-requested" };
+            var reviewStatus = request.ReviewStatus ?? "draft";
+            if (!validReviewStatuses.Contains(reviewStatus, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"ReviewStatus must be one of: {string.Join(", ", validReviewStatuses)}.", null);
+            }
+            
             var newDataPoint = new DataPoint
             {
                 Id = Guid.NewGuid().ToString(),
@@ -830,6 +839,7 @@ public sealed class InMemoryReportStore
                 InformationType = request.InformationType,
                 Assumptions = request.Assumptions,
                 CompletenessStatus = completenessStatus,
+                ReviewStatus = reviewStatus,
                 CreatedAt = now,
                 UpdatedAt = now,
                 EvidenceIds = new List<string>()
@@ -855,6 +865,20 @@ public sealed class InMemoryReportStore
             if (dataPoint == null)
             {
                 return (false, "DataPoint not found.", null);
+            }
+
+            // Check if data point is approved and enforce read-only (unless updating review status)
+            if (dataPoint.ReviewStatus == "approved" && request.ReviewStatus != "approved")
+            {
+                // Allow status changes but not content changes for approved data points
+                if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
+                {
+                    // This is a status-only change, allow it
+                }
+                else
+                {
+                    return (false, "Cannot modify approved data points. Only admins can make changes to approved entries.", null);
+                }
             }
 
             // Validate required fields
@@ -1012,6 +1036,21 @@ public sealed class InMemoryReportStore
             
             if (dataPoint.CompletenessStatus != completenessStatus)
                 changes.Add(new FieldChange { Field = "CompletenessStatus", OldValue = dataPoint.CompletenessStatus, NewValue = completenessStatus });
+            
+            // Handle review status changes
+            if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
+            {
+                var validReviewStatuses = new[] { "draft", "ready-for-review", "approved", "changes-requested" };
+                if (!validReviewStatuses.Contains(request.ReviewStatus, StringComparer.OrdinalIgnoreCase))
+                {
+                    return (false, $"ReviewStatus must be one of: {string.Join(", ", validReviewStatuses)}.", null);
+                }
+                
+                if (dataPoint.ReviewStatus != request.ReviewStatus)
+                {
+                    changes.Add(new FieldChange { Field = "ReviewStatus", OldValue = dataPoint.ReviewStatus, NewValue = request.ReviewStatus });
+                }
+            }
 
             // Only update the actual data point if validation passes
             dataPoint.Type = request.Type;
@@ -1027,6 +1066,12 @@ public sealed class InMemoryReportStore
             dataPoint.Assumptions = request.Assumptions;
             dataPoint.CompletenessStatus = completenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            // Update review status if provided
+            if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
+            {
+                dataPoint.ReviewStatus = request.ReviewStatus;
+            }
 
             // Create audit log entry if there are changes
             if (changes.Any())
@@ -1054,6 +1099,112 @@ public sealed class InMemoryReportStore
 
             _dataPoints.Remove(dataPoint);
             return true;
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) ApproveDataPoint(string id, ApproveDataPointRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Validate that data point is ready for review
+            if (dataPoint.ReviewStatus != "ready-for-review")
+            {
+                return (false, "Data point must be in 'ready-for-review' status to be approved.", null);
+            }
+
+            // Validate reviewer exists
+            var reviewer = _users.FirstOrDefault(u => u.Id == request.ReviewedBy);
+            if (reviewer == null)
+            {
+                return (false, $"Reviewer with ID '{request.ReviewedBy}' not found.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "ReviewStatus", OldValue = dataPoint.ReviewStatus, NewValue = "approved" }
+            };
+
+            dataPoint.ReviewStatus = "approved";
+            dataPoint.ReviewedBy = request.ReviewedBy;
+            dataPoint.ReviewedAt = now;
+            dataPoint.ReviewComments = request.ReviewComments;
+            dataPoint.UpdatedAt = now;
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                request.ReviewedBy, 
+                reviewer.Name, 
+                "approve", 
+                "DataPoint", 
+                dataPoint.Id, 
+                changes, 
+                request.ReviewComments
+            );
+
+            return (true, null, dataPoint);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) RequestChanges(string id, RequestChangesRequest request)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == id);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+
+            // Validate that data point is ready for review
+            if (dataPoint.ReviewStatus != "ready-for-review")
+            {
+                return (false, "Data point must be in 'ready-for-review' status to request changes.", null);
+            }
+
+            // Validate reviewer exists
+            var reviewer = _users.FirstOrDefault(u => u.Id == request.ReviewedBy);
+            if (reviewer == null)
+            {
+                return (false, $"Reviewer with ID '{request.ReviewedBy}' not found.", null);
+            }
+
+            // Validate that comments are provided
+            if (string.IsNullOrWhiteSpace(request.ReviewComments))
+            {
+                return (false, "Review comments are required when requesting changes.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("O");
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "ReviewStatus", OldValue = dataPoint.ReviewStatus, NewValue = "changes-requested" }
+            };
+
+            dataPoint.ReviewStatus = "changes-requested";
+            dataPoint.ReviewedBy = request.ReviewedBy;
+            dataPoint.ReviewedAt = now;
+            dataPoint.ReviewComments = request.ReviewComments;
+            dataPoint.UpdatedAt = now;
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                request.ReviewedBy, 
+                reviewer.Name, 
+                "request-changes", 
+                "DataPoint", 
+                dataPoint.Id, 
+                changes, 
+                request.ReviewComments
+            );
+
+            return (true, null, dataPoint);
         }
     }
 
