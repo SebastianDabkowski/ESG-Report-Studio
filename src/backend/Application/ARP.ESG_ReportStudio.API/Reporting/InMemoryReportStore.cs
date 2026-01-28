@@ -62,7 +62,8 @@ public sealed class InMemoryReportStore
             new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor" },
             new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor" },
             new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor" },
-            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" }
+            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" },
+            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner" }
         });
     }
 
@@ -1848,6 +1849,151 @@ public sealed class InMemoryReportStore
 
             return query.OrderByDescending(rh => rh.SentAt).ToList();
         }
+    }
+
+    // Completeness Dashboard
+    public CompletenessStats GetCompletenessStats(string? periodId = null, string? category = null, string? organizationalUnitId = null)
+    {
+        lock (_lock)
+        {
+            // Get data points for the specified period
+            var dataPoints = _dataPoints.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(periodId))
+            {
+                var periodSectionIds = _sections
+                    .Where(s => s.PeriodId == periodId)
+                    .Select(s => s.Id)
+                    .ToHashSet();
+                dataPoints = dataPoints.Where(dp => periodSectionIds.Contains(dp.SectionId));
+            }
+
+            // Apply category filter if specified
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                var categorySectionIds = _sections
+                    .Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase))
+                    .Select(s => s.Id)
+                    .ToHashSet();
+                dataPoints = dataPoints.Where(dp => categorySectionIds.Contains(dp.SectionId));
+            }
+
+            // Apply organizational unit filter if specified
+            if (!string.IsNullOrWhiteSpace(organizationalUnitId))
+            {
+                // For now, filter by owner ID since sections don't have organizational unit assignments
+                // This can be extended later when organizational units are linked to sections
+                var ownerSectionIds = _sections
+                    .Where(s => s.OwnerId == organizationalUnitId)
+                    .Select(s => s.Id)
+                    .ToHashSet();
+                dataPoints = dataPoints.Where(dp => ownerSectionIds.Contains(dp.SectionId));
+            }
+
+            var dataPointsList = dataPoints.ToList();
+
+            // Calculate overall stats
+            var overall = CalculateBreakdown("overall", "Overall", dataPointsList);
+
+            // Get filtered sections for efficient breakdown calculations
+            var relevantSectionIds = dataPointsList.Select(dp => dp.SectionId).Distinct().ToHashSet();
+            var relevantSections = _sections.Where(s => relevantSectionIds.Contains(s.Id)).ToList();
+
+            // Calculate by category
+            var byCategory = new List<CompletenessBreakdown>();
+            foreach (var cat in new[] { "environmental", "social", "governance" })
+            {
+                var categorySectionIds = relevantSections
+                    .Where(s => s.Category.Equals(cat, StringComparison.OrdinalIgnoreCase))
+                    .Select(s => s.Id)
+                    .ToHashSet();
+                var categoryDataPoints = dataPointsList
+                    .Where(dp => categorySectionIds.Contains(dp.SectionId))
+                    .ToList();
+                
+                byCategory.Add(CalculateBreakdown(cat, FormatCategoryName(cat), categoryDataPoints));
+            }
+
+            // Calculate by organizational unit (using section owners as proxy)
+            var byOrganizationalUnit = new List<CompletenessBreakdown>();
+            var ownerGroups = relevantSections
+                .GroupBy(s => s.OwnerId)
+                .ToList();
+
+            foreach (var ownerGroup in ownerGroups)
+            {
+                var ownerId = ownerGroup.Key;
+                var ownerSectionIds = ownerGroup.Select(s => s.Id).ToHashSet();
+                var ownerDataPoints = dataPointsList
+                    .Where(dp => ownerSectionIds.Contains(dp.SectionId))
+                    .ToList();
+
+                // Only include if there are actual data points
+                if (ownerDataPoints.Count == 0)
+                    continue;
+
+                var user = _users.FirstOrDefault(u => u.Id == ownerId);
+                var ownerName = user?.Name ?? "Unknown";
+                
+                byOrganizationalUnit.Add(CalculateBreakdown(ownerId, ownerName, ownerDataPoints));
+            }
+
+            return new CompletenessStats
+            {
+                Overall = overall,
+                ByCategory = byCategory,
+                ByOrganizationalUnit = byOrganizationalUnit
+            };
+        }
+    }
+
+    private CompletenessBreakdown CalculateBreakdown(string id, string name, List<DataPoint> dataPoints)
+    {
+        // Single pass through data points for efficiency
+        var missingCount = 0;
+        var incompleteCount = 0;
+        var completeCount = 0;
+        var notApplicableCount = 0;
+
+        foreach (var dp in dataPoints)
+        {
+            if (dp.CompletenessStatus.Equals("missing", StringComparison.OrdinalIgnoreCase))
+                missingCount++;
+            else if (dp.CompletenessStatus.Equals("incomplete", StringComparison.OrdinalIgnoreCase))
+                incompleteCount++;
+            else if (dp.CompletenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase))
+                completeCount++;
+            else if (dp.CompletenessStatus.Equals("not applicable", StringComparison.OrdinalIgnoreCase))
+                notApplicableCount++;
+        }
+
+        var totalCount = dataPoints.Count;
+        var completePercentage = totalCount > 0 
+            ? Math.Round((double)completeCount / totalCount * 100, 1) 
+            : 0.0;
+
+        return new CompletenessBreakdown
+        {
+            Id = id,
+            Name = name,
+            MissingCount = missingCount,
+            IncompleteCount = incompleteCount,
+            CompleteCount = completeCount,
+            NotApplicableCount = notApplicableCount,
+            TotalCount = totalCount,
+            CompletePercentage = completePercentage
+        };
+    }
+
+    private string FormatCategoryName(string category)
+    {
+        return category switch
+        {
+            "environmental" => "Environmental",
+            "social" => "Social",
+            "governance" => "Governance",
+            _ => category
+        };
     }
 
     private sealed record SectionTemplate(string Title, string Category, string Description);
