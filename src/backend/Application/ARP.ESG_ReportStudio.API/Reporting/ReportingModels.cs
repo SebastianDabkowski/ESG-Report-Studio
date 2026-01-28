@@ -82,6 +82,12 @@ public sealed class CreateReportingPeriodRequest
     /// When provided, ownership mappings are copied to matching sections/data points based on catalog codes.
     /// </summary>
     public string? CopyOwnershipFromPeriodId { get; set; }
+    
+    /// <summary>
+    /// When true and CopyOwnershipFromPeriodId is provided, carries forward open gaps, active assumptions,
+    /// and active remediation plans from the previous period to the new period.
+    /// </summary>
+    public bool CarryForwardGapsAndAssumptions { get; set; }
 }
 
 public sealed class UpdateReportingPeriodRequest
