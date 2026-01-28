@@ -19,7 +19,7 @@ const dataPointSchema = z.object({
   classification: z.enum(['fact', 'declaration', 'plan']).optional(),
   value: z.string().optional(),
   unit: z.string().optional(),
-  ownerId: z.string().min(1, 'Owner is required'),
+  ownerId: z.string(),
   source: z.string().min(1, 'Source is required'),
   informationType: z.enum(['fact', 'estimate', 'declaration', 'plan'], {
     errorMap: () => ({ message: 'Information type is required' })
@@ -38,6 +38,15 @@ const dataPointSchema = z.object({
 }, {
   message: "Assumptions field is required when Information Type is 'estimate'",
   path: ['assumptions']
+}).refine((data) => {
+  // Require owner when completeness status is 'complete'
+  if (data.completenessStatus === 'complete' && (!data.ownerId || !data.ownerId.trim())) {
+    return false;
+  }
+  return true;
+}, {
+  message: "An owner must be assigned before setting completeness status to 'complete'",
+  path: ['ownerId']
 })
 
 type DataPointFormData = z.infer<typeof dataPointSchema>

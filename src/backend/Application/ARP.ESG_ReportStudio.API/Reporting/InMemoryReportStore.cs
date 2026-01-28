@@ -780,17 +780,18 @@ public sealed class InMemoryReportStore
         bool hasInformationType = !string.IsNullOrWhiteSpace(dataPoint.InformationType);
         bool hasTitle = !string.IsNullOrWhiteSpace(dataPoint.Title);
         bool hasContent = !string.IsNullOrWhiteSpace(dataPoint.Content);
+        bool hasOwner = !string.IsNullOrWhiteSpace(dataPoint.OwnerId);
         
         // Check if evidence is linked (at least one evidence ID)
         bool hasEvidence = dataPoint.EvidenceIds != null && dataPoint.EvidenceIds.Count > 0;
         
-        // Complete: has all required fields AND evidence
-        if (hasTitle && hasContent && hasSource && hasInformationType && hasEvidence)
+        // Complete: has all required fields AND evidence AND owner
+        if (hasTitle && hasContent && hasSource && hasInformationType && hasEvidence && hasOwner)
         {
             return "complete";
         }
         
-        // Incomplete: has basic data but missing required metadata or evidence
+        // Incomplete: has basic data but missing required metadata, evidence, or owner
         return "incomplete";
     }
 
@@ -814,22 +815,23 @@ public sealed class InMemoryReportStore
                 return (false, "SectionId is required.", null);
             }
 
-            if (string.IsNullOrWhiteSpace(request.OwnerId))
-            {
-                return (false, "OwnerId is required.", null);
-            }
+            // Note: OwnerId is not required initially, but is required when setting status to complete
+            // This is validated later based on completeness status
 
-            // Validate owner exists
-            var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
-            if (owner == null)
+            // Validate owner exists if provided
+            if (!string.IsNullOrWhiteSpace(request.OwnerId))
             {
-                return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+                var owner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+                if (owner == null)
+                {
+                    return (false, $"Owner with ID '{request.OwnerId}' not found.", null);
+                }
             }
 
             // Validate contributors exist and are not the owner
             if (request.ContributorIds != null && request.ContributorIds.Any())
             {
-                if (request.ContributorIds.Contains(request.OwnerId))
+                if (!string.IsNullOrWhiteSpace(request.OwnerId) && request.ContributorIds.Contains(request.OwnerId))
                 {
                     return (false, "Owner cannot also be listed as a contributor.", null);
                 }
@@ -880,6 +882,7 @@ public sealed class InMemoryReportStore
                     Content = request.Content,
                     Source = request.Source,
                     InformationType = request.InformationType,
+                    OwnerId = request.OwnerId,
                     EvidenceIds = new List<string>()
                 };
                 completenessStatus = CalculateCompletenessStatus(tempDataPoint);
@@ -891,6 +894,13 @@ public sealed class InMemoryReportStore
                 if (!validCompletenessStatuses.Contains(completenessStatus, StringComparer.OrdinalIgnoreCase))
                 {
                     return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                }
+                
+                // Validate owner is required when setting status to complete
+                if (completenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase) 
+                    && string.IsNullOrWhiteSpace(request.OwnerId))
+                {
+                    return (false, "An owner must be assigned before setting completeness status to 'complete'.", null);
                 }
             }
 
@@ -967,7 +977,8 @@ public sealed class InMemoryReportStore
                     request.Content == dataPoint.Content &&
                     request.Value == dataPoint.Value &&
                     request.Unit == dataPoint.Unit &&
-                    request.OwnerId == dataPoint.OwnerId &&
+                    // Owner is unchanged if request is empty (preserve existing) or same as current
+                    (string.IsNullOrWhiteSpace(request.OwnerId) || request.OwnerId == dataPoint.OwnerId) &&
                     request.Source == dataPoint.Source &&
                     request.InformationType == dataPoint.InformationType &&
                     request.Assumptions == dataPoint.Assumptions &&
@@ -1050,12 +1061,15 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(completenessStatus))
             {
                 // Create temporary data point to calculate status (keeping existing evidence IDs)
+                // Use request OwnerId if provided, otherwise preserve existing owner
+                var effectiveOwnerId = !string.IsNullOrWhiteSpace(request.OwnerId) ? request.OwnerId : dataPoint.OwnerId;
                 var statusCalculationDataPoint = new DataPoint
                 {
                     Title = request.Title,
                     Content = request.Content,
                     Source = request.Source,
                     InformationType = request.InformationType,
+                    OwnerId = effectiveOwnerId,
                     EvidenceIds = dataPoint.EvidenceIds
                 };
                 completenessStatus = CalculateCompletenessStatus(statusCalculationDataPoint);
@@ -1067,6 +1081,15 @@ public sealed class InMemoryReportStore
                 if (!validCompletenessStatuses.Contains(completenessStatus, StringComparer.OrdinalIgnoreCase))
                 {
                     return (false, $"CompletenessStatus must be one of: {string.Join(", ", validCompletenessStatuses)}.", null);
+                }
+                
+                // Validate owner is required when setting status to complete
+                // Check the final owner state after the update
+                var finalOwnerId = !string.IsNullOrWhiteSpace(request.OwnerId) ? request.OwnerId : dataPoint.OwnerId;
+                if (completenessStatus.Equals("complete", StringComparison.OrdinalIgnoreCase) 
+                    && string.IsNullOrWhiteSpace(finalOwnerId))
+                {
+                    return (false, "An owner must be assigned before setting completeness status to 'complete'.", null);
                 }
             }
 
@@ -1120,7 +1143,8 @@ public sealed class InMemoryReportStore
             if (dataPoint.Unit != request.Unit)
                 changes.Add(new FieldChange { Field = "Unit", OldValue = dataPoint.Unit ?? "", NewValue = request.Unit ?? "" });
             
-            if (dataPoint.OwnerId != request.OwnerId)
+            // Only record owner change if explicitly provided and different
+            if (!string.IsNullOrWhiteSpace(request.OwnerId) && dataPoint.OwnerId != request.OwnerId)
                 changes.Add(new FieldChange { Field = "OwnerId", OldValue = dataPoint.OwnerId, NewValue = request.OwnerId });
             
             if (dataPoint.Source != request.Source)
@@ -1157,7 +1181,11 @@ public sealed class InMemoryReportStore
             dataPoint.Content = request.Content;
             dataPoint.Value = request.Value;
             dataPoint.Unit = request.Unit;
-            dataPoint.OwnerId = request.OwnerId;
+            // Only update OwnerId if explicitly provided (not empty)
+            if (!string.IsNullOrWhiteSpace(request.OwnerId))
+            {
+                dataPoint.OwnerId = request.OwnerId;
+            }
             dataPoint.ContributorIds = request.ContributorIds ?? new List<string>();
             dataPoint.Source = request.Source;
             dataPoint.InformationType = request.InformationType;

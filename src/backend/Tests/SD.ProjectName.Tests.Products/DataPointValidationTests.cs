@@ -593,5 +593,135 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal("Assumptions field is required when InformationType is 'estimate'.", errorMessage);
             Assert.Null(dataPoint);
         }
+
+        [Fact]
+        public void CreateDataPoint_WithCompleteStatusButNoOwner_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("An owner must be assigned before setting completeness status to 'complete'.", errorMessage);
+            Assert.Null(dataPoint);
+        }
+
+        [Fact]
+        public void UpdateDataPoint_ToCompleteStatusButNoOwner_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            // Create a data point WITHOUT an owner
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "",  // No owner initially
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            var (_, _, createdDataPoint) = store.CreateDataPoint(createRequest);
+
+            // Try to update to complete status without setting an owner
+            var updateRequest = new UpdateDataPointRequest
+            {
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "",  // Still no owner
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "complete"
+            };
+
+            // Act
+            var (isValid, errorMessage, updatedDataPoint) = store.UpdateDataPoint(createdDataPoint!.Id, updateRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("An owner must be assigned before setting completeness status to 'complete'.", errorMessage);
+            Assert.Null(updatedDataPoint);
+        }
+
+        [Fact]
+        public void CreateDataPoint_WithIncompleteStatusAndOwner_ShouldSucceed()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "owner-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(request);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(dataPoint);
+            Assert.Equal("incomplete", dataPoint.CompletenessStatus);
+        }
+
+        [Fact]
+        public void AutoCalculatedCompleteStatus_WithoutOwner_ShouldReturnIncomplete()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            // Create a data point without explicit completeness status to test auto-calculation
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "",
+                Source = "Test Source",
+                InformationType = "fact"
+                // CompletenessStatus not set, should auto-calculate
+            };
+
+            // Act
+            var (isValid, errorMessage, dataPoint) = store.CreateDataPoint(createRequest);
+
+            // Assert
+            Assert.True(isValid);
+            Assert.Null(errorMessage);
+            Assert.NotNull(dataPoint);
+            // Without owner and evidence, status should be incomplete
+            Assert.Equal("incomplete", dataPoint.CompletenessStatus);
+        }
     }
 }
