@@ -4,6 +4,21 @@ namespace SD.ProjectName.Tests.Products
 {
     public class ReportingPeriodValidationTests
     {
+        private static void CreateTestOrganization(InMemoryReportStore store)
+        {
+            // Create a default organization to satisfy the validation requirement
+            store.CreateOrganization(new CreateOrganizationRequest
+            {
+                Name = "Test Organization",
+                LegalForm = "LLC",
+                Country = "US",
+                Identifier = "12345",
+                CreatedBy = "test-user",
+                CoverageType = "full",
+                CoverageJustification = "Test coverage"
+            });
+        }
+
         private static void CreateTestOrganizationalUnit(InMemoryReportStore store)
         {
             // Create a default organizational unit to satisfy the validation requirement
@@ -15,12 +30,19 @@ namespace SD.ProjectName.Tests.Products
             });
         }
 
+        private static void CreateTestConfiguration(InMemoryReportStore store)
+        {
+            // Create both organization and organizational unit
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+        }
+
         [Fact]
         public void CreatePeriod_WithValidDates_ShouldSucceed()
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -46,7 +68,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Invalid Period",
@@ -72,7 +94,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Same Day Period",
@@ -98,7 +120,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "Invalid Format Period",
@@ -124,7 +146,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -166,7 +188,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -206,7 +228,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -246,7 +268,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             
             // Create first period
             var firstRequest = new CreateReportingPeriodRequest
@@ -286,7 +308,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -314,7 +336,7 @@ namespace SD.ProjectName.Tests.Products
         {
             // Arrange
             var store = new InMemoryReportStore();
-            CreateTestOrganizationalUnit(store);
+            CreateTestConfiguration(store);
             var request = new CreateReportingPeriodRequest
             {
                 Name = "FY 2024",
@@ -334,6 +356,87 @@ namespace SD.ProjectName.Tests.Products
             Assert.NotNull(snapshot);
             Assert.Single(snapshot.Periods);
             Assert.Equal("single-company", snapshot.Periods[0].ReportScope);
+        }
+
+        [Fact]
+        public void CreatePeriod_WithoutOrganization_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            // Only create organizational unit, not organization
+            CreateTestOrganizationalUnit(store);
+            var request = new CreateReportingPeriodRequest
+            {
+                Name = "FY 2024",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                OwnerId = "user1",
+                OwnerName = "Test User"
+            };
+
+            // Act
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Organization must be configured", errorMessage);
+            Assert.Null(snapshot);
+        }
+
+        [Fact]
+        public void CreatePeriod_WithoutOrganizationalUnits_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            // Only create organization, not organizational units
+            CreateTestOrganization(store);
+            var request = new CreateReportingPeriodRequest
+            {
+                Name = "FY 2024",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                OwnerId = "user1",
+                OwnerName = "Test User"
+            };
+
+            // Act
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Organizational structure must be defined", errorMessage);
+            Assert.Null(snapshot);
+        }
+
+        [Fact]
+        public void CreatePeriod_WithoutAnyConfiguration_ShouldFailWithOrganizationError()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            // Don't create any configuration
+            var request = new CreateReportingPeriodRequest
+            {
+                Name = "FY 2024",
+                StartDate = "2024-01-01",
+                EndDate = "2024-12-31",
+                ReportingMode = "simplified",
+                OwnerId = "user1",
+                OwnerName = "Test User"
+            };
+
+            // Act
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(request);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            // Should fail on organization check first (before organizational units check)
+            Assert.Contains("Organization must be configured", errorMessage);
+            Assert.Null(snapshot);
         }
     }
 }
