@@ -374,3 +374,81 @@ export interface ReadinessReport {
   metrics: ReadinessMetrics
   items: ReadinessItem[]
 }
+
+export type ExceptionType = 'missing-data' | 'estimated-data' | 'simplified-scope' | 'other'
+export type ExceptionStatus = 'pending' | 'accepted' | 'rejected'
+
+export interface CompletionException {
+  id: string
+  sectionId: string
+  dataPointId?: string
+  title: string
+  exceptionType: ExceptionType
+  justification: string
+  status: ExceptionStatus
+  requestedBy: string
+  requestedAt: string
+  approvedBy?: string
+  approvedAt?: string
+  rejectedBy?: string
+  rejectedAt?: string
+  reviewComments?: string
+  expiresAt?: string
+}
+
+export interface CreateCompletionExceptionRequest {
+  sectionId: string
+  dataPointId?: string
+  title: string
+  exceptionType: ExceptionType
+  justification: string
+  requestedBy: string
+  expiresAt?: string
+}
+
+export interface ApproveCompletionExceptionRequest {
+  approvedBy: string
+  reviewComments?: string
+}
+
+export interface RejectCompletionExceptionRequest {
+  rejectedBy: string
+  reviewComments: string
+}
+
+export interface DataPointSummary {
+  id: string
+  title: string
+  completenessStatus: string
+  missingReason?: string
+  estimateType?: string
+  confidenceLevel?: string
+}
+
+export interface SectionCompletenessDetail {
+  sectionId: string
+  sectionTitle: string
+  category: string
+  missingItems: DataPointSummary[]
+  estimatedItems: DataPointSummary[]
+  simplifiedItems: DataPointSummary[]
+  acceptedExceptions: CompletionException[]
+}
+
+export interface CompletenessValidationSummary {
+  totalSections: number
+  totalDataPoints: number
+  missingCount: number
+  estimatedCount: number
+  simplifiedCount: number
+  acceptedExceptionsCount: number
+  pendingExceptionsCount: number
+  completenessPercentage: number
+  completenessWithExceptionsPercentage: number
+}
+
+export interface CompletenessValidationReport {
+  periodId: string
+  sections: SectionCompletenessDetail[]
+  summary: CompletenessValidationSummary
+}
