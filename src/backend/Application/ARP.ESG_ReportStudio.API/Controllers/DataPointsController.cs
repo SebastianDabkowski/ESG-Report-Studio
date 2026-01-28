@@ -103,8 +103,8 @@ public sealed class DataPointsController : ControllerBase
         
         if (!isValid)
         {
-            // Return detailed validation error with missing fields
-            return BadRequest(validationError);
+            // Wrap validation error for consistency with other endpoints
+            return BadRequest(new { error = validationError });
         }
 
         return Ok(dataPoint);

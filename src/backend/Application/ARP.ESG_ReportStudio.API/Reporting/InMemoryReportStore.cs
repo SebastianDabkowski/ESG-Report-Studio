@@ -1630,7 +1630,6 @@ public sealed class InMemoryReportStore
             }
 
             // Update the status and timestamp
-            var oldStatus = dataPoint.CompletenessStatus;
             dataPoint.CompletenessStatus = request.CompletenessStatus;
             dataPoint.UpdatedAt = DateTime.UtcNow.ToString("O");
 

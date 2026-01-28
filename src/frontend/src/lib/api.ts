@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -46,6 +46,7 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     let errorMessage = 'Request failed'
+    let structuredError: any = null
     
     // Clone the response to allow multiple reads
     const clonedResponse = response.clone()
@@ -54,7 +55,17 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
       const errorData = await response.json()
       // Check if it's a structured error with 'error' field
       if (errorData.error) {
-        errorMessage = errorData.error
+        // Check if the error is itself a structured validation error
+        if (typeof errorData.error === 'object' && errorData.error.message && errorData.error.missingFields) {
+          structuredError = errorData.error
+          errorMessage = errorData.error.message
+        } else {
+          errorMessage = errorData.error
+        }
+      } else if (errorData.message && errorData.missingFields) {
+        // Direct StatusValidationError structure
+        structuredError = errorData
+        errorMessage = errorData.message
       } else if (typeof errorData === 'string') {
         errorMessage = errorData
       }
@@ -69,7 +80,13 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
         // Ignore and use default message
       }
     }
-    throw new Error(errorMessage)
+    
+    // Create error with structured data if available
+    const error = new Error(errorMessage) as any
+    if (structuredError) {
+      error.validationError = structuredError
+    }
+    throw error
   }
 
   return response.json() as Promise<T>
@@ -313,7 +330,7 @@ export async function requestChangesOnDataPoint(id: string, payload: RequestChan
   })
 }
 
-export async function updateDataPointStatus(id: string, payload: import('@/lib/types').UpdateDataPointStatusRequest): Promise<any> {
+export async function updateDataPointStatus(id: string, payload: UpdateDataPointStatusRequest): Promise<any> {
   return requestJson<any>(`data-points/${id}/status`, {
     method: 'POST',
     body: JSON.stringify(payload)

@@ -42,9 +42,9 @@ export default function DataPointStatusUpdate({
       
       onStatusUpdated(updatedDataPoint)
     } catch (err: any) {
-      // Check if the error is a validation error with missing fields
-      if (err.message && typeof err.message === 'object' && 'missingFields' in err.message) {
-        setValidationError(err.message as StatusValidationError)
+      // Check if the error has a validationError property (from our enhanced requestJson)
+      if (err.validationError) {
+        setValidationError(err.validationError as StatusValidationError)
       } else if (err instanceof Error) {
         setError(err.message)
       } else {
