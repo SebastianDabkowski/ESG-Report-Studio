@@ -137,11 +137,22 @@ export interface Assumption {
   id: string
   sectionId: string
   dataPointId?: string
+  title: string
   description: string
+  scope: string
+  validityStartDate: string
+  validityEndDate: string
   methodology: string
   limitations: string
+  status: 'active' | 'deprecated' | 'invalid'
+  replacementAssumptionId?: string
+  deprecationJustification?: string
+  version: number
+  updatedBy?: string
+  updatedAt?: string
   createdBy: string
   createdAt: string
+  linkedDataPointIds: string[]
 }
 
 export interface Gap {

@@ -664,17 +664,41 @@ public sealed class Evidence
 
 /// <summary>
 /// Represents an assumption or estimation for an ESG data point.
+/// Supports reusability across multiple disclosures, versioning, and lifecycle management.
 /// </summary>
 public sealed class Assumption
 {
     public string Id { get; set; } = string.Empty;
     public string SectionId { get; set; } = string.Empty;
     public string? DataPointId { get; set; }
+    
+    // Core fields from acceptance criteria
+    public string Title { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty; // e.g., "Company-wide", "Specific facility", "Product line"
+    public string ValidityStartDate { get; set; } = string.Empty;
+    public string ValidityEndDate { get; set; } = string.Empty;
+    
+    // Existing fields
     public string Methodology { get; set; } = string.Empty;
     public string Limitations { get; set; } = string.Empty;
+    
+    // Lifecycle management
+    public string Status { get; set; } = "active"; // 'active', 'deprecated', 'invalid'
+    public string? ReplacementAssumptionId { get; set; } // Reference to replacement when deprecated
+    public string? DeprecationJustification { get; set; } // Required when marked as invalid without replacement
+    
+    // Versioning for tracking updates
+    public int Version { get; set; } = 1;
+    public string? UpdatedBy { get; set; }
+    public string? UpdatedAt { get; set; }
+    
+    // Audit fields
     public string CreatedBy { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
+    
+    // Linkage tracking - stores IDs of all data points using this assumption
+    public List<string> LinkedDataPointIds { get; set; } = new();
 }
 
 /// <summary>
@@ -692,6 +716,46 @@ public sealed class Gap
     public string CreatedBy { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
     public bool Resolved { get; set; }
+}
+
+/// <summary>
+/// Request to create a new assumption.
+/// </summary>
+public sealed class CreateAssumptionRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public string ValidityStartDate { get; set; } = string.Empty;
+    public string ValidityEndDate { get; set; } = string.Empty;
+    public string Methodology { get; set; } = string.Empty;
+    public string Limitations { get; set; } = string.Empty;
+    public List<string> LinkedDataPointIds { get; set; } = new();
+}
+
+/// <summary>
+/// Request to update an existing assumption.
+/// </summary>
+public sealed class UpdateAssumptionRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Scope { get; set; } = string.Empty;
+    public string ValidityStartDate { get; set; } = string.Empty;
+    public string ValidityEndDate { get; set; } = string.Empty;
+    public string Methodology { get; set; } = string.Empty;
+    public string Limitations { get; set; } = string.Empty;
+    public List<string> LinkedDataPointIds { get; set; } = new();
+}
+
+/// <summary>
+/// Request to deprecate an assumption.
+/// </summary>
+public sealed class DeprecateAssumptionRequest
+{
+    public string? ReplacementAssumptionId { get; set; }
+    public string? Justification { get; set; }
 }
 
 /// <summary>
