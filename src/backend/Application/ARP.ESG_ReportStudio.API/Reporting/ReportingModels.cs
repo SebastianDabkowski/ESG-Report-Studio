@@ -424,7 +424,8 @@ public sealed class DataPoint
     public string? GapStatus { get; set; }
     
     /// <summary>
-    /// When GapStatus is "estimated", this preserves the estimate details even after transitioning to "provided".
+    /// Populated when transitioning from 'estimated' to 'provided' status.
+    /// Preserves the estimate details (EstimateType, EstimateMethod, ConfidenceLevel, etc.) for historical reference.
     /// </summary>
     public string? PreviousEstimateSnapshot { get; set; }
 }

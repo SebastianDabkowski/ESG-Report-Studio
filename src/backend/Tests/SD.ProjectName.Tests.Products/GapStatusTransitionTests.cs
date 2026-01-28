@@ -256,7 +256,14 @@ namespace SD.ProjectName.Tests.Products
             var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
             Assert.NotNull(dataPoint);
 
-            // Act
+            // First transition to missing (required workflow step)
+            store.TransitionGapStatus(dataPoint.Id, new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "missing"
+            });
+
+            // Act - Try to transition to estimated without EstimateType
             var transitionRequest = new TransitionGapStatusRequest
             {
                 TransitionedBy = "user-1",
@@ -297,7 +304,14 @@ namespace SD.ProjectName.Tests.Products
             var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
             Assert.NotNull(dataPoint);
 
-            // Act
+            // First transition to missing (required workflow step)
+            store.TransitionGapStatus(dataPoint.Id, new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "missing"
+            });
+
+            // Act - Try to transition to estimated without EstimateMethod
             var transitionRequest = new TransitionGapStatusRequest
             {
                 TransitionedBy = "user-1",
@@ -338,7 +352,14 @@ namespace SD.ProjectName.Tests.Products
             var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
             Assert.NotNull(dataPoint);
 
-            // Act
+            // First transition to missing (required workflow step)
+            store.TransitionGapStatus(dataPoint.Id, new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "missing"
+            });
+
+            // Act - Try to transition to estimated without ConfidenceLevel
             var transitionRequest = new TransitionGapStatusRequest
             {
                 TransitionedBy = "user-1",
@@ -686,6 +707,130 @@ namespace SD.ProjectName.Tests.Products
             Assert.False(isValid);
             Assert.NotNull(errorMessage);
             Assert.Contains("already in 'missing' status", errorMessage);
+        }
+
+        [Fact]
+        public void TransitionGapStatus_SkipMissingToEstimated_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
+            Assert.NotNull(dataPoint);
+
+            // Act - Try to skip directly to estimated without going through missing
+            var transitionRequest = new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "estimated",
+                EstimateType = "point",
+                EstimateMethod = "Some method",
+                ConfidenceLevel = "medium"
+            };
+
+            var (isValid, errorMessage, updatedDataPoint) = store.TransitionGapStatus(dataPoint.Id, transitionRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Cannot skip 'missing' state", errorMessage);
+        }
+
+        [Fact]
+        public void TransitionGapStatus_SkipMissingToProvided_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
+            Assert.NotNull(dataPoint);
+
+            // Act - Try to skip directly to provided without going through missing and estimated
+            var transitionRequest = new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "provided"
+            };
+
+            var (isValid, errorMessage, updatedDataPoint) = store.TransitionGapStatus(dataPoint.Id, transitionRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Cannot skip 'estimated' state", errorMessage);
+        }
+
+        [Fact]
+        public void TransitionGapStatus_SkipEstimatedToProvided_ShouldFail()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var createRequest = new CreateDataPointRequest
+            {
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Test Data Point",
+                Content = "Test content",
+                OwnerId = "user-1",
+                Source = "Test Source",
+                InformationType = "fact",
+                CompletenessStatus = "incomplete"
+            };
+
+            var (_, _, dataPoint) = store.CreateDataPoint(createRequest);
+            Assert.NotNull(dataPoint);
+
+            // Transition to missing first
+            store.TransitionGapStatus(dataPoint.Id, new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "missing"
+            });
+
+            // Act - Try to skip directly from missing to provided without going through estimated
+            var transitionRequest = new TransitionGapStatusRequest
+            {
+                TransitionedBy = "user-1",
+                TargetStatus = "provided"
+            };
+
+            var (isValid, errorMessage, updatedDataPoint) = store.TransitionGapStatus(dataPoint.Id, transitionRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("Cannot skip 'estimated' state", errorMessage);
         }
     }
 }

@@ -2181,7 +2181,15 @@ public sealed class InMemoryReportStore
             var currentStatus = dataPoint.GapStatus ?? "";
 
             // Validate workflow transitions
-            // Missing → Estimated → Provided (can't skip states)
+            // Missing → Estimated → Provided (can't skip states or go backward)
+            
+            // No-op if already in target status
+            if (currentStatus == normalizedTargetStatus)
+            {
+                return (false, $"DataPoint is already in '{normalizedTargetStatus}' status.", null);
+            }
+            
+            // Prevent backward transitions
             if (currentStatus == "estimated" && normalizedTargetStatus == "missing")
             {
                 return (false, "Cannot transition from 'estimated' back to 'missing'. Workflow must progress forward.", null);
@@ -2190,11 +2198,24 @@ public sealed class InMemoryReportStore
             {
                 return (false, "Cannot transition from 'provided' back to earlier states. Workflow must progress forward.", null);
             }
-
-            // No-op if already in target status
-            if (currentStatus == normalizedTargetStatus)
+            
+            // Prevent skipping states - must follow the sequence: missing → estimated → provided
+            if (string.IsNullOrEmpty(currentStatus) || currentStatus == "missing")
             {
-                return (false, $"DataPoint is already in '{normalizedTargetStatus}' status.", null);
+                // From empty/missing, can only go to missing (if empty) or estimated (if missing)
+                if (normalizedTargetStatus == "provided")
+                {
+                    return (false, "Cannot skip 'estimated' state. Must transition to 'estimated' before 'provided'.", null);
+                }
+            }
+            if (currentStatus == "missing" && normalizedTargetStatus == "estimated")
+            {
+                // This is valid - missing → estimated
+            }
+            else if (string.IsNullOrEmpty(currentStatus) && normalizedTargetStatus == "estimated")
+            {
+                // Cannot skip missing state - must explicitly mark as missing first
+                return (false, "Cannot skip 'missing' state. Must transition to 'missing' before 'estimated'.", null);
             }
 
             // Validate estimate fields when transitioning to "estimated"
