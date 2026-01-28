@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace ARP.ESG_ReportStudio.API.Reporting;
 
 public sealed class InMemoryReportStore
@@ -5335,5 +5337,361 @@ public sealed class InMemoryReportStore
                 }
             };
         }
+    }
+
+    /// <summary>
+    /// Generate a Gaps and Improvements report for a reporting period.
+    /// Compiles gaps, assumptions, simplifications, and remediation plans into a report-ready format.
+    /// </summary>
+    public GapsAndImprovementsReport GetGapsAndImprovementsReport(string? periodId = null, string? sectionId = null, string currentUserId = "system")
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow;
+            
+            // Filter sections by period
+            var sections = _sections.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(periodId))
+            {
+                sections = sections.Where(s => s.PeriodId == periodId);
+            }
+            
+            // Filter by specific section if provided
+            if (!string.IsNullOrWhiteSpace(sectionId))
+            {
+                sections = sections.Where(s => s.Id == sectionId);
+            }
+            
+            var sectionsList = sections.ToList();
+            var sectionIds = sectionsList.Select(s => s.Id).ToHashSet();
+            
+            // Collect all gaps, assumptions, simplifications, and remediation plans for filtered sections
+            var gaps = _gaps.Where(g => sectionIds.Contains(g.SectionId)).ToList();
+            var assumptions = _assumptions.Where(a => sectionIds.Contains(a.SectionId)).ToList();
+            var simplifications = _simplifications.Where(s => sectionIds.Contains(s.SectionId)).ToList();
+            var remediationPlans = _remediationPlans.Where(rp => sectionIds.Contains(rp.SectionId)).ToList();
+            var remediationActions = _remediationActions.Where(ra => 
+                remediationPlans.Any(rp => rp.Id == ra.RemediationPlanId)).ToList();
+            
+            // Build section-grouped data
+            var sectionGapsAndImprovements = new List<SectionGapsAndImprovements>();
+            
+            foreach (var section in sectionsList)
+            {
+                var sectionGaps = gaps.Where(g => g.SectionId == section.Id).ToList();
+                var sectionAssumptions = assumptions.Where(a => a.SectionId == section.Id).ToList();
+                var sectionSimplifications = simplifications.Where(s => s.SectionId == section.Id).ToList();
+                var sectionRemediationPlans = remediationPlans.Where(rp => rp.SectionId == section.Id).ToList();
+                
+                // Build gaps with associated remediation plans
+                var gapsWithRemediation = new List<GapWithRemediation>();
+                foreach (var gap in sectionGaps)
+                {
+                    var plan = sectionRemediationPlans.FirstOrDefault(rp => rp.GapId == gap.Id);
+                    RemediationPlanWithActions? planWithActions = null;
+                    
+                    if (plan != null)
+                    {
+                        var actions = remediationActions.Where(ra => ra.RemediationPlanId == plan.Id).ToList();
+                        planWithActions = new RemediationPlanWithActions
+                        {
+                            Plan = plan,
+                            Actions = actions
+                        };
+                    }
+                    
+                    gapsWithRemediation.Add(new GapWithRemediation
+                    {
+                        Gap = gap,
+                        RemediationPlan = planWithActions
+                    });
+                }
+                
+                // Build assumption references with linked data point titles
+                var assumptionRefs = new List<AssumptionReference>();
+                foreach (var assumption in sectionAssumptions)
+                {
+                    var linkedDataPoints = _dataPoints
+                        .Where(dp => assumption.LinkedDataPointIds.Contains(dp.Id))
+                        .Select(dp => dp.Title)
+                        .ToList();
+                    
+                    assumptionRefs.Add(new AssumptionReference
+                    {
+                        Assumption = assumption,
+                        LinkedDataPointTitles = linkedDataPoints
+                    });
+                }
+                
+                // Build simplification references
+                var simplificationRefs = sectionSimplifications
+                    .Select(s => new SimplificationReference { Simplification = s })
+                    .ToList();
+                
+                // Build standalone remediation plans (not linked to gaps)
+                var standalonePlans = new List<RemediationPlanWithActions>();
+                foreach (var plan in sectionRemediationPlans.Where(rp => string.IsNullOrWhiteSpace(rp.GapId)))
+                {
+                    var actions = remediationActions.Where(ra => ra.RemediationPlanId == plan.Id).ToList();
+                    standalonePlans.Add(new RemediationPlanWithActions
+                    {
+                        Plan = plan,
+                        Actions = actions
+                    });
+                }
+                
+                sectionGapsAndImprovements.Add(new SectionGapsAndImprovements
+                {
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    Gaps = gapsWithRemediation,
+                    Assumptions = assumptionRefs,
+                    Simplifications = simplificationRefs,
+                    RemediationPlans = standalonePlans
+                });
+            }
+            
+            // Calculate summary metrics
+            var totalGaps = gaps.Count;
+            var resolvedGaps = gaps.Count(g => g.Resolved);
+            var unresolvedGaps = totalGaps - resolvedGaps;
+            
+            var totalAssumptions = assumptions.Count;
+            var activeAssumptions = assumptions.Count(a => a.Status == "active");
+            var deprecatedAssumptions = assumptions.Count(a => a.Status == "deprecated");
+            
+            var totalSimplifications = simplifications.Count;
+            var activeSimplifications = simplifications.Count(s => s.Status == "active");
+            
+            var totalRemediationPlans = remediationPlans.Count;
+            var completedPlans = remediationPlans.Count(rp => rp.Status == "completed");
+            var inProgressPlans = remediationPlans.Count(rp => rp.Status == "in-progress");
+            
+            var totalActions = remediationActions.Count;
+            var completedActions = remediationActions.Count(ra => ra.Status == "completed");
+            
+            var overdueActions = remediationActions.Count(ra =>
+            {
+                if (ra.Status == "completed" || ra.Status == "cancelled") return false;
+                if (string.IsNullOrWhiteSpace(ra.DueDate)) return false;
+                
+                if (DateTime.TryParse(ra.DueDate, out var dueDate))
+                {
+                    return dueDate.Date < now.Date;
+                }
+                return false;
+            });
+            
+            // Generate auto-narrative
+            var narrative = GenerateGapsAndImprovementsNarrative(
+                totalGaps, resolvedGaps, unresolvedGaps,
+                totalAssumptions, activeAssumptions,
+                totalSimplifications, activeSimplifications,
+                totalRemediationPlans, completedPlans, inProgressPlans,
+                totalActions, completedActions, overdueActions,
+                sectionGapsAndImprovements
+            );
+            
+            return new GapsAndImprovementsReport
+            {
+                PeriodId = periodId,
+                Summary = new GapsAndImprovementsSummary
+                {
+                    TotalGaps = totalGaps,
+                    ResolvedGaps = resolvedGaps,
+                    UnresolvedGaps = unresolvedGaps,
+                    TotalAssumptions = totalAssumptions,
+                    ActiveAssumptions = activeAssumptions,
+                    DeprecatedAssumptions = deprecatedAssumptions,
+                    TotalSimplifications = totalSimplifications,
+                    ActiveSimplifications = activeSimplifications,
+                    TotalRemediationPlans = totalRemediationPlans,
+                    CompletedRemediationPlans = completedPlans,
+                    InProgressRemediationPlans = inProgressPlans,
+                    TotalRemediationActions = totalActions,
+                    CompletedActions = completedActions,
+                    OverdueActions = overdueActions
+                },
+                Sections = sectionGapsAndImprovements,
+                AutoGeneratedNarrative = narrative,
+                ManualNarrative = null, // Initially no manual override
+                GeneratedAt = now.ToString("O"),
+                GeneratedBy = currentUserId
+            };
+        }
+    }
+
+    /// <summary>
+    /// Generate narrative text for the gaps and improvements report.
+    /// </summary>
+    private string GenerateGapsAndImprovementsNarrative(
+        int totalGaps, int resolvedGaps, int unresolvedGaps,
+        int totalAssumptions, int activeAssumptions,
+        int totalSimplifications, int activeSimplifications,
+        int totalRemediationPlans, int completedPlans, int inProgressPlans,
+        int totalActions, int completedActions, int overdueActions,
+        List<SectionGapsAndImprovements> sections)
+    {
+        var sb = new StringBuilder();
+        
+        sb.AppendLine("# Gaps and Improvements");
+        sb.AppendLine();
+        sb.AppendLine("## Executive Summary");
+        sb.AppendLine();
+        
+        // Overall status
+        if (totalGaps == 0 && totalAssumptions == 0 && totalSimplifications == 0)
+        {
+            sb.AppendLine("This report contains complete data with no identified gaps, assumptions, or simplifications.");
+        }
+        else
+        {
+            sb.AppendLine($"This section provides a comprehensive overview of data gaps, estimates, assumptions, and simplifications applied in this ESG report, along with remediation plans for improvement in future reporting periods.");
+            sb.AppendLine();
+            
+            // Gaps summary
+            if (totalGaps > 0)
+            {
+                sb.AppendLine($"**Data Gaps:** {totalGaps} gap(s) identified, of which {resolvedGaps} have been resolved and {unresolvedGaps} remain open.");
+            }
+            
+            // Assumptions summary
+            if (totalAssumptions > 0)
+            {
+                sb.AppendLine($"**Assumptions:** {activeAssumptions} active assumption(s) are currently in use to support data collection and estimation.");
+            }
+            
+            // Simplifications summary
+            if (totalSimplifications > 0)
+            {
+                sb.AppendLine($"**Simplifications:** {activeSimplifications} simplification(s) have been applied to the reporting scope or methodology.");
+            }
+            
+            // Remediation summary
+            if (totalRemediationPlans > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"**Remediation Plans:** {totalRemediationPlans} plan(s) have been established to address gaps and improve data quality, with {completedPlans} completed and {inProgressPlans} currently in progress.");
+                
+                if (overdueActions > 0)
+                {
+                    sb.AppendLine($"⚠️ **Attention Required:** {overdueActions} remediation action(s) are overdue and require immediate attention.");
+                }
+            }
+        }
+        
+        sb.AppendLine();
+        sb.AppendLine("## Detailed Findings by Section");
+        sb.AppendLine();
+        
+        // Section details
+        foreach (var section in sections.Where(s => s.Gaps.Any() || s.Assumptions.Any() || s.Simplifications.Any()))
+        {
+            sb.AppendLine($"### {section.SectionTitle}");
+            sb.AppendLine();
+            
+            // Gaps
+            if (section.Gaps.Any())
+            {
+                sb.AppendLine("**Identified Gaps:**");
+                foreach (var gapWithRem in section.Gaps)
+                {
+                    var gap = gapWithRem.Gap;
+                    sb.AppendLine($"- **{gap.Title}**: {gap.Description}");
+                    sb.AppendLine($"  - Impact: {gap.Impact}");
+                    
+                    if (gapWithRem.RemediationPlan != null)
+                    {
+                        sb.AppendLine($"  - Remediation Plan: {gapWithRem.RemediationPlan.Plan.Title} (Target: {gapWithRem.RemediationPlan.Plan.TargetPeriod})");
+                    }
+                    else if (!string.IsNullOrWhiteSpace(gap.ImprovementPlan))
+                    {
+                        sb.AppendLine($"  - Improvement Plan: {gap.ImprovementPlan}");
+                    }
+                }
+                sb.AppendLine();
+            }
+            
+            // Assumptions
+            if (section.Assumptions.Any())
+            {
+                sb.AppendLine("**Applied Assumptions:**");
+                foreach (var assumptionRef in section.Assumptions.Where(a => a.Assumption.Status == "active"))
+                {
+                    var assumption = assumptionRef.Assumption;
+                    sb.AppendLine($"- **{assumption.Title}**: {assumption.Description}");
+                    sb.AppendLine($"  - Scope: {assumption.Scope}");
+                    sb.AppendLine($"  - Methodology: {assumption.Methodology}");
+                    
+                    if (assumptionRef.LinkedDataPointTitles.Any())
+                    {
+                        sb.AppendLine($"  - Applied to: {string.Join(", ", assumptionRef.LinkedDataPointTitles)}");
+                    }
+                    
+                    if (!string.IsNullOrWhiteSpace(assumption.Limitations))
+                    {
+                        sb.AppendLine($"  - Limitations: {assumption.Limitations}");
+                    }
+                }
+                sb.AppendLine();
+            }
+            
+            // Simplifications
+            if (section.Simplifications.Any())
+            {
+                sb.AppendLine("**Scope Simplifications:**");
+                foreach (var simpRef in section.Simplifications.Where(s => s.Simplification.Status == "active"))
+                {
+                    var simp = simpRef.Simplification;
+                    sb.AppendLine($"- **{simp.Title}**: {simp.Description}");
+                    sb.AppendLine($"  - Impact Level: {simp.ImpactLevel}");
+                    
+                    if (simp.AffectedEntities.Any())
+                    {
+                        sb.AppendLine($"  - Affected Entities: {string.Join(", ", simp.AffectedEntities)}");
+                    }
+                }
+                sb.AppendLine();
+            }
+            
+            // Remediation plans
+            if (section.RemediationPlans.Any())
+            {
+                sb.AppendLine("**Remediation Plans:**");
+                foreach (var planWithActions in section.RemediationPlans)
+                {
+                    var plan = planWithActions.Plan;
+                    sb.AppendLine($"- **{plan.Title}** ({plan.Status})");
+                    sb.AppendLine($"  - Target Period: {plan.TargetPeriod}");
+                    sb.AppendLine($"  - Owner: {plan.OwnerName}");
+                    sb.AppendLine($"  - Priority: {plan.Priority}");
+                    
+                    if (planWithActions.Actions.Any())
+                    {
+                        sb.AppendLine($"  - Actions: {planWithActions.Actions.Count(a => a.Status == "completed")}/{planWithActions.Actions.Count} completed");
+                    }
+                }
+                sb.AppendLine();
+            }
+        }
+        
+        sb.AppendLine("## Conclusion");
+        sb.AppendLine();
+        
+        if (totalRemediationPlans > 0)
+        {
+            sb.AppendLine("The organization has established a structured approach to addressing identified gaps and improving data quality. Continued progress on remediation plans will enhance the completeness and reliability of future ESG reports.");
+        }
+        else if (unresolvedGaps > 0 || activeAssumptions > 0)
+        {
+            sb.AppendLine("While gaps and assumptions have been identified, formal remediation plans should be established to systematically address these items in future reporting periods.");
+        }
+        else
+        {
+            sb.AppendLine("The report demonstrates strong data quality with minimal gaps or assumptions requiring remediation.");
+        }
+        
+        return sb.ToString();
     }
 }
