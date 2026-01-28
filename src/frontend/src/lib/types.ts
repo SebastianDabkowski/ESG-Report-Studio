@@ -68,6 +68,9 @@ export interface DataPoint {
   value?: string | number
   unit?: string
   ownerId: string
+  source: string
+  informationType: string
+  completenessStatus: string
   createdAt: string
   updatedAt: string
   evidenceIds: string[]
