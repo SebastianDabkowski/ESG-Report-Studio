@@ -1307,7 +1307,13 @@ public sealed class InMemoryReportStore
                 MissingFlaggedAt = request.IsMissing ? now : null,
                 EstimateType = request.EstimateType?.ToLowerInvariant(),
                 EstimateMethod = request.EstimateMethod,
-                ConfidenceLevel = request.ConfidenceLevel?.ToLowerInvariant()
+                ConfidenceLevel = request.ConfidenceLevel?.ToLowerInvariant(),
+                EstimateInputSources = request.EstimateInputSources ?? new List<EstimateInputSource>(),
+                EstimateInputs = request.EstimateInputs,
+                EstimateAuthor = request.InformationType?.Equals("estimate", StringComparison.OrdinalIgnoreCase) == true 
+                    ? request.OwnerId : null,
+                EstimateCreatedAt = request.InformationType?.Equals("estimate", StringComparison.OrdinalIgnoreCase) == true 
+                    ? now : null
             };
 
             // Validate against validation rules
@@ -1672,6 +1678,10 @@ public sealed class InMemoryReportStore
                 changes.Add(new FieldChange { Field = "ConfidenceLevel", OldValue = dataPoint.ConfidenceLevel ?? "", NewValue = normalizedConfidenceLevel ?? "" });
             }
             dataPoint.ConfidenceLevel = normalizedConfidenceLevel;
+            
+            // Update estimate provenance fields
+            dataPoint.EstimateInputSources = request.EstimateInputSources ?? new List<EstimateInputSource>();
+            dataPoint.EstimateInputs = request.EstimateInputs;
             
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
@@ -2567,6 +2577,8 @@ public sealed class InMemoryReportStore
         string methodology,
         string limitations,
         List<string> linkedDataPointIds,
+        string? rationale,
+        List<AssumptionSource> sources,
         string createdBy)
     {
         lock (_lock)
@@ -2649,6 +2661,8 @@ public sealed class InMemoryReportStore
                 ValidityEndDate = validityEndDate,
                 Methodology = methodology,
                 Limitations = limitations,
+                Rationale = rationale,
+                Sources = sources ?? new List<AssumptionSource>(),
                 Status = "active",
                 Version = 1,
                 CreatedBy = createdBy,
@@ -2671,6 +2685,8 @@ public sealed class InMemoryReportStore
         string methodology,
         string limitations,
         List<string> linkedDataPointIds,
+        string? rationale,
+        List<AssumptionSource> sources,
         string updatedBy)
     {
         lock (_lock)
@@ -2751,6 +2767,8 @@ public sealed class InMemoryReportStore
             assumption.ValidityEndDate = validityEndDate;
             assumption.Methodology = methodology;
             assumption.Limitations = limitations;
+            assumption.Rationale = rationale;
+            assumption.Sources = sources ?? new List<AssumptionSource>();
             assumption.LinkedDataPointIds = new List<string>(linkedDataPointIds);
             assumption.Version += 1;
             assumption.UpdatedBy = updatedBy;

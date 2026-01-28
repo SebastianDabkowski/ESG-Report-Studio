@@ -54,6 +54,8 @@ public sealed class AssumptionsController : ControllerBase
             request.Methodology,
             request.Limitations,
             request.LinkedDataPointIds,
+            request.Rationale,
+            request.Sources,
             User?.Identity?.Name ?? "anonymous"
         );
 
@@ -81,6 +83,8 @@ public sealed class AssumptionsController : ControllerBase
             request.Methodology,
             request.Limitations,
             request.LinkedDataPointIds,
+            request.Rationale,
+            request.Sources,
             User?.Identity?.Name ?? "anonymous"
         );
 
