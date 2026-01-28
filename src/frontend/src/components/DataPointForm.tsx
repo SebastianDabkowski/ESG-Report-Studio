@@ -80,7 +80,7 @@ export default function DataPointForm({
       source: '',
       informationType: 'fact',
       assumptions: '',
-      completenessStatus: 'incomplete',
+      completenessStatus: undefined,
     }
   })
 
@@ -245,7 +245,12 @@ export default function DataPointForm({
             <Label htmlFor="completenessStatus">Completeness Status</Label>
             <Select
               value={watch('completenessStatus') || ''}
-              onValueChange={(value) => setValue('completenessStatus', value as any)}
+              onValueChange={(value) => {
+                // Validate the value is a valid CompletenessStatus before setting
+                if (value === 'incomplete' || value === 'complete' || value === 'not applicable') {
+                  setValue('completenessStatus', value)
+                }
+              }}
             >
               <SelectTrigger id="completenessStatus" className={errors.completenessStatus ? 'border-red-500' : ''}>
                 <SelectValue placeholder="Auto-calculate" />
