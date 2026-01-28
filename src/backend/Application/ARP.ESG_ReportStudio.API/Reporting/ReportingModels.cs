@@ -2934,4 +2934,160 @@ public sealed class PublishReportResult
     /// Message describing the publication result.
     /// </summary>
     public string Message { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Approval request associated with this publication, if any.
+    /// </summary>
+    public ApprovalRequest? ApprovalRequest { get; set; }
+}
+
+/// <summary>
+/// Request to initiate an approval workflow for a report version.
+/// </summary>
+public sealed class CreateApprovalRequestRequest
+{
+    /// <summary>
+    /// ID of the reporting period for which approval is requested.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person requesting approval (typically report owner).
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of user IDs who should approve this report.
+    /// </summary>
+    public List<string> ApproverIds { get; set; } = new();
+    
+    /// <summary>
+    /// Optional message to approvers explaining context or urgency.
+    /// </summary>
+    public string? RequestMessage { get; set; }
+    
+    /// <summary>
+    /// Deadline for approval (ISO 8601 timestamp).
+    /// </summary>
+    public string? ApprovalDeadline { get; set; }
+}
+
+/// <summary>
+/// Represents an approval request workflow for a reporting period.
+/// </summary>
+public sealed class ApprovalRequest
+{
+    /// <summary>
+    /// Unique identifier for this approval request.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the reporting period this approval is for.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who requested the approval.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when approval was requested (ISO 8601).
+    /// </summary>
+    public string RequestedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional message to approvers.
+    /// </summary>
+    public string? RequestMessage { get; set; }
+    
+    /// <summary>
+    /// Deadline for approval (ISO 8601 timestamp).
+    /// </summary>
+    public string? ApprovalDeadline { get; set; }
+    
+    /// <summary>
+    /// Overall status of the approval request.
+    /// Values: pending, approved, rejected, cancelled
+    /// </summary>
+    public string Status { get; set; } = "pending";
+    
+    /// <summary>
+    /// Individual approval records from each approver.
+    /// </summary>
+    public List<ApprovalRecord> Approvals { get; set; } = new();
+}
+
+/// <summary>
+/// Individual approval record from one approver.
+/// </summary>
+public sealed class ApprovalRecord
+{
+    /// <summary>
+    /// Unique identifier for this approval record.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the approval request this record belongs to.
+    /// </summary>
+    public string ApprovalRequestId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the approver.
+    /// </summary>
+    public string ApproverId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the approver (for display).
+    /// </summary>
+    public string ApproverName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Status of this individual approval.
+    /// Values: pending, approved, rejected
+    /// </summary>
+    public string Status { get; set; } = "pending";
+    
+    /// <summary>
+    /// Decision: approve or reject.
+    /// </summary>
+    public string? Decision { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the decision was made (ISO 8601).
+    /// </summary>
+    public string? DecidedAt { get; set; }
+    
+    /// <summary>
+    /// Optional comment from the approver explaining their decision.
+    /// </summary>
+    public string? Comment { get; set; }
+}
+
+/// <summary>
+/// Request to submit an approval decision.
+/// </summary>
+public sealed class SubmitApprovalDecisionRequest
+{
+    /// <summary>
+    /// ID of the approval record being decided on.
+    /// </summary>
+    public string ApprovalRecordId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Decision: "approve" or "reject".
+    /// </summary>
+    public string Decision { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional comment explaining the decision.
+    /// </summary>
+    public string? Comment { get; set; }
+    
+    /// <summary>
+    /// User ID of the person making the decision.
+    /// </summary>
+    public string DecidedBy { get; set; } = string.Empty;
 }

@@ -31,6 +31,8 @@ public sealed class InMemoryReportStore
     private readonly List<EvidenceAccessLog> _evidenceAccessLog = new();
     private readonly List<Decision> _decisions = new();
     private readonly List<DecisionVersion> _decisionVersions = new();
+    private readonly List<ApprovalRequest> _approvalRequests = new();
+    private readonly List<ApprovalRecord> _approvalRecords = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -7999,6 +8001,200 @@ public sealed class InMemoryReportStore
         }
 
         return issues;
+    }
+
+    #endregion
+
+    #region Approval Workflow
+
+    /// <summary>
+    /// Creates an approval request for a reporting period.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ApprovalRequest? ApprovalRequest) CreateApprovalRequest(CreateApprovalRequestRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate period exists
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, $"Reporting period with ID '{request.PeriodId}' not found.", null);
+            }
+
+            // Validate requester exists
+            var requester = _users.FirstOrDefault(u => u.Id == request.RequestedBy);
+            if (requester == null)
+            {
+                return (false, $"User with ID '{request.RequestedBy}' not found.", null);
+            }
+
+            // Validate approvers
+            if (request.ApproverIds == null || request.ApproverIds.Count == 0)
+            {
+                return (false, "At least one approver must be specified.", null);
+            }
+
+            var approvers = _users.Where(u => request.ApproverIds.Contains(u.Id)).ToList();
+            if (approvers.Count != request.ApproverIds.Count)
+            {
+                return (false, "One or more approver IDs are invalid.", null);
+            }
+
+            // Create approval request
+            var approvalRequest = new ApprovalRequest
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = request.PeriodId,
+                RequestedBy = request.RequestedBy,
+                RequestedAt = DateTime.UtcNow.ToString("O"),
+                RequestMessage = request.RequestMessage,
+                ApprovalDeadline = request.ApprovalDeadline,
+                Status = "pending",
+                Approvals = new List<ApprovalRecord>()
+            };
+
+            // Create approval records for each approver
+            foreach (var approver in approvers)
+            {
+                var record = new ApprovalRecord
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ApprovalRequestId = approvalRequest.Id,
+                    ApproverId = approver.Id,
+                    ApproverName = approver.Name,
+                    Status = "pending"
+                };
+                approvalRequest.Approvals.Add(record);
+                _approvalRecords.Add(record);
+            }
+
+            _approvalRequests.Add(approvalRequest);
+
+            // Log the action
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                EntityType = "ApprovalRequest",
+                EntityId = approvalRequest.Id,
+                Action = "created",
+                UserId = request.RequestedBy,
+                UserName = requester.Name,
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                ChangeNote = $"Approval request created for period '{period.Name}' with {approvers.Count} approver(s)"
+            });
+
+            return (true, null, approvalRequest);
+        }
+    }
+
+    /// <summary>
+    /// Submits an approval decision (approve or reject).
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ApprovalRecord? ApprovalRecord) SubmitApprovalDecision(SubmitApprovalDecisionRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate decision
+            if (request.Decision != "approve" && request.Decision != "reject")
+            {
+                return (false, "Decision must be either 'approve' or 'reject'.", null);
+            }
+
+            // Find approval record
+            var record = _approvalRecords.FirstOrDefault(r => r.Id == request.ApprovalRecordId);
+            if (record == null)
+            {
+                return (false, $"Approval record with ID '{request.ApprovalRecordId}' not found.", null);
+            }
+
+            // Validate approver
+            var approver = _users.FirstOrDefault(u => u.Id == request.DecidedBy);
+            if (approver == null)
+            {
+                return (false, $"User with ID '{request.DecidedBy}' not found.", null);
+            }
+
+            // Check authorization - only assigned approver can decide
+            if (record.ApproverId != request.DecidedBy)
+            {
+                return (false, "You are not authorized to decide on this approval.", null);
+            }
+
+            // Check if already decided
+            if (record.Status != "pending")
+            {
+                return (false, $"This approval has already been {record.Status}.", null);
+            }
+
+            // Update approval record
+            record.Decision = request.Decision;
+            record.Status = request.Decision == "approve" ? "approved" : "rejected";
+            record.DecidedAt = DateTime.UtcNow.ToString("O");
+            record.Comment = request.Comment;
+
+            // Update overall approval request status
+            var approvalRequest = _approvalRequests.FirstOrDefault(ar => ar.Id == record.ApprovalRequestId);
+            if (approvalRequest != null)
+            {
+                // Check if all approvals are decided
+                var allDecided = approvalRequest.Approvals.All(a => a.Status != "pending");
+                if (allDecided)
+                {
+                    // If any rejection, overall status is rejected
+                    var anyRejection = approvalRequest.Approvals.Any(a => a.Status == "rejected");
+                    approvalRequest.Status = anyRejection ? "rejected" : "approved";
+                }
+            }
+
+            // Log the action
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                EntityType = "ApprovalRecord",
+                EntityId = record.Id,
+                Action = record.Status,
+                UserId = request.DecidedBy,
+                UserName = approver.Name,
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                ChangeNote = $"Approval {record.Status} for approval request {record.ApprovalRequestId}"
+            });
+
+            return (true, null, record);
+        }
+    }
+
+    /// <summary>
+    /// Gets all approval requests for a reporting period.
+    /// </summary>
+    public List<ApprovalRequest> GetApprovalRequests(string? periodId = null, string? approverId = null)
+    {
+        lock (_lock)
+        {
+            var query = _approvalRequests.AsEnumerable();
+
+            if (!string.IsNullOrEmpty(periodId))
+            {
+                query = query.Where(ar => ar.PeriodId == periodId);
+            }
+
+            if (!string.IsNullOrEmpty(approverId))
+            {
+                query = query.Where(ar => ar.Approvals.Any(a => a.ApproverId == approverId));
+            }
+
+            return query.ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets a specific approval request by ID.
+    /// </summary>
+    public ApprovalRequest? GetApprovalRequest(string id)
+    {
+        lock (_lock)
+        {
+            return _approvalRequests.FirstOrDefault(ar => ar.Id == id);
+        }
     }
 
     #endregion

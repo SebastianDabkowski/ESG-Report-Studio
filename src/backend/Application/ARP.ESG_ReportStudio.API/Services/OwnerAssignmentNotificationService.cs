@@ -256,4 +256,123 @@ This data point has been reassigned to another user. You are no longer responsib
 Best regards,
 ESG Report Studio";
     }
+
+    public async Task SendApprovalRequestNotificationAsync(
+        ApprovalRequest approvalRequest,
+        ReportingPeriod period,
+        User requester,
+        List<User> approvers)
+    {
+        var deadlineInfo = !string.IsNullOrWhiteSpace(approvalRequest.ApprovalDeadline)
+            ? $"\nDeadline: {approvalRequest.ApprovalDeadline}"
+            : "";
+
+        var messageInfo = !string.IsNullOrWhiteSpace(approvalRequest.RequestMessage)
+            ? $"\n\nMessage from {requester.Name}:\n{approvalRequest.RequestMessage}"
+            : "";
+
+        foreach (var approver in approvers)
+        {
+            var notification = new OwnerNotification
+            {
+                Id = Guid.NewGuid().ToString(),
+                RecipientUserId = approver.Id,
+                NotificationType = "approval-requested",
+                EntityId = approvalRequest.Id,
+                EntityType = "ApprovalRequest",
+                EntityTitle = $"Approval for {period.Name}",
+                Message = $"Approval requested for report '{period.Name}' by {requester.Name}",
+                ChangedBy = requester.Id,
+                ChangedByName = requester.Name,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                IsRead = false
+            };
+
+            var subject = $"ESG Report Studio: Approval Requested - {period.Name}";
+            var body = $@"Hello {approver.Name},
+
+{requester.Name} has requested your approval for the following ESG report:
+
+Report Period: {period.Name}
+Reporting Period: {period.StartDate} to {period.EndDate}
+Requested by: {requester.Name}{deadlineInfo}{messageInfo}
+
+Please log in to ESG Report Studio to review the report and provide your approval decision.
+
+Best regards,
+ESG Report Studio";
+
+            var emailSent = await _emailService.SendEmailAsync(approver.Email, approver.Name, subject, body);
+            notification.EmailSent = emailSent;
+
+            _store.RecordNotification(notification);
+
+            _logger.LogInformation(
+                "Sent approval request notification for approval {ApprovalRequestId} to approver {UserId} (email sent: {EmailSent})",
+                approvalRequest.Id, approver.Id, emailSent);
+        }
+    }
+
+    public async Task SendApprovalDecisionNotificationAsync(
+        ApprovalRecord approvalRecord,
+        ApprovalRequest approvalRequest,
+        ReportingPeriod period,
+        User approver,
+        User requester)
+    {
+        var decision = approvalRecord.Decision == "approve" ? "approved" : "rejected";
+        var commentInfo = !string.IsNullOrWhiteSpace(approvalRecord.Comment)
+            ? $"\n\nComment from {approver.Name}:\n{approvalRecord.Comment}"
+            : "";
+
+        var notification = new OwnerNotification
+        {
+            Id = Guid.NewGuid().ToString(),
+            RecipientUserId = requester.Id,
+            NotificationType = $"approval-{decision}",
+            EntityId = approvalRequest.Id,
+            EntityType = "ApprovalRequest",
+            EntityTitle = $"Approval for {period.Name}",
+            Message = $"{approver.Name} has {decision} the report '{period.Name}'",
+            ChangedBy = approver.Id,
+            ChangedByName = approver.Name,
+            CreatedAt = DateTime.UtcNow.ToString("O"),
+            IsRead = false
+        };
+
+        // Check overall approval status
+        var allApprovals = approvalRequest.Approvals;
+        var totalApprovals = allApprovals.Count;
+        var completedApprovals = allApprovals.Count(a => a.Status != "pending");
+        var approvedCount = allApprovals.Count(a => a.Status == "approved");
+        var rejectedCount = allApprovals.Count(a => a.Status == "rejected");
+
+        var statusInfo = completedApprovals == totalApprovals
+            ? $"\n\nOverall Status: All {totalApprovals} approver(s) have responded ({approvedCount} approved, {rejectedCount} rejected)"
+            : $"\n\nOverall Status: {completedApprovals} of {totalApprovals} approver(s) have responded";
+
+        var subject = $"ESG Report Studio: Approval {decision.ToUpper()} - {period.Name}";
+        var body = $@"Hello {requester.Name},
+
+{approver.Name} has {decision} your approval request for:
+
+Report Period: {period.Name}
+Reporting Period: {period.StartDate} to {period.EndDate}
+Decision: {decision.ToUpper()}
+Decided at: {approvalRecord.DecidedAt}{commentInfo}{statusInfo}
+
+Please log in to ESG Report Studio to view the complete approval status.
+
+Best regards,
+ESG Report Studio";
+
+        var emailSent = await _emailService.SendEmailAsync(requester.Email, requester.Name, subject, body);
+        notification.EmailSent = emailSent;
+
+        _store.RecordNotification(notification);
+
+        _logger.LogInformation(
+            "Sent approval decision notification for approval {ApprovalRequestId} to requester {UserId} (email sent: {EmailSent})",
+            approvalRequest.Id, requester.Id, emailSent);
+    }
 }
