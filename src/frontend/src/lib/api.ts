@@ -175,6 +175,20 @@ export function deleteOrganizationalUnit(id: string): Promise<void> {
   })
 }
 
+// Section Owner API methods
+export interface UpdateSectionOwnerPayload {
+  ownerId: string
+  updatedBy: string
+  changeNote?: string
+}
+
+export function updateSectionOwner(sectionId: string, payload: UpdateSectionOwnerPayload): Promise<ReportSection> {
+  return requestJson<ReportSection>(`sections/${sectionId}/owner`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
 // User API methods
 export function getUsers(): Promise<User[]> {
   return requestJson<User[]>('users')

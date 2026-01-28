@@ -341,6 +341,91 @@ public sealed class InMemoryReportStore
         }
     }
 
+    public (bool IsValid, string? ErrorMessage, ReportSection? Section) UpdateSectionOwner(string sectionId, UpdateSectionOwnerRequest request)
+    {
+        lock (_lock)
+        {
+            // Find the section
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, "Section not found.", null);
+            }
+
+            // Validate the new owner exists
+            var newOwner = _users.FirstOrDefault(u => u.Id == request.OwnerId);
+            if (newOwner == null)
+            {
+                return (false, "Owner user not found.", null);
+            }
+
+            // Validate the user making the change exists
+            var updatingUser = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
+            if (updatingUser == null)
+            {
+                return (false, "Updating user not found.", null);
+            }
+
+            // Check authorization: only admin or report-owner can change section ownership
+            if (updatingUser.Role == "admin")
+            {
+                // Admins can change ownership of any section
+            }
+            else if (updatingUser.Role == "report-owner")
+            {
+                // Report owners can only change ownership of sections in their own periods
+                var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+                if (period == null || period.OwnerId != updatingUser.Id)
+                {
+                    return (false, "Report owners can only change section ownership for their own reporting periods.", null);
+                }
+            }
+            else
+            {
+                return (false, "Only administrators or report owners can change section ownership.", null);
+            }
+
+            // Capture old value for audit log
+            var oldOwnerId = section.OwnerId;
+            var oldOwner = _users.FirstOrDefault(u => u.Id == oldOwnerId);
+            var oldOwnerName = oldOwner?.Name ?? oldOwnerId;
+
+            // Update the section owner
+            section.OwnerId = request.OwnerId;
+
+            // Update the corresponding summary
+            var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+            if (summary != null)
+            {
+                summary.OwnerId = request.OwnerId;
+                summary.OwnerName = newOwner.Name;
+            }
+
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange
+                {
+                    Field = "OwnerId",
+                    OldValue = $"{oldOwnerName} ({oldOwnerId})",
+                    NewValue = $"{newOwner.Name} ({newOwner.Id})"
+                }
+            };
+
+            CreateAuditLogEntry(
+                userId: request.UpdatedBy,
+                userName: updatingUser.Name,
+                action: "UpdateSectionOwner",
+                entityType: "ReportSection",
+                entityId: sectionId,
+                changes: changes,
+                changeNote: request.ChangeNote
+            );
+
+            return (true, null, section);
+        }
+    }
+
     public Organization? GetOrganization()
     {
         lock (_lock)
