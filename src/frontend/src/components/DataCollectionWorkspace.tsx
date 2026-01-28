@@ -15,6 +15,7 @@ import DataPointEvidenceManager from '@/components/DataPointEvidenceManager'
 import DataPointNotes from '@/components/DataPointNotes'
 import EvidenceUploadForm from '@/components/EvidenceUploadForm'
 import ImportDataDialog from '@/components/ImportDataDialog'
+import { AssumptionsList } from '@/components/AssumptionsList'
 import { 
   Leaf, 
   Users, 
@@ -633,6 +634,11 @@ export default function DataCollectionWorkspace({ currentUser }: DataCollectionW
                     ))}
                   </div>
                 )}
+
+                {/* Assumptions Section */}
+                <div className="pt-4 border-t">
+                  <AssumptionsList sectionId={section.id} />
+                </div>
               </CardContent>
             </Card>
           )
