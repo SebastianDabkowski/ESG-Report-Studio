@@ -159,9 +159,14 @@ public sealed class AssumptionsController : ControllerBase
     /// Delete an assumption. Cannot delete if used as replacement for other assumptions.
     /// </summary>
     [HttpDelete("{id}")]
-    public ActionResult DeleteAssumption(string id)
+    public ActionResult DeleteAssumption(string id, [FromQuery] string deletedBy)
     {
-        var (isValid, errorMessage) = _store.DeleteAssumption(id);
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest(new { error = "deletedBy query parameter is required." });
+        }
+
+        var (isValid, errorMessage) = _store.DeleteAssumption(id, deletedBy);
         if (!isValid)
         {
             return NotFound(new { error = errorMessage });

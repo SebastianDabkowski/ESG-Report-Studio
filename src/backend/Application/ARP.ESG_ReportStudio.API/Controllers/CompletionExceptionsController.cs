@@ -123,10 +123,16 @@ public sealed class CompletionExceptionsController : ControllerBase
     /// Only pending exceptions can be deleted to preserve audit trail.
     /// </summary>
     /// <param name="id">Exception ID.</param>
+    /// <param name="deletedBy">User ID performing the deletion.</param>
     /// <returns>No content on success.</returns>
     [HttpDelete("{id}")]
-    public ActionResult DeleteCompletionException(string id)
+    public ActionResult DeleteCompletionException(string id, [FromQuery] string deletedBy)
     {
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest(new { error = "DeletedBy user ID is required." });
+        }
+
         var exception = _store.GetCompletionException(id);
         if (exception == null)
         {
@@ -138,7 +144,7 @@ public sealed class CompletionExceptionsController : ControllerBase
             return BadRequest(new { error = $"Cannot delete exception with status '{exception.Status}'. Only pending exceptions can be deleted." });
         }
 
-        var deleted = _store.DeleteCompletionException(id);
+        var deleted = _store.DeleteCompletionException(id, deletedBy);
         if (!deleted)
         {
             return NotFound(new { error = $"Completion exception with ID '{id}' not found." });

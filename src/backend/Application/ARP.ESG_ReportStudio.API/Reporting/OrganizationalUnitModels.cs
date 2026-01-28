@@ -23,4 +23,5 @@ public sealed class UpdateOrganizationalUnitRequest
     public string Name { get; set; } = string.Empty;
     public string? ParentId { get; set; }
     public string Description { get; set; } = string.Empty;
+    public string UpdatedBy { get; set; } = string.Empty;
 }

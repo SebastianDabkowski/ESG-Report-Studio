@@ -438,13 +438,20 @@ namespace SD.ProjectName.Tests.Products
 
             // Assert
             Assert.True(isValid);
-            var auditEntries = store.GetAuditLog(entityType: "simplification", entityId: simplification.Id);
+            var auditEntries = store.GetAuditLog(entityType: "Simplification", entityId: simplification.Id);
             
-            // Should have update entry (create doesn't log for simplifications currently)
-            Assert.NotEmpty(auditEntries);
+            // Should have create and update entries
+            Assert.Equal(2, auditEntries.Count);
+            
+            var createEntry = auditEntries.Last();
+            Assert.Equal("create", createEntry.Action);
+            Assert.Equal("Simplification", createEntry.EntityType);
+            Assert.Contains(createEntry.Changes, c => c.Field == "Title" && c.NewValue == "Original Title");
+            Assert.Contains(createEntry.Changes, c => c.Field == "ImpactLevel" && c.NewValue == "medium");
+            
             var updateEntry = auditEntries.First();
             Assert.Equal("update", updateEntry.Action);
-            Assert.Contains(updateEntry.Changes, c => c.Field == "Title");
+            Assert.Contains(updateEntry.Changes, c => c.Field == "Title" && c.OldValue == "Original Title" && c.NewValue == "Updated Title");
             Assert.Contains(updateEntry.Changes, c => c.Field == "ImpactLevel" && c.OldValue == "medium" && c.NewValue == "high");
         }
 

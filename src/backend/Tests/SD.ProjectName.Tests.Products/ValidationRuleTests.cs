@@ -522,7 +522,8 @@ namespace SD.ProjectName.Tests.Products
                 RuleType = "non-negative",
                 TargetField = "value",
                 ErrorMessage = "Updated error message: Value cannot be negative.",
-                IsActive = true
+                IsActive = true,
+                UpdatedBy = "user-1"
             };
 
             store.UpdateValidationRule(rule!.Id, updateRuleRequest);
@@ -575,7 +576,8 @@ namespace SD.ProjectName.Tests.Products
                 RuleType = "non-negative",
                 TargetField = "value",
                 ErrorMessage = "Value cannot be negative.",
-                IsActive = false
+                IsActive = false,
+                UpdatedBy = "user-1"
             };
 
             store.UpdateValidationRule(rule!.Id, updateRuleRequest);
@@ -623,7 +625,7 @@ namespace SD.ProjectName.Tests.Products
             });
 
             // Delete the rule
-            var deleted = store.DeleteValidationRule(rule!.Id);
+            var deleted = store.DeleteValidationRule(rule!.Id, "user-1");
             Assert.True(deleted);
 
             // Try to create a data point with negative value
@@ -689,7 +691,8 @@ namespace SD.ProjectName.Tests.Products
             {
                 RuleType = "required-unit",
                 ErrorMessage = "Error 2",
-                IsActive = false
+                IsActive = false,
+                UpdatedBy = "user-1"
             });
 
             // Act
@@ -699,6 +702,114 @@ namespace SD.ProjectName.Tests.Products
             Assert.Single(rules);
             Assert.Equal(sectionId1, rules[0].SectionId);
             Assert.Equal("non-negative", rules[0].RuleType);
+        }
+
+        [Fact]
+        public void CreateValidationRule_ShouldCreateAuditLogEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var request = new CreateValidationRuleRequest
+            {
+                SectionId = sectionId,
+                RuleType = "non-negative",
+                TargetField = "value",
+                ErrorMessage = "Value must be non-negative.",
+                CreatedBy = "user-1"
+            };
+
+            // Act
+            var (isValid, errorMessage, rule) = store.CreateValidationRule(request);
+            var auditLog = store.GetAuditLog(entityType: "ValidationRule", entityId: rule!.Id, action: "create");
+
+            // Assert
+            Assert.True(isValid);
+            var auditEntry = auditLog.FirstOrDefault();
+            
+            Assert.NotNull(auditEntry);
+            Assert.Equal("user-1", auditEntry.UserId);
+            Assert.Equal("create", auditEntry.Action);
+            Assert.Contains("Created validation rule", auditEntry.ChangeNote);
+            Assert.NotEmpty(auditEntry.Changes);
+            Assert.Contains(auditEntry.Changes, c => c.Field == "RuleType" && c.NewValue == "non-negative");
+            Assert.Contains(auditEntry.Changes, c => c.Field == "Description" && c.NewValue == "Value must be non-negative.");
+        }
+
+        [Fact]
+        public void UpdateValidationRule_ShouldCreateAuditLogEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (_, _, rule) = store.CreateValidationRule(new CreateValidationRuleRequest
+            {
+                SectionId = sectionId,
+                RuleType = "non-negative",
+                TargetField = "value",
+                ErrorMessage = "Original message.",
+                CreatedBy = "user-1"
+            });
+
+            // Act
+            store.UpdateValidationRule(rule!.Id, new UpdateValidationRuleRequest
+            {
+                RuleType = "required-unit",
+                TargetField = "unit",
+                ErrorMessage = "Updated message.",
+                IsActive = false,
+                UpdatedBy = "user-2"
+            });
+            var auditLog = store.GetAuditLog(entityType: "ValidationRule", entityId: rule.Id, action: "update");
+
+            // Assert
+            var auditEntry = auditLog.FirstOrDefault();
+            
+            Assert.NotNull(auditEntry);
+            Assert.Equal("user-2", auditEntry.UserId);
+            Assert.Equal("update", auditEntry.Action);
+            Assert.Contains("Updated validation rule", auditEntry.ChangeNote);
+            Assert.NotEmpty(auditEntry.Changes);
+            Assert.Contains(auditEntry.Changes, c => c.Field == "RuleType" && c.OldValue == "non-negative" && c.NewValue == "required-unit");
+            Assert.Contains(auditEntry.Changes, c => c.Field == "Description" && c.OldValue == "Original message." && c.NewValue == "Updated message.");
+            Assert.Contains(auditEntry.Changes, c => c.Field == "Enabled" && c.OldValue == "True" && c.NewValue == "False");
+        }
+
+        [Fact]
+        public void DeleteValidationRule_ShouldCreateAuditLogEntry()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestConfiguration(store);
+            var sectionId = CreateTestSection(store);
+
+            var (_, _, rule) = store.CreateValidationRule(new CreateValidationRuleRequest
+            {
+                SectionId = sectionId,
+                RuleType = "non-negative",
+                TargetField = "value",
+                ErrorMessage = "Test rule.",
+                CreatedBy = "user-1"
+            });
+
+            // Act
+            var deleted = store.DeleteValidationRule(rule!.Id, "user-2");
+            var auditLog = store.GetAuditLog(entityType: "ValidationRule", entityId: rule.Id, action: "delete");
+
+            // Assert
+            Assert.True(deleted);
+            var auditEntry = auditLog.FirstOrDefault();
+            
+            Assert.NotNull(auditEntry);
+            Assert.Equal("user-2", auditEntry.UserId);
+            Assert.Equal("delete", auditEntry.Action);
+            Assert.Contains("Deleted validation rule", auditEntry.ChangeNote);
+            Assert.NotEmpty(auditEntry.Changes);
+            Assert.Contains(auditEntry.Changes, c => c.Field == "Description" && c.OldValue == "Test rule." && c.NewValue == "");
         }
     }
 }

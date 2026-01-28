@@ -1198,6 +1198,11 @@ public sealed class LinkEvidenceRequest
     /// ID of the data point to link to.
     /// </summary>
     public string DataPointId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the user performing the link/unlink operation.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -1239,6 +1244,7 @@ public sealed class UpdateValidationRuleRequest
     public string? Parameters { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public bool IsActive { get; set; } = true;
+    public string UpdatedBy { get; set; } = string.Empty;
 }
 
 /// <summary>

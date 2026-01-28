@@ -59,9 +59,14 @@ public sealed class ValidationRulesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public ActionResult DeleteValidationRule(string id)
+    public ActionResult DeleteValidationRule(string id, [FromQuery] string deletedBy)
     {
-        var deleted = _store.DeleteValidationRule(id);
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest(new { error = "deletedBy is required." });
+        }
+
+        var deleted = _store.DeleteValidationRule(id, deletedBy);
         if (!deleted)
         {
             return NotFound(new { error = $"ValidationRule with ID '{id}' not found." });

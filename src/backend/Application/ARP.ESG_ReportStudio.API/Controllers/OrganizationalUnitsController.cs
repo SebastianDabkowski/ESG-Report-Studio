@@ -74,6 +74,11 @@ public sealed class OrganizationalUnitsController : ControllerBase
             return BadRequest("Name is required.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.UpdatedBy))
+        {
+            return BadRequest("UpdatedBy is required.");
+        }
+
         if (request.Name.Length > 255)
         {
             return BadRequest("Name must be 255 characters or less.");
@@ -101,11 +106,16 @@ public sealed class OrganizationalUnitsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
-    public ActionResult DeleteOrganizationalUnit(string id)
+    public ActionResult DeleteOrganizationalUnit(string id, [FromQuery] string deletedBy)
     {
+        if (string.IsNullOrWhiteSpace(deletedBy))
+        {
+            return BadRequest("deletedBy query parameter is required.");
+        }
+
         try
         {
-            var deleted = _store.DeleteOrganizationalUnit(id);
+            var deleted = _store.DeleteOrganizationalUnit(id, deletedBy);
             if (!deleted)
             {
                 return NotFound($"Organizational unit with ID '{id}' not found.");
