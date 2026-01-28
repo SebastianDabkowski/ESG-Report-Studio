@@ -18,6 +18,7 @@ export interface CreateReportingPeriodPayload {
   ownerName: string
   organizationId?: string
   copyOwnershipFromPeriodId?: string
+  carryForwardGapsAndAssumptions?: boolean
 }
 
 export interface UpdateReportingPeriodPayload {

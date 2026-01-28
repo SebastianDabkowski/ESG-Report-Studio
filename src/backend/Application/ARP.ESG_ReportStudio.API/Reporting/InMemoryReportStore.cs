@@ -311,6 +311,12 @@ public sealed class InMemoryReportStore
                 }
                 
                 CopyOwnershipFromPreviousPeriod(request.CopyOwnershipFromPeriodId, newPeriod.Id);
+                
+                // Carry forward gaps, assumptions, and remediation plans if requested
+                if (request.CarryForwardGapsAndAssumptions)
+                {
+                    CarryForwardGapsAndAssumptions(request.CopyOwnershipFromPeriodId, newPeriod.Id, request.StartDate);
+                }
             }
 
             var snapshot = new ReportingDataSnapshot
@@ -376,6 +382,184 @@ public sealed class InMemoryReportStore
             }
             // Note: Sections without a match remain unassigned (empty OwnerId)
             // These will appear in the "Unassigned" view and must be manually assigned
+        }
+    }
+
+    /// <summary>
+    /// Carries forward open gaps, active assumptions, and active remediation plans from a previous period to a new period.
+    /// Items are copied as references to matching sections based on catalog codes.
+    /// Expired assumptions are flagged for review.
+    /// </summary>
+    /// <param name="sourcePeriodId">The period to copy items from</param>
+    /// <param name="targetPeriodId">The period to copy items to</param>
+    /// <param name="targetPeriodStartDate">Start date of the new period (for expiration checking)</param>
+    private void CarryForwardGapsAndAssumptions(string sourcePeriodId, string targetPeriodId, string targetPeriodStartDate)
+    {
+        // Get all sections from both periods
+        var sourceSections = _sections.Where(s => s.PeriodId == sourcePeriodId).ToList();
+        var targetSections = _sections.Where(s => s.PeriodId == targetPeriodId).ToList();
+        
+        // Create a mapping from source section IDs to target section IDs based on catalog codes
+        var sectionMapping = new Dictionary<string, string>();
+        foreach (var targetSection in targetSections)
+        {
+            if (string.IsNullOrWhiteSpace(targetSection.CatalogCode))
+                continue;
+                
+            var sourceSection = sourceSections.FirstOrDefault(s => s.CatalogCode == targetSection.CatalogCode);
+            if (sourceSection != null)
+            {
+                sectionMapping[sourceSection.Id] = targetSection.Id;
+            }
+        }
+        
+        var currentUser = "system"; // Carried forward items are created by system
+        var now = DateTime.UtcNow.ToString("O");
+        
+        // Parse target period start date for expiration checking
+        DateTime.TryParse(targetPeriodStartDate, out var periodStartDate);
+        
+        // Carry forward open gaps (Resolved = false)
+        var openGaps = _gaps.Where(g => 
+            sourceSections.Any(s => s.Id == g.SectionId) && 
+            !g.Resolved
+        ).ToList();
+        
+        foreach (var gap in openGaps)
+        {
+            if (!sectionMapping.TryGetValue(gap.SectionId, out var targetSectionId))
+                continue; // Skip if section doesn't exist in new period
+            
+            var newGap = new Gap
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = targetSectionId,
+                Title = gap.Title,
+                Description = $"[Carried forward from previous period]\n\n{gap.Description}",
+                Impact = gap.Impact,
+                ImprovementPlan = gap.ImprovementPlan,
+                TargetDate = gap.TargetDate,
+                CreatedBy = currentUser,
+                CreatedAt = now,
+                Resolved = false
+            };
+            
+            _gaps.Add(newGap);
+        }
+        
+        // Carry forward active assumptions (Status = "active")
+        var activeAssumptions = _assumptions.Where(a => 
+            sourceSections.Any(s => s.Id == a.SectionId) && 
+            a.Status == "active"
+        ).ToList();
+        
+        foreach (var assumption in activeAssumptions)
+        {
+            if (!sectionMapping.TryGetValue(assumption.SectionId, out var targetSectionId))
+                continue; // Skip if section doesn't exist in new period
+            
+            // Check if assumption has expired
+            var isExpired = false;
+            var expirationNote = "";
+            if (DateTime.TryParse(assumption.ValidityEndDate, out var endDate) && 
+                periodStartDate > DateTime.MinValue)
+            {
+                if (endDate < periodStartDate)
+                {
+                    isExpired = true;
+                    expirationNote = $"\n\n⚠️ WARNING: This assumption expired on {assumption.ValidityEndDate}. Please review and update before use.";
+                }
+            }
+            
+            var newAssumption = new Assumption
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = targetSectionId,
+                DataPointId = assumption.DataPointId,
+                Title = assumption.Title,
+                Description = $"[Carried forward from previous period]{expirationNote}\n\n{assumption.Description}",
+                Scope = assumption.Scope,
+                ValidityStartDate = assumption.ValidityStartDate,
+                ValidityEndDate = assumption.ValidityEndDate,
+                Methodology = assumption.Methodology,
+                Limitations = isExpired 
+                    ? $"[EXPIRED - Requires Review] {assumption.Limitations}" 
+                    : assumption.Limitations,
+                Rationale = assumption.Rationale,
+                Sources = assumption.Sources.Select(s => new AssumptionSource 
+                { 
+                    SourceType = s.SourceType, 
+                    SourceReference = s.SourceReference, 
+                    Description = s.Description 
+                }).ToList(),
+                Status = "active",
+                Version = 1, // Start at version 1 for the new period
+                CreatedBy = currentUser,
+                CreatedAt = now,
+                LinkedDataPointIds = new List<string>() // Will be linked to new data points separately if needed
+            };
+            
+            _assumptions.Add(newAssumption);
+        }
+        
+        // Carry forward active remediation plans (Status != "completed" && != "cancelled")
+        var activePlans = _remediationPlans.Where(p => 
+            sourceSections.Any(s => s.Id == p.SectionId) && 
+            p.Status != "completed" && 
+            p.Status != "cancelled"
+        ).ToList();
+        
+        foreach (var plan in activePlans)
+        {
+            if (!sectionMapping.TryGetValue(plan.SectionId, out var targetSectionId))
+                continue; // Skip if section doesn't exist in new period
+            
+            var newPlan = new RemediationPlan
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = targetSectionId,
+                Title = plan.Title,
+                Description = $"[Carried forward from previous period]\n\n{plan.Description}",
+                TargetPeriod = plan.TargetPeriod,
+                OwnerId = plan.OwnerId,
+                OwnerName = plan.OwnerName,
+                Priority = plan.Priority,
+                Status = plan.Status, // Maintain the same status (planned or in-progress)
+                GapId = null, // Don't link to old gap - will need to be manually linked if needed
+                AssumptionId = null, // Don't link to old assumption
+                DataPointId = null, // Don't link to old data point
+                CreatedBy = currentUser,
+                CreatedAt = now
+            };
+            
+            _remediationPlans.Add(newPlan);
+            
+            // Carry forward actions from the plan (only pending and in-progress actions)
+            var activeActions = _remediationActions.Where(a => 
+                a.RemediationPlanId == plan.Id && 
+                a.Status != "completed" && 
+                a.Status != "cancelled"
+            ).ToList();
+            
+            foreach (var action in activeActions)
+            {
+                var newAction = new RemediationAction
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RemediationPlanId = newPlan.Id,
+                    Title = action.Title,
+                    Description = $"[Carried forward from previous period]\n\n{action.Description}",
+                    OwnerId = action.OwnerId,
+                    OwnerName = action.OwnerName,
+                    DueDate = action.DueDate,
+                    Status = action.Status, // Maintain the same status
+                    EvidenceIds = new List<string>(), // Don't copy evidence references
+                    CreatedBy = currentUser,
+                    CreatedAt = now
+                };
+                
+                _remediationActions.Add(newAction);
+            }
         }
     }
 

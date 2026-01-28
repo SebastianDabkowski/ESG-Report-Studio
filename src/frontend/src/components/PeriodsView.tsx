@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { useKV } from '@github/spark/hooks'
 import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportingMode, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
@@ -51,6 +52,8 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [endDate, setEndDate] = useState('')
   const [reportingMode, setReportingMode] = useState<ReportingMode>('simplified')
   const [reportScope, setReportScope] = useState<ReportScope>('single-company')
+  const [copyOwnershipFromPeriodId, setCopyOwnershipFromPeriodId] = useState<string>('')
+  const [carryForwardGapsAndAssumptions, setCarryForwardGapsAndAssumptions] = useState(false)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [validationError, setValidationError] = useState<string | null>(null)
 
@@ -196,7 +199,9 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         reportScope,
         ownerId: currentUser.id,
         ownerName: currentUser.name,
-        organizationId: organization.id
+        organizationId: organization.id,
+        copyOwnershipFromPeriodId: copyOwnershipFromPeriodId || undefined,
+        carryForwardGapsAndAssumptions: copyOwnershipFromPeriodId ? carryForwardGapsAndAssumptions : undefined
       })
 
       setPeriods(snapshot.periods)
@@ -210,6 +215,8 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
       setEndDate('')
       setReportingMode('simplified')
       setReportScope('single-company')
+      setCopyOwnershipFromPeriodId('')
+      setCarryForwardGapsAndAssumptions(false)
     } catch (error) {
       // Display server validation error
       const errorMessage = error instanceof Error ? error.message : 'Failed to create reporting period.'
@@ -433,6 +440,51 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {periods.length > 0 && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="copy-from-period">Copy from Previous Period (Optional)</Label>
+                      <Select value={copyOwnershipFromPeriodId} onValueChange={setCopyOwnershipFromPeriodId}>
+                        <SelectTrigger id="copy-from-period">
+                          <SelectValue placeholder="Select a period to copy ownership from" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">
+                            <div className="font-medium">None</div>
+                          </SelectItem>
+                          {periods.map(period => (
+                            <SelectItem key={period.id} value={period.id}>
+                              {period.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {copyOwnershipFromPeriodId && (
+                      <div className="flex items-start space-x-2 rounded-md border p-3">
+                        <Checkbox
+                          id="carry-forward"
+                          checked={carryForwardGapsAndAssumptions}
+                          onCheckedChange={(checked) => setCarryForwardGapsAndAssumptions(checked === true)}
+                        />
+                        <div className="grid gap-1.5 leading-none">
+                          <label
+                            htmlFor="carry-forward"
+                            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                          >
+                            Carry forward gaps and assumptions
+                          </label>
+                          <p className="text-sm text-muted-foreground">
+                            Copy open gaps, active assumptions, and active remediation plans from the selected period.
+                            Expired assumptions will be flagged for review.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {validationError && (
                   <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
