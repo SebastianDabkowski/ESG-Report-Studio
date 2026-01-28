@@ -337,6 +337,23 @@ export async function updateDataPointStatus(id: string, payload: UpdateDataPoint
   })
 }
 
+// Data Point Notes API methods
+export interface CreateDataPointNotePayload {
+  content: string
+  createdBy: string
+}
+
+export async function getDataPointNotes(dataPointId: string): Promise<any[]> {
+  return requestJson<any[]>(`data-points/${dataPointId}/notes`)
+}
+
+export async function createDataPointNote(dataPointId: string, payload: CreateDataPointNotePayload): Promise<any> {
+  return requestJson<any>(`data-points/${dataPointId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
 // Audit Log API methods
 export interface AuditLogFilters {
   entityType?: string
