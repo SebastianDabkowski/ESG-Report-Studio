@@ -15,6 +15,13 @@ public sealed class User
     /// Inactive users cannot be assigned as owners during rollover.
     /// </summary>
     public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Indicates whether the user has permission to export reports.
+    /// When false, export actions are blocked even if the user can preview reports.
+    /// Default: false (least privilege principle).
+    /// </summary>
+    public bool CanExport { get; set; } = false;
 }
 
 public sealed class ReportingPeriod

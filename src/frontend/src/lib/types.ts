@@ -29,6 +29,7 @@ export interface User {
   role: UserRole
   avatarUrl?: string
   isActive?: boolean
+  canExport?: boolean // Permission to export reports
 }
 
 export interface Organization {

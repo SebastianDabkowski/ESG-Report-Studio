@@ -163,3 +163,23 @@ export function canEditSection(userRole: UserRole): boolean {
 export function isReadOnly(userRole: UserRole): boolean {
   return userRole === 'auditor'
 }
+
+/**
+ * Check if a user has permission to export reports.
+ * Permission is granted if:
+ * - User has canExport flag set to true (global permission), OR
+ * - User is the owner of the specific reporting period (owner-based permission)
+ */
+export function canUserExport(user: { canExport?: boolean; id: string }, periodOwnerId?: string): boolean {
+  // Check global export permission
+  if (user.canExport === true) {
+    return true
+  }
+  
+  // Check owner-based permission for specific period
+  if (periodOwnerId && user.id === periodOwnerId) {
+    return true
+  }
+  
+  return false
+}

@@ -149,13 +149,13 @@ public sealed class InMemoryReportStore
     {
         _users.AddRange(new[]
         {
-            new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner" },
-            new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin" },
-            new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor" },
-            new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor" },
-            new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor" },
-            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor" },
-            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner" }
+            new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner", CanExport = true },
+            new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin", CanExport = true },
+            new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor", CanExport = false },
+            new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor", CanExport = false },
+            new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor", CanExport = false },
+            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor", CanExport = true },
+            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner", CanExport = true }
         });
     }
 
@@ -15143,6 +15143,75 @@ public sealed class InMemoryReportStore
                 export.DownloadCount++;
                 export.LastDownloadedAt = DateTime.UtcNow.ToString("O");
             }
+        }
+    }
+    
+    #endregion
+    
+    #region Export Permission Checks
+    
+    /// <summary>
+    /// Check if a user has permission to export reports.
+    /// Permission is granted if:
+    /// - User has CanExport flag set to true (global permission), OR
+    /// - User is the owner of the specific reporting period (owner-based permission)
+    /// Admin and report-owner roles typically have CanExport=true by default.
+    /// </summary>
+    public (bool HasPermission, string? ErrorMessage) CheckExportPermission(string userId, string periodId)
+    {
+        lock (_lock)
+        {
+            var user = GetUser(userId);
+            if (user == null)
+            {
+                return (false, "User not found.");
+            }
+            
+            // Check global export permission
+            if (user.CanExport)
+            {
+                return (true, null);
+            }
+            
+            // Check owner-based permission for specific period
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period != null && period.OwnerId == userId)
+            {
+                return (true, null);
+            }
+            
+            return (false, "You do not have permission to export reports. Contact an administrator to request export access.");
+        }
+    }
+    
+    /// <summary>
+    /// Record an export attempt in the audit log, including both successful and denied attempts.
+    /// </summary>
+    public void RecordExportAttempt(string userId, string userName, string periodId, string format, string? variantName, bool wasAllowed, string? errorMessage = null)
+    {
+        lock (_lock)
+        {
+            var entry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("O"),
+                UserId = userId,
+                UserName = userName,
+                Action = wasAllowed ? "export" : "export-denied",
+                EntityType = "ReportExport",
+                EntityId = periodId,
+                ChangeNote = wasAllowed 
+                    ? $"Successfully exported report in {format.ToUpperInvariant()} format{(string.IsNullOrWhiteSpace(variantName) ? "" : $" (variant: {variantName})")}" 
+                    : $"Export denied: {errorMessage ?? "Insufficient permissions"}",
+                Changes = new List<FieldChange>
+                {
+                    new FieldChange { Field = "Format", OldValue = null, NewValue = format },
+                    new FieldChange { Field = "VariantName", OldValue = null, NewValue = variantName ?? "" },
+                    new FieldChange { Field = "Allowed", OldValue = null, NewValue = wasAllowed.ToString() }
+                }
+            };
+            
+            _auditLog.Add(entry);
         }
     }
     

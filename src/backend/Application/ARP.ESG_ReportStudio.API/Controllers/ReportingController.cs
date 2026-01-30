@@ -404,6 +404,8 @@ public sealed class ReportingController : ControllerBase
     
     /// <summary>
     /// Export a generated report to PDF format with title page, table of contents, and page numbering.
+    /// Requires export permission: either CanExport=true or being the period owner.
+    /// All export attempts are logged in the audit trail.
     /// </summary>
     [HttpPost("periods/{periodId}/export-pdf")]
     public ActionResult ExportPdf(string periodId, [FromBody] ExportPdfRequest request)
@@ -418,6 +420,26 @@ public sealed class ReportingController : ControllerBase
         if (period == null)
         {
             return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
+        // Check export permission
+        var user = _store.GetUser(request.GeneratedBy);
+        var (hasPermission, permissionError) = _store.CheckExportPermission(request.GeneratedBy, periodId);
+        
+        if (!hasPermission)
+        {
+            // Log denied export attempt
+            _store.RecordExportAttempt(
+                request.GeneratedBy, 
+                user?.Name ?? request.GeneratedBy, 
+                periodId, 
+                "pdf", 
+                request.VariantName, 
+                wasAllowed: false, 
+                errorMessage: permissionError
+            );
+            
+            return StatusCode(403, new { error = permissionError });
         }
         
         // Generate the report first
@@ -483,6 +505,16 @@ public sealed class ReportingController : ControllerBase
         };
         _store.RecordExport(exportEntry);
         
+        // Log successful export attempt
+        _store.RecordExportAttempt(
+            request.GeneratedBy, 
+            user?.Name ?? request.GeneratedBy, 
+            periodId, 
+            "pdf", 
+            request.VariantName, 
+            wasAllowed: true
+        );
+        
         // Return PDF file
         return File(pdfBytes, "application/pdf", filename);
     }
@@ -496,6 +528,8 @@ public sealed class ReportingController : ControllerBase
     
     /// <summary>
     /// Export a generated report to DOCX format with proper heading styles, tables, and formatting.
+    /// Requires export permission: either CanExport=true or being the period owner.
+    /// All export attempts are logged in the audit trail.
     /// </summary>
     [HttpPost("periods/{periodId}/export-docx")]
     public ActionResult ExportDocx(string periodId, [FromBody] ExportDocxRequest request)
@@ -510,6 +544,26 @@ public sealed class ReportingController : ControllerBase
         if (period == null)
         {
             return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
+        // Check export permission
+        var user = _store.GetUser(request.GeneratedBy);
+        var (hasPermission, permissionError) = _store.CheckExportPermission(request.GeneratedBy, periodId);
+        
+        if (!hasPermission)
+        {
+            // Log denied export attempt
+            _store.RecordExportAttempt(
+                request.GeneratedBy, 
+                user?.Name ?? request.GeneratedBy, 
+                periodId, 
+                "docx", 
+                request.VariantName, 
+                wasAllowed: false, 
+                errorMessage: permissionError
+            );
+            
+            return StatusCode(403, new { error = permissionError });
         }
         
         // Generate the report first
@@ -574,6 +628,16 @@ public sealed class ReportingController : ControllerBase
             DownloadCount = 0
         };
         _store.RecordExport(exportEntry);
+        
+        // Log successful export attempt
+        _store.RecordExportAttempt(
+            request.GeneratedBy, 
+            user?.Name ?? request.GeneratedBy, 
+            periodId, 
+            "docx", 
+            request.VariantName, 
+            wasAllowed: true
+        );
         
         // Return DOCX file
         return File(docxBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename);

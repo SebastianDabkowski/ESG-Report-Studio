@@ -5,9 +5,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye, FilePdf, FileDoc } from '@phosphor-icons/react'
+import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye, FilePdf, FileDoc, LockKey } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate, canUserExport } from '@/lib/helpers'
 import { getCompletenessStats, exportReportPdf, exportReportDocx } from '@/lib/api'
 import ReportPreviewDialog from './ReportPreviewDialog'
 
@@ -60,7 +60,14 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       })
     } catch (error) {
       console.error('Failed to export PDF:', error)
-      alert('Failed to export PDF. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export PDF. Please try again.'
+      
+      // Check if it's a permission error
+      if (errorMessage.includes('permission') || errorMessage.includes('403')) {
+        alert('You do not have permission to export reports. Contact an administrator to request export access.')
+      } else {
+        alert(errorMessage)
+      }
     } finally {
       setIsExportingPdf(false)
     }
@@ -80,7 +87,14 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       })
     } catch (error) {
       console.error('Failed to export DOCX:', error)
-      alert('Failed to export DOCX. Please try again.')
+      const errorMessage = error instanceof Error ? error.message : 'Failed to export DOCX. Please try again.'
+      
+      // Check if it's a permission error
+      if (errorMessage.includes('permission') || errorMessage.includes('403')) {
+        alert('You do not have permission to export reports. Contact an administrator to request export access.')
+      } else {
+        alert(errorMessage)
+      }
     } finally {
       setIsExportingDocx(false)
     }
@@ -146,26 +160,41 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     <Eye weight="regular" className="h-4 w-4" />
                     Preview Report
                   </Button>
-                  <Button 
-                    onClick={handleExportPdf}
-                    disabled={isExportingPdf}
-                    variant="default"
-                    size="sm"
-                    className="gap-2"
-                  >
-                    <FilePdf weight="regular" className="h-4 w-4" />
-                    {isExportingPdf ? 'Exporting...' : 'Export PDF'}
-                  </Button>
-                  <Button 
-                    onClick={handleExportDocx}
-                    disabled={isExportingDocx}
-                    variant="default"
-                    size="sm"
-                    className="gap-2"
-                  >
-                    <FileDoc weight="regular" className="h-4 w-4" />
-                    {isExportingDocx ? 'Exporting...' : 'Export DOCX'}
-                  </Button>
+                  {canUserExport(currentUser, activePeriod.ownerId) ? (
+                    <>
+                      <Button 
+                        onClick={handleExportPdf}
+                        disabled={isExportingPdf}
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FilePdf weight="regular" className="h-4 w-4" />
+                        {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+                      </Button>
+                      <Button 
+                        onClick={handleExportDocx}
+                        disabled={isExportingDocx}
+                        variant="default"
+                        size="sm"
+                        className="gap-2"
+                      >
+                        <FileDoc weight="regular" className="h-4 w-4" />
+                        {isExportingDocx ? 'Exporting...' : 'Export DOCX'}
+                      </Button>
+                    </>
+                  ) : (
+                    <Button 
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                      disabled
+                      title="You do not have permission to export reports"
+                    >
+                      <LockKey weight="regular" className="h-4 w-4" />
+                      Export Restricted
+                    </Button>
+                  )}
                 </div>
               </div>
             </CardHeader>
