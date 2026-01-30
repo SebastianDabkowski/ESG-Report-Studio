@@ -9449,7 +9449,8 @@ public sealed class InMemoryReportStore
                     DecisionCount = contents.Decisions.Count,
                     AssumptionCount = contents.Sections.Sum(s => s.Assumptions.Count),
                     GapCount = contents.Sections.Sum(s => s.Gaps.Count),
-                    EvidenceFileCount = contents.EvidenceFiles.Count
+                    EvidenceFileCount = contents.EvidenceFiles.Count,
+                    ValidationResultCount = contents.ValidationResults.Count
                 }
             };
 
@@ -9603,6 +9604,12 @@ public sealed class InMemoryReportStore
                     .ToList()
             }).ToList();
 
+        // Get validation results for the period
+        var validationResults = _validationResults
+            .Where(v => v.PeriodId == request.PeriodId)
+            .OrderByDescending(v => v.ValidatedAt)
+            .ToList();
+
         return new AuditPackageContents
         {
             Metadata = new ExportMetadata
@@ -9612,13 +9619,15 @@ public sealed class InMemoryReportStore
                 ExportedBy = userId,
                 ExportedByName = userName,
                 ExportNote = request.ExportNote,
-                Version = "1.0"
+                Version = "1.0",
+                DataSnapshotId = period.IntegrityHash
             },
             Period = period,
             Sections = sectionAuditData,
             AuditTrail = auditTrail,
             Decisions = decisions,
-            EvidenceFiles = evidenceFiles
+            EvidenceFiles = evidenceFiles,
+            ValidationResults = validationResults
         };
     }
 

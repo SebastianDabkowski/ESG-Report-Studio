@@ -3670,6 +3670,7 @@ public sealed class AuditPackageSummary
     public int AssumptionCount { get; set; }
     public int GapCount { get; set; }
     public int EvidenceFileCount { get; set; }
+    public int ValidationResultCount { get; set; }
 }
 
 /// <summary>
@@ -3706,6 +3707,11 @@ public sealed class AuditPackageContents
     /// Evidence file references with checksums.
     /// </summary>
     public List<EvidenceReference> EvidenceFiles { get; set; } = new();
+    
+    /// <summary>
+    /// Validation results for the period.
+    /// </summary>
+    public List<ValidationResult> ValidationResults { get; set; } = new();
 }
 
 /// <summary>
@@ -3719,6 +3725,12 @@ public sealed class ExportMetadata
     public string ExportedByName { get; set; } = string.Empty;
     public string? ExportNote { get; set; }
     public string Version { get; set; } = "1.0";
+    
+    /// <summary>
+    /// Data snapshot identifier for tracking the state of data at export time.
+    /// This is typically the reporting period's integrity hash.
+    /// </summary>
+    public string? DataSnapshotId { get; set; }
 }
 
 /// <summary>
