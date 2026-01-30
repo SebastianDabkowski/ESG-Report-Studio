@@ -5570,6 +5570,276 @@ public sealed class InMemoryReportStore
     }
 
     /// <summary>
+    /// Compares completeness statistics between two reporting periods.
+    /// </summary>
+    /// <param name="currentPeriodId">Current reporting period ID.</param>
+    /// <param name="priorPeriodId">Prior reporting period ID for comparison.</param>
+    /// <returns>Completeness comparison with breakdowns and regression highlights.</returns>
+    public CompletenessComparison CompareCompletenessStats(string currentPeriodId, string priorPeriodId)
+    {
+        lock (_lock)
+        {
+            // Get period information
+            var currentPeriod = _periods.FirstOrDefault(p => p.Id == currentPeriodId);
+            var priorPeriod = _periods.FirstOrDefault(p => p.Id == priorPeriodId);
+
+            if (currentPeriod == null && priorPeriod == null)
+            {
+                throw new ArgumentException("Both currentPeriodId and priorPeriodId are invalid.");
+            }
+            if (currentPeriod == null)
+            {
+                throw new ArgumentException($"Invalid currentPeriodId: '{currentPeriodId}' not found.");
+            }
+            if (priorPeriod == null)
+            {
+                throw new ArgumentException($"Invalid priorPeriodId: '{priorPeriodId}' not found.");
+            }
+
+            // Get completeness stats for both periods
+            var currentStats = GetCompletenessStats(currentPeriodId);
+            var priorStats = GetCompletenessStats(priorPeriodId);
+
+            // Create overall comparison
+            var overallComparison = CreateBreakdownComparison(
+                "overall",
+                "Overall",
+                currentStats.Overall,
+                priorStats.Overall,
+                null,
+                null,
+                true
+            );
+
+            // Create category comparisons
+            var categoryComparisons = new List<CompletenessBreakdownComparison>();
+            foreach (var category in new[] { "environmental", "social", "governance" })
+            {
+                var currentCat = currentStats.ByCategory.FirstOrDefault(c => c.Id == category);
+                var priorCat = priorStats.ByCategory.FirstOrDefault(c => c.Id == category);
+
+                if (currentCat != null)
+                {
+                    categoryComparisons.Add(CreateBreakdownComparison(
+                        category,
+                        FormatCategoryName(category),
+                        currentCat,
+                        priorCat,
+                        null,
+                        null,
+                        priorCat != null
+                    ));
+                }
+            }
+
+            // Get sections for both periods
+            var currentSections = _sections.Where(s => s.PeriodId == currentPeriodId).ToList();
+            var priorSections = _sections.Where(s => s.PeriodId == priorPeriodId).ToList();
+
+            // Create section comparisons using catalog codes for matching
+            var sectionComparisons = new List<CompletenessBreakdownComparison>();
+            var processedCatalogCodes = new HashSet<string>();
+
+            // Process current period sections
+            foreach (var currentSection in currentSections)
+            {
+                var catalogCode = currentSection.CatalogCode ?? currentSection.Id;
+                processedCatalogCodes.Add(catalogCode);
+
+                var priorSection = priorSections.FirstOrDefault(s => 
+                    (s.CatalogCode ?? s.Id) == catalogCode);
+
+                var currentSectionStats = GetSectionCompletenessBreakdown(currentSection.Id);
+                var priorSectionStats = priorSection != null 
+                    ? GetSectionCompletenessBreakdown(priorSection.Id) 
+                    : null;
+
+                var existsInBoth = priorSection != null;
+                var notApplicableReason = !existsInBoth 
+                    ? "Section added in current period" 
+                    : null;
+
+                // Get owner name from users
+                var owner = _users.FirstOrDefault(u => u.Id == currentSection.OwnerId);
+                var ownerName = owner?.Name ?? "Unknown";
+
+                sectionComparisons.Add(CreateBreakdownComparison(
+                    catalogCode,
+                    currentSection.Title,
+                    currentSectionStats,
+                    priorSectionStats,
+                    currentSection.OwnerId,
+                    ownerName,
+                    existsInBoth,
+                    notApplicableReason
+                ));
+            }
+
+            // Process prior period sections that don't exist in current period
+            foreach (var priorSection in priorSections)
+            {
+                var catalogCode = priorSection.CatalogCode ?? priorSection.Id;
+                if (processedCatalogCodes.Contains(catalogCode))
+                    continue;
+
+                var priorSectionStats = GetSectionCompletenessBreakdown(priorSection.Id);
+
+                sectionComparisons.Add(CreateBreakdownComparison(
+                    catalogCode,
+                    priorSection.Title,
+                    new CompletenessBreakdown { Id = catalogCode, Name = priorSection.Title },
+                    priorSectionStats,
+                    null,
+                    null,
+                    false,
+                    "Section removed in current period"
+                ));
+            }
+
+            // Create organizational unit comparisons
+            var orgUnitComparisons = new List<CompletenessBreakdownComparison>();
+            var allOwnerIds = currentStats.ByOrganizationalUnit
+                .Select(o => o.Id)
+                .Union(priorStats.ByOrganizationalUnit.Select(o => o.Id))
+                .Distinct()
+                .ToList();
+
+            foreach (var ownerId in allOwnerIds)
+            {
+                var currentOrgUnit = currentStats.ByOrganizationalUnit.FirstOrDefault(o => o.Id == ownerId);
+                var priorOrgUnit = priorStats.ByOrganizationalUnit.FirstOrDefault(o => o.Id == ownerId);
+
+                if (currentOrgUnit != null)
+                {
+                    orgUnitComparisons.Add(CreateBreakdownComparison(
+                        ownerId,
+                        currentOrgUnit.Name,
+                        currentOrgUnit,
+                        priorOrgUnit,
+                        ownerId,
+                        currentOrgUnit.Name,
+                        priorOrgUnit != null
+                    ));
+                }
+                else if (priorOrgUnit != null)
+                {
+                    orgUnitComparisons.Add(CreateBreakdownComparison(
+                        ownerId,
+                        priorOrgUnit.Name,
+                        new CompletenessBreakdown { Id = ownerId, Name = priorOrgUnit.Name },
+                        priorOrgUnit,
+                        ownerId,
+                        priorOrgUnit.Name,
+                        false,
+                        "Owner no longer has assigned sections"
+                    ));
+                }
+            }
+
+            // Identify regressions and improvements
+            var regressions = sectionComparisons
+                .Where(s => s.IsRegression && s.ExistsInBothPeriods)
+                .OrderByDescending(s => Math.Abs(s.PercentagePointChange ?? 0))
+                .ToList();
+
+            var improvements = sectionComparisons
+                .Where(s => !s.IsRegression && (s.PercentagePointChange ?? 0) > 0 && s.ExistsInBothPeriods)
+                .OrderByDescending(s => s.PercentagePointChange)
+                .ToList();
+
+            // Calculate summary statistics
+            var summary = new ComparisonSummary
+            {
+                RegressionCount = regressions.Count,
+                ImprovementCount = improvements.Count,
+                UnchangedCount = sectionComparisons.Count(s => 
+                    s.ExistsInBothPeriods && (s.PercentagePointChange ?? 0) == 0),
+                AddedSectionCount = sectionComparisons.Count(s => 
+                    !s.ExistsInBothPeriods && s.NotApplicableReason == "Section added in current period"),
+                RemovedSectionCount = sectionComparisons.Count(s => 
+                    !s.ExistsInBothPeriods && s.NotApplicableReason == "Section removed in current period")
+            };
+
+            return new CompletenessComparison
+            {
+                CurrentPeriod = new PeriodInfo
+                {
+                    Id = currentPeriod.Id,
+                    Name = currentPeriod.Name,
+                    StartDate = currentPeriod.StartDate,
+                    EndDate = currentPeriod.EndDate
+                },
+                PriorPeriod = new PeriodInfo
+                {
+                    Id = priorPeriod.Id,
+                    Name = priorPeriod.Name,
+                    StartDate = priorPeriod.StartDate,
+                    EndDate = priorPeriod.EndDate
+                },
+                Overall = overallComparison,
+                ByCategory = categoryComparisons,
+                BySection = sectionComparisons,
+                ByOrganizationalUnit = orgUnitComparisons,
+                Regressions = regressions,
+                Improvements = improvements,
+                Summary = summary
+            };
+        }
+    }
+
+    private CompletenessBreakdown GetSectionCompletenessBreakdown(string sectionId)
+    {
+        var dataPoints = _dataPoints.Where(dp => dp.SectionId == sectionId).ToList();
+        var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+        
+        return CalculateBreakdown(
+            sectionId,
+            section?.Title ?? "Unknown Section",
+            dataPoints
+        );
+    }
+
+    private CompletenessBreakdownComparison CreateBreakdownComparison(
+        string id,
+        string name,
+        CompletenessBreakdown current,
+        CompletenessBreakdown? prior,
+        string? ownerId,
+        string? ownerName,
+        bool existsInBoth,
+        string? notApplicableReason = null)
+    {
+        double? percentagePointChange = null;
+        int? completeCountChange = null;
+        bool isRegression = false;
+
+        if (prior != null && existsInBoth)
+        {
+            percentagePointChange = Math.Round(
+                current.CompletePercentage - prior.CompletePercentage, 
+                1
+            );
+            completeCountChange = current.CompleteCount - prior.CompleteCount;
+            isRegression = percentagePointChange < 0;
+        }
+
+        return new CompletenessBreakdownComparison
+        {
+            Id = id,
+            Name = name,
+            CurrentPeriod = current,
+            PriorPeriod = prior,
+            PercentagePointChange = percentagePointChange,
+            CompleteCountChange = completeCountChange,
+            IsRegression = isRegression,
+            OwnerId = ownerId,
+            OwnerName = ownerName,
+            ExistsInBothPeriods = existsInBoth,
+            NotApplicableReason = notApplicableReason
+        };
+    }
+
+    /// <summary>
     /// Calculates the progress status of a section based on its data points.
     /// Status rules:
     /// - "not-started": No data points exist OR all data points have completenessStatus "missing" (but not if mixed with "not applicable")

@@ -405,6 +405,47 @@ export interface CompletenessStats {
   byOrganizationalUnit: CompletenessBreakdown[]
 }
 
+export interface CompletenessBreakdownComparison {
+  id: string
+  name: string
+  currentPeriod: CompletenessBreakdown
+  priorPeriod: CompletenessBreakdown | null
+  percentagePointChange: number | null
+  completeCountChange: number | null
+  isRegression: boolean
+  ownerId?: string
+  ownerName?: string
+  existsInBothPeriods: boolean
+  notApplicableReason?: string
+}
+
+export interface PeriodInfo {
+  id: string
+  name: string
+  startDate: string
+  endDate: string
+}
+
+export interface ComparisonSummary {
+  regressionCount: number
+  improvementCount: number
+  unchangedCount: number
+  addedSectionCount: number
+  removedSectionCount: number
+}
+
+export interface CompletenessComparison {
+  currentPeriod: PeriodInfo
+  priorPeriod: PeriodInfo
+  overall: CompletenessBreakdownComparison
+  byCategory: CompletenessBreakdownComparison[]
+  bySection: CompletenessBreakdownComparison[]
+  byOrganizationalUnit: CompletenessBreakdownComparison[]
+  regressions: CompletenessBreakdownComparison[]
+  improvements: CompletenessBreakdownComparison[]
+  summary: ComparisonSummary
+}
+
 export interface OwnerAssignment {
   ownerId: string
   ownerName: string

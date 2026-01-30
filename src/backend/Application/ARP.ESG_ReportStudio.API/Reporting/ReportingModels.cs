@@ -1676,6 +1676,177 @@ public sealed class CompletenessStats
 }
 
 /// <summary>
+/// Comparison of completeness breakdown between two periods.
+/// </summary>
+public sealed class CompletenessBreakdownComparison
+{
+    /// <summary>
+    /// Identifier (e.g., category name, organizational unit ID, or section catalog code).
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display name for the breakdown dimension.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Current period completeness breakdown.
+    /// </summary>
+    public CompletenessBreakdown CurrentPeriod { get; set; } = new();
+
+    /// <summary>
+    /// Prior period completeness breakdown.
+    /// </summary>
+    public CompletenessBreakdown? PriorPeriod { get; set; }
+
+    /// <summary>
+    /// Change in complete percentage (current - prior).
+    /// Positive indicates improvement, negative indicates regression.
+    /// </summary>
+    public double? PercentagePointChange { get; set; }
+
+    /// <summary>
+    /// Change in absolute number of complete items.
+    /// </summary>
+    public int? CompleteCountChange { get; set; }
+
+    /// <summary>
+    /// Indicates if there's a regression in completeness (negative change).
+    /// </summary>
+    public bool IsRegression { get; set; }
+
+    /// <summary>
+    /// Owner ID if this is a section-level comparison.
+    /// </summary>
+    public string? OwnerId { get; set; }
+
+    /// <summary>
+    /// Owner name if this is a section-level comparison.
+    /// </summary>
+    public string? OwnerName { get; set; }
+
+    /// <summary>
+    /// Indicates if the item exists in both periods (true) or only in one period (false).
+    /// When false, changes should be interpreted as structural rather than regression.
+    /// </summary>
+    public bool ExistsInBothPeriods { get; set; }
+
+    /// <summary>
+    /// Reason why item doesn't exist in both periods.
+    /// </summary>
+    public string? NotApplicableReason { get; set; }
+}
+
+/// <summary>
+/// Completeness comparison between two reporting periods.
+/// </summary>
+public sealed class CompletenessComparison
+{
+    /// <summary>
+    /// Current reporting period information.
+    /// </summary>
+    public PeriodInfo CurrentPeriod { get; set; } = new();
+
+    /// <summary>
+    /// Prior reporting period information.
+    /// </summary>
+    public PeriodInfo PriorPeriod { get; set; } = new();
+
+    /// <summary>
+    /// Overall completeness comparison.
+    /// </summary>
+    public CompletenessBreakdownComparison Overall { get; set; } = new();
+
+    /// <summary>
+    /// Completeness comparison by E/S/G category.
+    /// </summary>
+    public List<CompletenessBreakdownComparison> ByCategory { get; set; } = new();
+
+    /// <summary>
+    /// Completeness comparison by section (using catalog codes for matching).
+    /// </summary>
+    public List<CompletenessBreakdownComparison> BySection { get; set; } = new();
+
+    /// <summary>
+    /// Completeness comparison by organizational unit.
+    /// </summary>
+    public List<CompletenessBreakdownComparison> ByOrganizationalUnit { get; set; } = new();
+
+    /// <summary>
+    /// Sections with regressions, ordered by severity.
+    /// </summary>
+    public List<CompletenessBreakdownComparison> Regressions { get; set; } = new();
+
+    /// <summary>
+    /// Sections with improvements, ordered by magnitude.
+    /// </summary>
+    public List<CompletenessBreakdownComparison> Improvements { get; set; } = new();
+
+    /// <summary>
+    /// Summary statistics for the comparison.
+    /// </summary>
+    public ComparisonSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Basic period information for comparison context.
+/// </summary>
+public sealed class PeriodInfo
+{
+    /// <summary>
+    /// Period ID.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Period name.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Period start date.
+    /// </summary>
+    public string StartDate { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Period end date.
+    /// </summary>
+    public string EndDate { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Summary statistics for completeness comparison.
+/// </summary>
+public sealed class ComparisonSummary
+{
+    /// <summary>
+    /// Total number of sections with regressions.
+    /// </summary>
+    public int RegressionCount { get; set; }
+
+    /// <summary>
+    /// Total number of sections with improvements.
+    /// </summary>
+    public int ImprovementCount { get; set; }
+
+    /// <summary>
+    /// Total number of sections unchanged.
+    /// </summary>
+    public int UnchangedCount { get; set; }
+
+    /// <summary>
+    /// Number of sections added in current period (not in prior).
+    /// </summary>
+    public int AddedSectionCount { get; set; }
+
+    /// <summary>
+    /// Number of sections removed from current period (were in prior).
+    /// </summary>
+    public int RemovedSectionCount { get; set; }
+}
+
+/// <summary>
 /// Represents a notification sent to a user about ownership changes.
 /// </summary>
 public sealed class OwnerNotification

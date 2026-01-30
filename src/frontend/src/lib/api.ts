@@ -5,7 +5,8 @@ import type {
   Organization, 
   OrganizationalUnit, 
   User, 
-  CompletenessStats, 
+  CompletenessStats,
+  CompletenessComparison,
   UpdateDataPointStatusRequest, 
   StatusValidationError, 
   DataPointNote, 
@@ -564,6 +565,19 @@ export async function getCompletenessStats(params?: CompletenessStatsParams): Pr
   
   const queryString = queryParams.toString()
   return requestJson<CompletenessStats>(`dashboard/completeness-stats${queryString ? `?${queryString}` : ''}`)
+}
+
+export interface CompletenessComparisonParams {
+  currentPeriodId: string
+  priorPeriodId: string
+}
+
+export async function getCompletenessComparison(params: CompletenessComparisonParams): Promise<CompletenessComparison> {
+  const queryParams = new URLSearchParams()
+  queryParams.append('currentPeriodId', params.currentPeriodId)
+  queryParams.append('priorPeriodId', params.priorPeriodId)
+  
+  return requestJson<CompletenessComparison>(`dashboard/completeness-comparison?${queryParams.toString()}`)
 }
 
 // Responsibility Matrix API

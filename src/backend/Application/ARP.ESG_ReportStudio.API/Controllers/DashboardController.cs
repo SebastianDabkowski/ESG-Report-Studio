@@ -33,4 +33,41 @@ public sealed class DashboardController : ControllerBase
         var stats = _store.GetCompletenessStats(periodId, category, organizationalUnitId);
         return Ok(stats);
     }
+
+    /// <summary>
+    /// Compares completeness statistics between two reporting periods.
+    /// </summary>
+    /// <param name="currentPeriodId">Current reporting period ID.</param>
+    /// <param name="priorPeriodId">Prior reporting period ID for comparison.</param>
+    /// <returns>Completeness comparison with breakdowns, regressions, and improvements.</returns>
+    [HttpGet("completeness-comparison")]
+    public ActionResult<CompletenessComparison> CompareCompletenessStats(
+        [FromQuery] string currentPeriodId,
+        [FromQuery] string priorPeriodId)
+    {
+        if (string.IsNullOrWhiteSpace(currentPeriodId))
+        {
+            return BadRequest("currentPeriodId is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(priorPeriodId))
+        {
+            return BadRequest("priorPeriodId is required.");
+        }
+
+        if (currentPeriodId == priorPeriodId)
+        {
+            return BadRequest("currentPeriodId and priorPeriodId must be different.");
+        }
+
+        try
+        {
+            var comparison = _store.CompareCompletenessStats(currentPeriodId, priorPeriodId);
+            return Ok(comparison);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+    }
 }
