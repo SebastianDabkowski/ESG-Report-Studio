@@ -13299,5 +13299,201 @@ public sealed class InMemoryReportStore
         return evidence.Title?.Contains("confidential", StringComparison.OrdinalIgnoreCase) == true;
     }
     
+    #region Report Generation
+    
+    /// <summary>
+    /// Generate a report from the selected structure for a reporting period.
+    /// Only includes enabled sections, sorted by their Order field.
+    /// Uses the latest data snapshot for each included section.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, GeneratedReport? Report) GenerateReport(GenerateReportRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate period exists
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, $"Period with ID '{request.PeriodId}' not found.", null);
+            }
+            
+            // Get user information
+            var user = _users.FirstOrDefault(u => u.Id == request.GeneratedBy);
+            var userName = user?.Name ?? request.GeneratedBy;
+            
+            // Get all sections for the period
+            var allSections = _sections.Where(s => s.PeriodId == request.PeriodId).ToList();
+            
+            // Filter sections based on request
+            IEnumerable<ReportSection> sectionsToInclude = allSections;
+            
+            // If specific section IDs are provided, filter to those
+            if (request.SectionIds != null && request.SectionIds.Count > 0)
+            {
+                sectionsToInclude = sectionsToInclude.Where(s => request.SectionIds.Contains(s.Id));
+            }
+            
+            // Only include enabled sections
+            sectionsToInclude = sectionsToInclude.Where(s => s.IsEnabled);
+            
+            // Sort by Order field to maintain defined sequence
+            var orderedSections = sectionsToInclude.OrderBy(s => s.Order).ToList();
+            
+            // Build generated report sections with data
+            var generatedSections = new List<GeneratedReportSection>();
+            
+            foreach (var section in orderedSections)
+            {
+                var owner = _users.FirstOrDefault(u => u.Id == section.OwnerId);
+                
+                // Get data points for this section
+                var dataPoints = _dataPoints
+                    .Where(dp => dp.SectionId == section.Id)
+                    .Select(dp =>
+                    {
+                        var dpOwner = _users.FirstOrDefault(u => u.Id == dp.OwnerId);
+                        var evidenceCount = _evidence.Count(e => e.LinkedDataPoints.Contains(dp.Id));
+                        var hasAssumptions = _assumptions.Any(a => a.DataPointId == dp.Id && a.Status == "active");
+                        
+                        return new DataPointSnapshot
+                        {
+                            Id = dp.Id,
+                            Title = dp.Title,
+                            Value = dp.Value ?? string.Empty,
+                            Unit = dp.Unit,
+                            InformationType = dp.InformationType,
+                            Status = dp.CompletenessStatus,
+                            OwnerId = dp.OwnerId,
+                            OwnerName = dpOwner?.Name ?? dp.OwnerId,
+                            LastUpdatedAt = dp.UpdatedAt,
+                            EvidenceCount = evidenceCount,
+                            HasAssumptions = hasAssumptions
+                        };
+                    })
+                    .ToList();
+                
+                // Get evidence for this section
+                var sectionEvidence = _evidence
+                    .Where(e => e.SectionId == section.Id)
+                    .Select(e => new EvidenceMetadata
+                    {
+                        Id = e.Id,
+                        DataPointId = string.Empty, // Evidence is linked to section, not specific data point in this model
+                        Title = e.Title,
+                        FileName = e.FileName ?? string.Empty,
+                        FileType = e.ContentType ?? string.Empty,
+                        FileSize = e.FileSize ?? 0,
+                        UploadedAt = e.UploadedAt,
+                        UploadedBy = e.UploadedBy
+                    })
+                    .ToList();
+                
+                // Get active assumptions for this section
+                var sectionAssumptions = _assumptions
+                    .Where(a => a.SectionId == section.Id && a.Status == "active")
+                    .Select(a => new AssumptionRecord
+                    {
+                        Id = a.Id,
+                        DataPointId = a.DataPointId ?? string.Empty,
+                        Description = a.Description,
+                        Justification = a.Rationale ?? string.Empty,
+                        ConfidenceLevel = string.Empty, // Not available on Assumption model
+                        Status = a.Status,
+                        CreatedAt = a.CreatedAt,
+                        CreatedBy = a.CreatedBy
+                    })
+                    .ToList();
+                
+                // Get gaps for this section (Gap model uses Resolved, not Status)
+                var sectionGaps = _gaps
+                    .Where(g => g.SectionId == section.Id && !g.Resolved)
+                    .Select(g => new GapRecord
+                    {
+                        Id = g.Id,
+                        DataPointId = string.Empty, // Gap is linked to section, not specific data point
+                        Description = g.Description,
+                        MissingReason = g.Impact, // Using Impact as MissingReason since that's what's available
+                        Status = g.Resolved ? "provided" : "missing",
+                        CreatedAt = g.CreatedAt
+                    })
+                    .ToList();
+                
+                generatedSections.Add(new GeneratedReportSection
+                {
+                    Section = section,
+                    Owner = owner,
+                    DataPoints = dataPoints,
+                    Evidence = sectionEvidence,
+                    Assumptions = sectionAssumptions,
+                    Gaps = sectionGaps
+                });
+            }
+            
+            // Create the generated report
+            var reportId = Guid.NewGuid().ToString();
+            var generatedAt = DateTime.UtcNow.ToString("O");
+            
+            var report = new GeneratedReport
+            {
+                Id = reportId,
+                Period = period,
+                Organization = _organization,
+                Sections = generatedSections,
+                GeneratedAt = generatedAt,
+                GeneratedBy = request.GeneratedBy,
+                GeneratedByName = userName,
+                GenerationNote = request.GenerationNote,
+                Checksum = CalculateReportChecksum(reportId, period.Id, generatedSections, generatedAt)
+            };
+            
+            // Log generation to audit trail
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = generatedAt,
+                UserId = request.GeneratedBy,
+                UserName = userName,
+                Action = "report-generated",
+                EntityType = "report",
+                EntityId = reportId,
+                ChangeNote = $"Generated report for period '{period.Name}' with {generatedSections.Count} sections"
+            };
+            _auditLog.Add(auditEntry);
+            
+            return (true, null, report);
+        }
+    }
+    
+    /// <summary>
+    /// Calculate a deterministic checksum for the generated report.
+    /// </summary>
+    private string CalculateReportChecksum(string reportId, string periodId, List<GeneratedReportSection> sections, string generatedAt)
+    {
+        var checksumBuilder = new StringBuilder();
+        checksumBuilder.Append(reportId);
+        checksumBuilder.Append(periodId);
+        checksumBuilder.Append(generatedAt);
+        
+        foreach (var section in sections)
+        {
+            checksumBuilder.Append(section.Section.Id);
+            checksumBuilder.Append(section.Section.Title);
+            checksumBuilder.Append(section.Section.Order);
+            
+            foreach (var dp in section.DataPoints)
+            {
+                checksumBuilder.Append(dp.Id);
+                checksumBuilder.Append(dp.Value);
+                checksumBuilder.Append(dp.Status);
+            }
+        }
+        
+        using var sha256 = SHA256.Create();
+        var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(checksumBuilder.ToString()));
+        return Convert.ToBase64String(hash);
+    }
+    
+    #endregion
+    
     #endregion
 }

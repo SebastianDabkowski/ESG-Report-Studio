@@ -312,4 +312,33 @@ public sealed class ReportingController : ControllerBase
         var auditTrail = _store.GetPeriodAuditTrail(periodId);
         return Ok(auditTrail);
     }
+    
+    /// <summary>
+    /// Generate a report from the selected structure for a reporting period.
+    /// Returns a structured report containing enabled sections in their defined order,
+    /// with the latest data snapshot for each section.
+    /// </summary>
+    [HttpPost("periods/{periodId}/generate-report")]
+    public ActionResult<GeneratedReport> GenerateReport(string periodId, [FromBody] GenerateReportRequest request)
+    {
+        // Ensure periodId from route matches request
+        if (request.PeriodId != periodId)
+        {
+            request.PeriodId = periodId;
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.GeneratedBy))
+        {
+            return BadRequest(new { error = "GeneratedBy is required." });
+        }
+        
+        var (isValid, errorMessage, report) = _store.GenerateReport(request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(report);
+    }
 }

@@ -93,6 +93,12 @@ public class ReportSection
     /// Catalog code reference (e.g., "ENV-001", "SOC-001") for stable identification across versions.
     /// </summary>
     public string? CatalogCode { get; set; }
+    
+    /// <summary>
+    /// Indicates whether this section is enabled for inclusion in report generation.
+    /// When false, the section is excluded from generated reports.
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
 }
 
 public sealed class SectionSummary : ReportSection
@@ -6136,4 +6142,179 @@ public sealed class YoYAnnexExportRecord
     public int MetricRowCount { get; set; }
     public int VarianceExplanationCount { get; set; }
     public int EvidenceReferenceCount { get; set; }
+}
+
+/// <summary>
+/// Request to generate a report from the selected structure.
+/// </summary>
+public sealed class GenerateReportRequest
+{
+    /// <summary>
+    /// The reporting period ID for which to generate the report.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional list of specific section IDs to include. If null or empty, includes all enabled sections.
+    /// </summary>
+    public List<string>? SectionIds { get; set; }
+    
+    /// <summary>
+    /// User ID of the person generating the report.
+    /// </summary>
+    public string GeneratedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about this generation.
+    /// </summary>
+    public string? GenerationNote { get; set; }
+}
+
+/// <summary>
+/// Result of report generation containing the structured output.
+/// </summary>
+public sealed class GeneratedReport
+{
+    /// <summary>
+    /// Unique identifier for this generated report.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The reporting period information.
+    /// </summary>
+    public ReportingPeriod Period { get; set; } = new();
+    
+    /// <summary>
+    /// Organization information.
+    /// </summary>
+    public Organization? Organization { get; set; }
+    
+    /// <summary>
+    /// Ordered list of sections included in the report, sorted by Order field.
+    /// Only enabled sections are included.
+    /// </summary>
+    public List<GeneratedReportSection> Sections { get; set; } = new();
+    
+    /// <summary>
+    /// Timestamp when the report was generated (ISO 8601 format).
+    /// </summary>
+    public string GeneratedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person who generated the report.
+    /// </summary>
+    public string GeneratedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person who generated the report.
+    /// </summary>
+    public string GeneratedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about this generation.
+    /// </summary>
+    public string? GenerationNote { get; set; }
+    
+    /// <summary>
+    /// SHA-256 checksum of the report content for integrity verification.
+    /// </summary>
+    public string Checksum { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// A section included in a generated report with its associated data.
+/// </summary>
+public sealed class GeneratedReportSection
+{
+    /// <summary>
+    /// Section metadata.
+    /// </summary>
+    public ReportSection Section { get; set; } = new();
+    
+    /// <summary>
+    /// Owner information for the section.
+    /// </summary>
+    public User? Owner { get; set; }
+    
+    /// <summary>
+    /// Data points included in this section with their latest values.
+    /// </summary>
+    public List<DataPointSnapshot> DataPoints { get; set; } = new();
+    
+    /// <summary>
+    /// Evidence attached to this section.
+    /// </summary>
+    public List<EvidenceMetadata> Evidence { get; set; } = new();
+    
+    /// <summary>
+    /// Active assumptions for this section.
+    /// </summary>
+    public List<AssumptionRecord> Assumptions { get; set; } = new();
+    
+    /// <summary>
+    /// Active gaps for this section.
+    /// </summary>
+    public List<GapRecord> Gaps { get; set; } = new();
+}
+
+/// <summary>
+/// Snapshot of a data point's current state for report generation.
+/// </summary>
+public sealed class DataPointSnapshot
+{
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Value { get; set; } = string.Empty;
+    public string? Unit { get; set; }
+    public string InformationType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public string? LastUpdatedAt { get; set; }
+    public int EvidenceCount { get; set; }
+    public bool HasAssumptions { get; set; }
+}
+
+/// <summary>
+/// Evidence metadata for report generation.
+/// </summary>
+public sealed class EvidenceMetadata
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string FileType { get; set; } = string.Empty;
+    public long FileSize { get; set; }
+    public string UploadedAt { get; set; } = string.Empty;
+    public string UploadedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Assumption record for report generation.
+/// </summary>
+public sealed class AssumptionRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Justification { get; set; } = string.Empty;
+    public string ConfidenceLevel { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Gap record for report generation.
+/// </summary>
+public sealed class GapRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string DataPointId { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string MissingReason { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string CreatedAt { get; set; } = string.Empty;
 }
