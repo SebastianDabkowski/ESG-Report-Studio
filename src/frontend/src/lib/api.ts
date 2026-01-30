@@ -17,7 +17,8 @@ import type {
   RolloverAuditLog,
   DataTypeRolloverRule,
   SaveDataTypeRolloverRuleRequest,
-  RolloverRuleHistory
+  RolloverRuleHistory,
+  MetricComparisonResponse
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1070,4 +1071,10 @@ export async function deleteRolloverRule(dataType: string, deletedBy: string): P
 
 export async function getRolloverRuleHistory(dataType: string): Promise<RolloverRuleHistory[]> {
   return requestJson<RolloverRuleHistory[]>(`rollover-rules/${encodeURIComponent(dataType)}/history`)
+}
+
+// Metric Comparison API
+export async function compareMetrics(dataPointId: string, priorPeriodId?: string): Promise<MetricComparisonResponse> {
+  const params = priorPeriodId ? `?priorPeriodId=${encodeURIComponent(priorPeriodId)}` : ''
+  return requestJson<MetricComparisonResponse>(`data-points/${dataPointId}/compare-periods${params}`)
 }
