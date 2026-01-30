@@ -3091,3 +3091,176 @@ public sealed class SubmitApprovalDecisionRequest
     /// </summary>
     public string DecidedBy { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Request to export an audit package for external auditors.
+/// </summary>
+public sealed class ExportAuditPackageRequest
+{
+    /// <summary>
+    /// ID of the reporting period to export.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional list of section IDs to include. If empty/null, includes all sections.
+    /// </summary>
+    public List<string>? SectionIds { get; set; }
+    
+    /// <summary>
+    /// User ID of the person requesting the export.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note describing the purpose of this export.
+    /// </summary>
+    public string? ExportNote { get; set; }
+}
+
+/// <summary>
+/// Result of an audit package export operation.
+/// </summary>
+public sealed class ExportAuditPackageResult
+{
+    /// <summary>
+    /// Unique identifier for this export.
+    /// </summary>
+    public string ExportId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when the export was created.
+    /// </summary>
+    public string ExportedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who requested the export.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// SHA-256 checksum of the entire package for integrity verification.
+    /// </summary>
+    public string Checksum { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Size of the package in bytes.
+    /// </summary>
+    public long PackageSize { get; set; }
+    
+    /// <summary>
+    /// Summary of what was included in the package.
+    /// </summary>
+    public AuditPackageSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Summary of contents included in an audit package.
+/// </summary>
+public sealed class AuditPackageSummary
+{
+    public string PeriodId { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public int SectionCount { get; set; }
+    public int DataPointCount { get; set; }
+    public int AuditLogEntryCount { get; set; }
+    public int DecisionCount { get; set; }
+    public int AssumptionCount { get; set; }
+    public int GapCount { get; set; }
+    public int EvidenceFileCount { get; set; }
+}
+
+/// <summary>
+/// Complete audit package contents for export.
+/// </summary>
+public sealed class AuditPackageContents
+{
+    /// <summary>
+    /// Export metadata.
+    /// </summary>
+    public ExportMetadata Metadata { get; set; } = new();
+    
+    /// <summary>
+    /// Report period information.
+    /// </summary>
+    public ReportingPeriod Period { get; set; } = new();
+    
+    /// <summary>
+    /// Included sections with complete data.
+    /// </summary>
+    public List<SectionAuditData> Sections { get; set; } = new();
+    
+    /// <summary>
+    /// Audit log entries for the period/sections.
+    /// </summary>
+    public List<AuditLogEntry> AuditTrail { get; set; } = new();
+    
+    /// <summary>
+    /// Decision log entries related to the report.
+    /// </summary>
+    public List<Decision> Decisions { get; set; } = new();
+    
+    /// <summary>
+    /// Evidence file references with checksums.
+    /// </summary>
+    public List<EvidenceReference> EvidenceFiles { get; set; } = new();
+}
+
+/// <summary>
+/// Metadata about the export operation itself.
+/// </summary>
+public sealed class ExportMetadata
+{
+    public string ExportId { get; set; } = string.Empty;
+    public string ExportedAt { get; set; } = string.Empty;
+    public string ExportedBy { get; set; } = string.Empty;
+    public string ExportedByName { get; set; } = string.Empty;
+    public string? ExportNote { get; set; }
+    public string Version { get; set; } = "1.0";
+}
+
+/// <summary>
+/// Complete audit data for a section.
+/// </summary>
+public sealed class SectionAuditData
+{
+    public ReportSection Section { get; set; } = new();
+    public List<DataPoint> DataPoints { get; set; } = new();
+    public List<FragmentAuditView> ProvenanceMappings { get; set; } = new();
+    public List<Gap> Gaps { get; set; } = new();
+    public List<Assumption> Assumptions { get; set; } = new();
+}
+
+/// <summary>
+/// Evidence file reference with integrity information.
+/// </summary>
+public sealed class EvidenceReference
+{
+    public string Id { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string? FileUrl { get; set; }
+    public long? FileSize { get; set; }
+    public string? Checksum { get; set; }
+    public string? ContentType { get; set; }
+    public string IntegrityStatus { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public string UploadedBy { get; set; } = string.Empty;
+    public string UploadedAt { get; set; } = string.Empty;
+    public List<string> LinkedDataPointIds { get; set; } = new();
+}
+
+/// <summary>
+/// Record of an audit package export for tracking purposes.
+/// </summary>
+public sealed class AuditPackageExportRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string PeriodId { get; set; } = string.Empty;
+    public List<string> SectionIds { get; set; } = new();
+    public string ExportedAt { get; set; } = string.Empty;
+    public string ExportedBy { get; set; } = string.Empty;
+    public string ExportedByName { get; set; } = string.Empty;
+    public string? ExportNote { get; set; }
+    public string Checksum { get; set; } = string.Empty;
+    public long PackageSize { get; set; }
+}
