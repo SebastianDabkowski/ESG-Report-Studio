@@ -23,6 +23,23 @@ public sealed class ReportingPeriod
     public string CreatedAt { get; set; } = string.Empty;
     public string OwnerId { get; set; } = string.Empty;
     public string? OrganizationId { get; set; }
+    
+    /// <summary>
+    /// SHA-256 hash of critical fields for integrity verification.
+    /// Calculated from: Id, Name, StartDate, EndDate, ReportingMode, ReportScope, OwnerId, OrganizationId
+    /// </summary>
+    public string? IntegrityHash { get; set; }
+    
+    /// <summary>
+    /// Indicates if an integrity warning has been raised for this period.
+    /// When true, publication is blocked unless overridden by an admin.
+    /// </summary>
+    public bool IntegrityWarning { get; set; }
+    
+    /// <summary>
+    /// Details about the integrity warning, if any.
+    /// </summary>
+    public string? IntegrityWarningDetails { get; set; }
 }
 
 public class ReportSection
@@ -2371,6 +2388,17 @@ public sealed class Decision
     /// Change note explaining what was updated in this version.
     /// </summary>
     public string? ChangeNote { get; set; }
+    
+    /// <summary>
+    /// SHA-256 hash of critical fields for integrity verification.
+    /// Calculated from: Id, Version, Title, Context, DecisionText, Alternatives, Consequences
+    /// </summary>
+    public string? IntegrityHash { get; set; }
+    
+    /// <summary>
+    /// Status of integrity verification: 'valid', 'failed', 'not-checked'
+    /// </summary>
+    public string IntegrityStatus { get; set; } = "not-checked";
 }
 
 /// <summary>
@@ -2396,6 +2424,11 @@ public sealed class DecisionVersion
     public string CreatedBy { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
     public string? ChangeNote { get; set; }
+    
+    /// <summary>
+    /// SHA-256 hash of this version's content for integrity verification.
+    /// </summary>
+    public string? IntegrityHash { get; set; }
 }
 
 /// <summary>
@@ -3268,4 +3301,26 @@ public sealed class AuditPackageExportRecord
     public string? ExportNote { get; set; }
     public string Checksum { get; set; } = string.Empty;
     public long PackageSize { get; set; }
+}
+
+/// <summary>
+/// Report of integrity status for a reporting period and its related entities.
+/// </summary>
+public sealed class IntegrityStatusReport
+{
+    public string PeriodId { get; set; } = string.Empty;
+    public bool PeriodIntegrityValid { get; set; }
+    public bool PeriodIntegrityWarning { get; set; }
+    public List<string> FailedDecisions { get; set; } = new();
+    public bool CanPublish { get; set; }
+    public string? WarningDetails { get; set; }
+    public string? ErrorMessage { get; set; }
+}
+
+/// <summary>
+/// Request to override an integrity warning.
+/// </summary>
+public sealed class OverrideIntegrityWarningRequest
+{
+    public string Justification { get; set; } = string.Empty;
 }
