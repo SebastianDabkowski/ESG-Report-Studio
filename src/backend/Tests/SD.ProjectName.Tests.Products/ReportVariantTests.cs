@@ -253,8 +253,8 @@ public sealed class ReportVariantTests
             EndDate = "2024-12-31",
             ReportingMode = "simplified",
             ReportScope = "single-company",
-            OwnerId = "user1",
-            OwnerName = "Test User"
+            OwnerId = "user-1",
+            OwnerName = "Sarah Chen"
         };
         var (_, _, snapshot) = store.ValidateAndCreatePeriod(periodRequest);
         var period = snapshot!.Periods.First();
@@ -273,7 +273,7 @@ public sealed class ReportVariantTests
             InformationType = "fact",
             Value = "1000000",
             Unit = "USD",
-            OwnerId = "user1",
+            OwnerId = "user-1",
             Source = "Financial System"
         };
         var (dpValid, dpError, createdDataPoint) = store.CreateDataPoint(createDataPointRequest);
@@ -286,7 +286,7 @@ public sealed class ReportVariantTests
             Name = "Client Report",
             Description = "Report for client with financial data redacted",
             AudienceType = "client",
-            CreatedBy = "user1",
+            CreatedBy = "user-1",
             Rules = new List<VariantRule>(),
             RedactionRules = new List<RedactionRule>
             {
@@ -305,7 +305,7 @@ public sealed class ReportVariantTests
         {
             PeriodId = period.Id,
             VariantId = variant!.Id,
-            GeneratedBy = "user1"
+            GeneratedBy = "user-1"
         };
         var (isValid, errorMessage, variantReport) = store.GenerateReportVariant(generateRequest);
 
