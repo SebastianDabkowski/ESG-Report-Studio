@@ -14536,6 +14536,19 @@ public sealed class InMemoryReportStore
                 return (false, $"TemplateType must be one of: {string.Join(", ", validTypes)}.", null);
             }
             
+            // Validate JSON configuration format
+            if (!string.IsNullOrWhiteSpace(request.Configuration))
+            {
+                try
+                {
+                    System.Text.Json.JsonDocument.Parse(request.Configuration);
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    return (false, "Configuration must be valid JSON.", null);
+                }
+            }
+            
             // If this is set as default for its type, unmark any existing default of the same type
             if (request.IsDefault)
             {
@@ -14596,6 +14609,19 @@ public sealed class InMemoryReportStore
             if (string.IsNullOrWhiteSpace(request.UpdatedBy))
             {
                 return (false, "UpdatedBy is required.", null);
+            }
+            
+            // Validate JSON configuration format
+            if (!string.IsNullOrWhiteSpace(request.Configuration))
+            {
+                try
+                {
+                    System.Text.Json.JsonDocument.Parse(request.Configuration);
+                }
+                catch (System.Text.Json.JsonException)
+                {
+                    return (false, "Configuration must be valid JSON.", null);
+                }
             }
             
             // Track changes for audit log

@@ -114,9 +114,9 @@ public sealed class PdfExportService : IPdfExportService
                 }
             }
             
-            // Organization name (with optional primary color from branding)
-            var titleColor = options.BrandingProfile?.PrimaryColor;
-            var titleStyle = column.Item().AlignCenter().Text(report.Organization?.Name ?? "ESG Responsibility Report")
+            // Organization name
+            // Note: Primary color from branding profile could be applied here in future
+            column.Item().AlignCenter().Text(report.Organization?.Name ?? "ESG Responsibility Report")
                 .FontSize(24).Bold();
             
             // Report period
