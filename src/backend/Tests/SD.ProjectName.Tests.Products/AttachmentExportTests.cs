@@ -9,14 +9,60 @@ namespace SD.ProjectName.Tests.Products;
 /// </summary>
 public sealed class AttachmentExportTests
 {
+    private static void CreateTestConfiguration(InMemoryReportStore store)
+    {
+        // Create organization
+        store.CreateOrganization(new CreateOrganizationRequest
+        {
+            Name = "Test Corporation",
+            LegalForm = "corporation",
+            Country = "US",
+            Identifier = "TEST123",
+            CreatedBy = "test-user",
+            CoverageType = "full",
+            CoverageJustification = "Test coverage"
+        });
+
+        // Create organizational unit
+        store.CreateOrganizationalUnit(new CreateOrganizationalUnitRequest
+        {
+            Name = "Test Unit",
+            Description = "Default unit for testing",
+            CreatedBy = "test-user"
+        });
+    }
+    
+    private static string CreateTestSection(InMemoryReportStore store, string periodId, string title, string category)
+    {
+        var section = new ReportSection
+        {
+            Id = Guid.NewGuid().ToString(),
+            PeriodId = periodId,
+            Title = title,
+            Category = category,
+            Description = "Test section",
+            OwnerId = "user-1",
+            Status = "draft",
+            Completeness = "empty",
+            Order = 1
+        };
+        
+        var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+        var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+        sections!.Add(section);
+        
+        return section.Id;
+    }
+
     [Fact]
     public void PdfExport_WithAttachmentsIncluded_ShouldGeneratePdfWithAppendix()
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Annual Report",
             StartDate = "2024-01-01",
@@ -25,96 +71,62 @@ public sealed class AttachmentExportTests
             ReportScope = "single-company",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
-        Assert.NotNull(snapshot);
-        
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Environmental Impact",
-            Category = "environmental",
-            Description = "Test section",
-            OwnerId = "user-1",
-            Order = 1
-        };
-        
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
-        var section = sectionSnapshot!.Sections.First(s => s.Title == "Environmental Impact");
+        var sectionId = CreateTestSection(store, period.Id, "Environmental Impact", "environmental");
         
         // Add some evidence to the section
-        var evidenceRequest1 = new UploadEvidenceRequest
-        {
-            SectionId = section.Id,
-            Title = "Energy Invoice Q1",
-            Description = "Invoice from utility company",
-            FileName = "invoice-q1.pdf",
-            UploadedBy = "user-1"
-        };
-        
-        var evidence1 = store.CreateEvidence(
-            evidenceRequest1.SectionId,
-            evidenceRequest1.Title,
-            evidenceRequest1.Description,
-            evidenceRequest1.FileName,
-            evidenceRequest1.UploadedBy,
-            fileSize: 51200,
-            checksum: "abc123",
-            contentType: "application/pdf"
+        var (ev1Valid, _, evidence1) = store.CreateEvidence(
+            sectionId,
+            "Energy Invoice Q1",
+            "Invoice from utility company",
+            "invoice-q1.pdf",
+            null, // FileUrl
+            null, // SourceUrl
+            "user-1",
+            51200, // fileSize
+            "abc123", // checksum
+            "application/pdf" // contentType
         );
+        Assert.True(ev1Valid);
         
-        var evidenceRequest2 = new UploadEvidenceRequest
-        {
-            SectionId = section.Id,
-            Title = "Emissions Report",
-            Description = "Annual emissions calculation",
-            FileName = "emissions-2024.xlsx",
-            UploadedBy = "user-1"
-        };
-        
-        var evidence2 = store.CreateEvidence(
-            evidenceRequest2.SectionId,
-            evidenceRequest2.Title,
-            evidenceRequest2.Description,
-            evidenceRequest2.FileName,
-            evidenceRequest2.UploadedBy,
-            fileSize: 102400,
-            checksum: "def456",
-            contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        var (ev2Valid, _, evidence2) = store.CreateEvidence(
+            sectionId,
+            "Emissions Report",
+            "Annual emissions calculation",
+            "emissions-2024.xlsx",
+            null,
+            null,
+            "user-1",
+            102400,
+            "def456",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         );
+        Assert.True(ev2Valid);
         
         // Generate report
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
         // Act - Export with attachments included
         var pdfService = new PdfExportService();
-        var options = new PdfExportOptions
+        var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = true,
             UserId = "user-1",
             MaxAttachmentSizeMB = 50
-        };
-        
-        var pdfBytes = pdfService.GeneratePdf(report!, options);
+        });
         
         // Assert
         Assert.NotNull(pdfBytes);
         Assert.NotEmpty(pdfBytes);
-        
-        // Verify PDF header (starts with %PDF)
         var pdfHeader = System.Text.Encoding.ASCII.GetString(pdfBytes.Take(4).ToArray());
         Assert.Equal("%PDF", pdfHeader);
     }
@@ -124,9 +136,9 @@ public sealed class AttachmentExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Annual Report",
             StartDate = "2024-01-01",
@@ -135,65 +147,48 @@ public sealed class AttachmentExportTests
             ReportScope = "single-company",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Social Responsibility",
-            Category = "social",
-            Description = "Test section",
-            OwnerId = "user-1",
-            Order = 1
-        };
-        
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
-        var section = sectionSnapshot!.Sections.First(s => s.Title == "Social Responsibility");
+        var sectionId = CreateTestSection(store, period.Id, "Social Responsibility", "social");
         
         // Add evidence
-        var evidence = store.CreateEvidence(
-            section.Id,
+        var (evValid, _, evidence) = store.CreateEvidence(
+            sectionId,
             "Employee Survey Results",
             "2024 employee satisfaction survey",
             "survey-2024.pdf",
+            null,
+            null,
             "user-1",
-            fileSize: 256000,
-            checksum: "xyz789",
-            contentType: "application/pdf"
+            256000,
+            "xyz789",
+            "application/pdf"
         );
+        Assert.True(evValid);
         
         // Generate report
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
         // Act - Export with attachments included
         var docxService = new DocxExportService();
-        var options = new DocxExportOptions
+        var docxBytes = docxService.GenerateDocx(report!, new DocxExportOptions
         {
             IncludeAttachments = true,
             UserId = "user-1",
             MaxAttachmentSizeMB = 50
-        };
-        
-        var docxBytes = docxService.GenerateDocx(report!, options);
+        });
         
         // Assert
         Assert.NotNull(docxBytes);
         Assert.NotEmpty(docxBytes);
-        
-        // Verify DOCX header (ZIP format, starts with PK)
         var docxHeader = System.Text.Encoding.ASCII.GetString(docxBytes.Take(2).ToArray());
         Assert.Equal("PK", docxHeader);
     }
@@ -203,9 +198,9 @@ public sealed class AttachmentExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Q1",
             StartDate = "2024-01-01",
@@ -214,62 +209,35 @@ public sealed class AttachmentExportTests
             ReportScope = "single-company",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Governance",
-            Category = "governance",
-            Description = "Test section",
-            OwnerId = "user-1",
-            Order = 1
-        };
-        
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
-        var section = sectionSnapshot!.Sections.First(s => s.Title == "Governance");
+        var sectionId = CreateTestSection(store, period.Id, "Governance", "governance");
         
         // Add evidence but don't include it in export
-        var evidence = store.CreateEvidence(
-            section.Id,
-            "Board Meeting Minutes",
-            "Q1 board minutes",
-            "minutes-q1.pdf",
-            "user-1",
-            fileSize: 75000,
-            checksum: "aaa111",
-            contentType: "application/pdf"
-        );
+        store.CreateEvidence(sectionId, "Board Minutes", "Q1 board minutes", "minutes-q1.pdf",
+            null, null, "user-1", 75000, "aaa111", "application/pdf");
         
         // Generate report
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
         // Act - Export WITHOUT attachments (default)
         var pdfService = new PdfExportService();
-        var options = new PdfExportOptions
+        var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = false
-        };
-        
-        var pdfBytes = pdfService.GeneratePdf(report!, options);
+        });
         
         // Assert - Should still generate valid PDF
         Assert.NotNull(pdfBytes);
         Assert.NotEmpty(pdfBytes);
-        
         var pdfHeader = System.Text.Encoding.ASCII.GetString(pdfBytes.Take(4).ToArray());
         Assert.Equal("%PDF", pdfHeader);
     }
@@ -279,9 +247,9 @@ public sealed class AttachmentExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Full Year",
             StartDate = "2024-01-01",
@@ -290,64 +258,37 @@ public sealed class AttachmentExportTests
             ReportScope = "group",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Environmental",
-            Category = "environmental",
-            Description = "Test section",
-            OwnerId = "user-1",
-            Order = 1
-        };
-        
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
-        var section = sectionSnapshot!.Sections.First();
+        var sectionId = CreateTestSection(store, period.Id, "Environmental", "environmental");
         
         // Add large evidence file (100 MB)
-        var largeEvidence = store.CreateEvidence(
-            section.Id,
-            "Video Evidence",
-            "Facility walkthrough video",
-            "walkthrough.mp4",
-            "user-1",
-            fileSize: 100 * 1024 * 1024, // 100 MB
-            checksum: "large123",
-            contentType: "video/mp4"
-        );
+        store.CreateEvidence(sectionId, "Video Evidence", "Facility walkthrough video",
+            "walkthrough.mp4", null, null, "user-1", 100 * 1024 * 1024, "large123", "video/mp4");
         
         // Generate report
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
         // Act - Export with low size limit
         var pdfService = new PdfExportService();
-        var options = new PdfExportOptions
+        var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = true,
             UserId = "user-1",
             MaxAttachmentSizeMB = 50 // Lower than the 100 MB file
-        };
-        
-        var pdfBytes = pdfService.GeneratePdf(report!, options);
+        });
         
         // Assert - Should still generate PDF (with warning in content)
         Assert.NotNull(pdfBytes);
         Assert.NotEmpty(pdfBytes);
-        
         var pdfHeader = System.Text.Encoding.ASCII.GetString(pdfBytes.Take(4).ToArray());
         Assert.Equal("%PDF", pdfHeader);
     }
@@ -357,9 +298,9 @@ public sealed class AttachmentExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Q2",
             StartDate = "2024-04-01",
@@ -368,50 +309,32 @@ public sealed class AttachmentExportTests
             ReportScope = "single-company",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Test Section",
-            Category = "environmental",
-            Description = "No evidence",
-            OwnerId = "user-1",
-            Order = 1
-        };
-        
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
+        CreateTestSection(store, period.Id, "Test Section", "environmental");
         
         // Generate report (no evidence added)
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
         // Act - Export with attachments enabled but no evidence exists
         var docxService = new DocxExportService();
-        var options = new DocxExportOptions
+        var docxBytes = docxService.GenerateDocx(report!, new DocxExportOptions
         {
             IncludeAttachments = true,
             UserId = "user-1"
-        };
-        
-        var docxBytes = docxService.GenerateDocx(report!, options);
+        });
         
         // Assert - Should still generate valid DOCX
         Assert.NotNull(docxBytes);
         Assert.NotEmpty(docxBytes);
-        
         var docxHeader = System.Text.Encoding.ASCII.GetString(docxBytes.Take(2).ToArray());
         Assert.Equal("PK", docxHeader);
     }
@@ -421,9 +344,9 @@ public sealed class AttachmentExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        ExportTestHelpers.CreateTestConfiguration(store);
+        CreateTestConfiguration(store);
         
-        var createPeriodRequest = new CreateReportingPeriodRequest
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
         {
             Name = "2024 Annual",
             StartDate = "2024-01-01",
@@ -432,32 +355,17 @@ public sealed class AttachmentExportTests
             ReportScope = "single-company",
             OwnerId = "user-1",
             OwnerName = "Test User"
-        };
-        
-        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        });
         Assert.True(isValid);
         var period = snapshot!.Periods.First();
         
-        var createSectionRequest = new CreateReportSectionRequest
-        {
-            PeriodId = period.Id,
-            Title = "Test",
-            Category = "environmental",
-            Description = "Test",
-            OwnerId = "user-1",
-            Order = 1
-        };
+        CreateTestSection(store, period.Id, "Test", "environmental");
         
-        var (sectionValid, _, sectionSnapshot) = store.ValidateAndCreateSection(createSectionRequest);
-        Assert.True(sectionValid);
-        
-        var generateRequest = new GenerateReportRequest
+        var (reportValid, errorMessage, report) = store.GenerateReport(new GenerateReportRequest
         {
             PeriodId = period.Id,
             GeneratedBy = "user-1"
-        };
-        
-        var (reportValid, errorMessage, report) = store.GenerateReport(generateRequest);
+        });
         Assert.True(reportValid, errorMessage);
         Assert.NotNull(report);
         
