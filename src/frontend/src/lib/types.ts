@@ -934,3 +934,42 @@ export interface MetricComparisonResponse {
   unitWarning?: string
   availableBaselines: AvailableBaselinePeriod[]
 }
+
+// Text Disclosure Comparison Types
+export interface TextSegmentDto {
+  text: string
+  changeType: 'unchanged' | 'added' | 'removed' | 'modified'
+}
+
+export interface DiffSummaryDto {
+  totalSegments: number
+  addedSegments: number
+  removedSegments: number
+  modifiedSegments: number
+  unchangedSegments: number
+  oldTextLength: number
+  newTextLength: number
+  hasChanges: boolean
+}
+
+export interface DataPointInfo {
+  id: string
+  periodId: string
+  periodName: string
+  title: string
+  content: string
+  reviewStatus: string
+  updatedAt: string
+  sourcePeriodId?: string
+  sourceDataPointId?: string
+  rolloverTimestamp?: string
+}
+
+export interface TextDisclosureComparisonResponse {
+  currentDataPoint: DataPointInfo
+  previousDataPoint?: DataPointInfo
+  segments: TextSegmentDto[]
+  summary: DiffSummaryDto
+  isDraftCopy: boolean
+  hasBeenEdited: boolean
+}
