@@ -8198,4 +8198,285 @@ public sealed class InMemoryReportStore
     }
 
     #endregion
+
+    #region Audit Package Export
+
+    private readonly List<AuditPackageExportRecord> _auditPackageExports = new();
+
+    /// <summary>
+    /// Generate an audit package for external auditors.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ExportAuditPackageResult? Result) GenerateAuditPackage(ExportAuditPackageRequest request)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, $"Period with ID '{request.PeriodId}' not found.", null);
+            }
+
+            // Get user if exists, otherwise use the user ID directly
+            var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+            var userName = user?.Name ?? request.ExportedBy;
+
+            // Build the package contents
+            var contents = BuildAuditPackageContentsInternal(request, period, request.ExportedBy, userName);
+            
+            // Calculate checksum (will be properly calculated during ZIP download)
+            // This is just a placeholder for the metadata endpoint
+            var checksum = ""; // Checksum is calculated during ZIP creation in download endpoint
+            
+            var exportId = Guid.NewGuid().ToString();
+            var exportedAt = DateTime.UtcNow.ToString("O");
+
+            // Create result
+            var result = new ExportAuditPackageResult
+            {
+                ExportId = exportId,
+                ExportedAt = exportedAt,
+                ExportedBy = request.ExportedBy,
+                Checksum = checksum,
+                PackageSize = 0, // Package size is calculated during ZIP creation in download endpoint
+                Summary = new AuditPackageSummary
+                {
+                    PeriodId = period.Id,
+                    PeriodName = period.Name,
+                    SectionCount = contents.Sections.Count,
+                    DataPointCount = contents.Sections.Sum(s => s.DataPoints.Count),
+                    AuditLogEntryCount = contents.AuditTrail.Count,
+                    DecisionCount = contents.Decisions.Count,
+                    AssumptionCount = contents.Sections.Sum(s => s.Assumptions.Count),
+                    GapCount = contents.Sections.Sum(s => s.Gaps.Count),
+                    EvidenceFileCount = contents.EvidenceFiles.Count
+                }
+            };
+
+            return (true, null, result);
+        }
+    }
+
+    /// <summary>
+    /// Build audit package contents for export.
+    /// </summary>
+    public AuditPackageContents? BuildAuditPackageContents(ExportAuditPackageRequest request)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return null;
+            }
+
+            var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+            var userName = user?.Name ?? request.ExportedBy;
+
+            return BuildAuditPackageContentsInternal(request, period, request.ExportedBy, userName);
+        }
+    }
+
+    private AuditPackageContents BuildAuditPackageContentsInternal(ExportAuditPackageRequest request, ReportingPeriod period, string userId, string userName)
+    {
+        var exportId = Guid.NewGuid().ToString();
+        var exportedAt = DateTime.UtcNow.ToString("O");
+
+        // Determine which sections to include
+        var sectionsToInclude = request.SectionIds != null && request.SectionIds.Count > 0
+            ? _sections.Where(s => s.PeriodId == request.PeriodId && request.SectionIds.Contains(s.Id)).ToList()
+            : _sections.Where(s => s.PeriodId == request.PeriodId).ToList();
+
+        // Validate that we have at least one section
+        if (sectionsToInclude.Count == 0)
+        {
+            // If specific sections were requested, they might not exist
+            if (request.SectionIds != null && request.SectionIds.Count > 0)
+            {
+                // Return empty package rather than failing - allows partial exports
+                sectionsToInclude = new List<ReportSection>();
+            }
+        }
+
+        var sectionIds = sectionsToInclude.Select(s => s.Id).ToList();
+
+        // Build section audit data
+        var sectionAuditData = sectionsToInclude.Select(section =>
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            var dataPointIds = dataPoints.Select(dp => dp.Id).ToList();
+            
+            // Build provenance mappings (fragment audit views)
+            var provenanceMappings = dataPointIds.Select(dpId => GetDataPointAuditView(dpId))
+                .Where(v => v != null)
+                .Cast<FragmentAuditView>()
+                .ToList();
+            
+            var gaps = _gaps.Where(g => g.SectionId == section.Id).ToList();
+            var assumptions = _assumptions.Where(a => 
+                dataPointIds.Any(dpId => a.LinkedDataPointIds?.Contains(dpId) ?? false)).ToList();
+
+            return new SectionAuditData
+            {
+                Section = section,
+                DataPoints = dataPoints,
+                ProvenanceMappings = provenanceMappings,
+                Gaps = gaps,
+                Assumptions = assumptions
+            };
+        }).ToList();
+
+        // Get audit trail for the period/sections
+        var auditTrail = _auditLog.Where(log =>
+        {
+            // Include audit logs for the period itself
+            if (log.EntityType == "ReportingPeriod" && log.EntityId == request.PeriodId)
+                return true;
+
+            // Include audit logs for sections
+            if (log.EntityType == "ReportSection" && sectionIds.Contains(log.EntityId))
+                return true;
+
+            // Include audit logs for data points in these sections
+            if (log.EntityType == "DataPoint")
+            {
+                var dp = _dataPoints.FirstOrDefault(d => d.Id == log.EntityId);
+                if (dp != null && sectionIds.Contains(dp.SectionId))
+                    return true;
+            }
+
+            // Include audit logs for gaps in these sections
+            if (log.EntityType == "Gap")
+            {
+                var gap = _gaps.FirstOrDefault(g => g.Id == log.EntityId);
+                if (gap != null && sectionIds.Contains(gap.SectionId))
+                    return true;
+            }
+
+            // Include audit logs for assumptions linked to data points in these sections
+            if (log.EntityType == "Assumption")
+            {
+                var assumption = _assumptions.FirstOrDefault(a => a.Id == log.EntityId);
+                if (assumption != null && assumption.LinkedDataPointIds != null)
+                {
+                    var dataPointIds = _dataPoints.Where(dp => sectionIds.Contains(dp.SectionId)).Select(dp => dp.Id).ToList();
+                    if (assumption.LinkedDataPointIds.Any(id => dataPointIds.Contains(id)))
+                        return true;
+                }
+            }
+
+            // Include audit logs for evidence in these sections
+            if (log.EntityType == "Evidence")
+            {
+                var evidence = _evidence.FirstOrDefault(e => e.Id == log.EntityId);
+                if (evidence != null && sectionIds.Contains(evidence.SectionId))
+                    return true;
+            }
+
+            return false;
+        }).OrderByDescending(log => log.Timestamp).ToList();
+
+        // Get decisions related to data points in the sections
+        var dataPointIdsInSections = sectionAuditData.SelectMany(s => s.DataPoints.Select(dp => dp.Id)).ToList();
+        var decisions = _decisions.Where(d => 
+            d.ReferencedByFragmentIds != null && 
+            d.ReferencedByFragmentIds.Any(id => dataPointIdsInSections.Contains(id))
+        ).ToList();
+
+        // Get evidence files for the sections
+        var evidenceFiles = _evidence.Where(e => sectionIds.Contains(e.SectionId))
+            .Select(e => new EvidenceReference
+            {
+                Id = e.Id,
+                FileName = e.FileName ?? "",
+                FileUrl = e.FileUrl,
+                FileSize = e.FileSize,
+                Checksum = e.Checksum,
+                ContentType = e.ContentType,
+                IntegrityStatus = e.IntegrityStatus,
+                SectionId = e.SectionId,
+                UploadedBy = e.UploadedBy,
+                UploadedAt = e.UploadedAt,
+                LinkedDataPointIds = _dataPoints
+                    .Where(dp => dp.EvidenceIds != null && dp.EvidenceIds.Contains(e.Id))
+                    .Select(dp => dp.Id)
+                    .ToList()
+            }).ToList();
+
+        return new AuditPackageContents
+        {
+            Metadata = new ExportMetadata
+            {
+                ExportId = exportId,
+                ExportedAt = exportedAt,
+                ExportedBy = userId,
+                ExportedByName = userName,
+                ExportNote = request.ExportNote,
+                Version = "1.0"
+            },
+            Period = period,
+            Sections = sectionAuditData,
+            AuditTrail = auditTrail,
+            Decisions = decisions,
+            EvidenceFiles = evidenceFiles
+        };
+    }
+
+    /// <summary>
+    /// Record an audit package export for tracking purposes.
+    /// </summary>
+    public void RecordAuditPackageExport(ExportAuditPackageRequest request, string checksum, long packageSize)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+            var sectionIds = request.SectionIds ?? new List<string>();
+            
+            if (sectionIds.Count == 0)
+            {
+                // Include all sections for the period
+                sectionIds = _sections.Where(s => s.PeriodId == request.PeriodId).Select(s => s.Id).ToList();
+            }
+
+            var record = new AuditPackageExportRecord
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = request.PeriodId,
+                SectionIds = sectionIds,
+                ExportedAt = DateTime.UtcNow.ToString("O"),
+                ExportedBy = request.ExportedBy,
+                ExportedByName = user?.Name ?? "Unknown",
+                ExportNote = request.ExportNote,
+                Checksum = checksum,
+                PackageSize = packageSize
+            };
+
+            _auditPackageExports.Add(record);
+
+            // Also add to audit log
+            CreateAuditLogEntry(request.ExportedBy, user?.Name ?? "Unknown", "export",
+                "AuditPackageExport", record.Id, new List<FieldChange>
+                {
+                    new() { Field = "PeriodId", NewValue = request.PeriodId },
+                    new() { Field = "SectionCount", NewValue = sectionIds.Count.ToString() },
+                    new() { Field = "Checksum", NewValue = checksum },
+                    new() { Field = "PackageSize", NewValue = packageSize.ToString() }
+                }, request.ExportNote ?? "Audit package exported");
+        }
+    }
+
+    /// <summary>
+    /// Get all audit package exports for a period.
+    /// </summary>
+    public IReadOnlyList<AuditPackageExportRecord> GetAuditPackageExports(string periodId)
+    {
+        lock (_lock)
+        {
+            return _auditPackageExports
+                .Where(e => e.PeriodId == periodId)
+                .OrderByDescending(e => e.ExportedAt)
+                .ToList();
+        }
+    }
+
+    #endregion
 }
