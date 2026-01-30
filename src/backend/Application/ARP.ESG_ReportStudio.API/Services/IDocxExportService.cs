@@ -64,4 +64,10 @@ public sealed class DocxExportOptions
     /// Default: 50 MB
     /// </summary>
     public int MaxAttachmentSizeMB { get; set; } = 50;
+    
+    /// <summary>
+    /// Branding profile to apply to the export (optional).
+    /// If not provided, default branding (if configured) may be applied.
+    /// </summary>
+    public Reporting.BrandingProfile? BrandingProfile { get; set; }
 }

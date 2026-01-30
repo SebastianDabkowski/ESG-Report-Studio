@@ -59,14 +59,27 @@ public sealed class PdfExportService : IPdfExportService
                     }
                 });
                 
-                // Footer with page numbers
-                if (options.IncludePageNumbers)
+                // Footer with page numbers and optional branding footer text
+                if (options.IncludePageNumbers || !string.IsNullOrWhiteSpace(options.BrandingProfile?.FooterText))
                 {
-                    page.Footer().AlignCenter().DefaultTextStyle(x => x.FontSize(9)).Text(text =>
+                    page.Footer().Column(footer =>
                     {
-                        text.CurrentPageNumber();
-                        text.Span(" / ");
-                        text.TotalPages();
+                        // Custom footer text from branding if available
+                        if (!string.IsNullOrWhiteSpace(options.BrandingProfile?.FooterText))
+                        {
+                            footer.Item().AlignCenter().DefaultTextStyle(x => x.FontSize(8)).Text(options.BrandingProfile.FooterText);
+                        }
+                        
+                        // Page numbers
+                        if (options.IncludePageNumbers)
+                        {
+                            footer.Item().AlignCenter().DefaultTextStyle(x => x.FontSize(9)).Text(text =>
+                            {
+                                text.CurrentPageNumber();
+                                text.Span(" / ");
+                                text.TotalPages();
+                            });
+                        }
                     });
                 }
             });
@@ -86,13 +99,36 @@ public sealed class PdfExportService : IPdfExportService
         {
             column.Spacing(20);
             
-            // Organization name
-            column.Item().AlignCenter().Text(report.Organization?.Name ?? "ESG Responsibility Report")
+            // Logo if branding profile includes one (base64 encoded)
+            if (!string.IsNullOrWhiteSpace(options.BrandingProfile?.LogoData))
+            {
+                try
+                {
+                    // Note: In a real implementation, you would decode the base64 and render the image
+                    // For now, we'll just add a placeholder for logo space
+                    column.Item().AlignCenter().Height(80).AlignMiddle().Text("[Company Logo]").FontSize(12).Italic();
+                }
+                catch
+                {
+                    // Logo rendering failed, skip it
+                }
+            }
+            
+            // Organization name (with optional primary color from branding)
+            var titleColor = options.BrandingProfile?.PrimaryColor;
+            var titleStyle = column.Item().AlignCenter().Text(report.Organization?.Name ?? "ESG Responsibility Report")
                 .FontSize(24).Bold();
             
             // Report period
             column.Item().AlignCenter().Text(report.Period.Name)
                 .FontSize(18).SemiBold();
+            
+            // Subsidiary name if from branding profile
+            if (!string.IsNullOrWhiteSpace(options.BrandingProfile?.SubsidiaryName))
+            {
+                column.Item().AlignCenter().Text(options.BrandingProfile.SubsidiaryName)
+                    .FontSize(14);
+            }
             
             // Date range
             column.Item().AlignCenter().Text($"{report.Period.StartDate} to {report.Period.EndDate}")

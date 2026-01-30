@@ -49,6 +49,9 @@ public sealed class InMemoryReportStore
     private readonly Dictionary<string, List<AuditLogEntry>> _periodAuditTrails = new(); // Key: periodId
     private readonly List<ValidationResult> _validationResults = new(); // Audit trail for validation runs
     private readonly List<ReportVariant> _reportVariants = new(); // Report variant configurations
+    private readonly List<BrandingProfile> _brandingProfiles = new(); // Corporate branding profiles
+    private readonly List<DocumentTemplate> _documentTemplates = new(); // Document templates with versioning
+    private readonly List<TemplateUsageRecord> _templateUsageRecords = new(); // Template usage audit trail
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -14319,6 +14322,442 @@ public sealed class InMemoryReportStore
                 string.Join(",", request.VariantIds), changes, $"Compared {variants.Count} variants for period '{period.Name}'");
             
             return (true, null, comparison);
+        }
+    }
+    
+    #endregion
+    
+    #region Branding Profiles
+    
+    public (bool IsValid, string? ErrorMessage, BrandingProfile? Profile) CreateBrandingProfile(CreateBrandingProfileRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.CreatedBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+            
+            // If this is set as default, unmark any existing default
+            if (request.IsDefault)
+            {
+                foreach (var existing in _brandingProfiles.Where(p => p.IsDefault))
+                {
+                    existing.IsDefault = false;
+                }
+            }
+            
+            var now = DateTime.UtcNow.ToString("O");
+            var profile = new BrandingProfile
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                Description = request.Description,
+                OrganizationId = request.OrganizationId,
+                SubsidiaryName = request.SubsidiaryName,
+                LogoData = request.LogoData,
+                LogoContentType = request.LogoContentType,
+                PrimaryColor = request.PrimaryColor,
+                SecondaryColor = request.SecondaryColor,
+                AccentColor = request.AccentColor,
+                FooterText = request.FooterText,
+                IsDefault = request.IsDefault,
+                IsActive = true,
+                CreatedBy = request.CreatedBy,
+                CreatedAt = now
+            };
+            
+            _brandingProfiles.Add(profile);
+            
+            // Add audit log entry
+            var user = GetUser(request.CreatedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", NewValue = request.Name },
+                new FieldChange { Field = "IsDefault", NewValue = request.IsDefault.ToString() }
+            };
+            CreateAuditLogEntry(request.CreatedBy, user?.Name ?? request.CreatedBy, "create", "BrandingProfile", 
+                profile.Id, changes, $"Created branding profile '{request.Name}'");
+            
+            return (true, null, profile);
+        }
+    }
+    
+    public (bool IsValid, string? ErrorMessage, BrandingProfile? Profile) UpdateBrandingProfile(string id, UpdateBrandingProfileRequest request)
+    {
+        lock (_lock)
+        {
+            var profile = _brandingProfiles.FirstOrDefault(p => p.Id == id);
+            if (profile == null)
+            {
+                return (false, "BrandingProfile not found.", null);
+            }
+            
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.UpdatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+            
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+            
+            if (profile.Name != request.Name)
+            {
+                changes.Add(new FieldChange { Field = "Name", OldValue = profile.Name, NewValue = request.Name });
+            }
+            
+            if (profile.IsDefault != request.IsDefault)
+            {
+                changes.Add(new FieldChange { Field = "IsDefault", OldValue = profile.IsDefault.ToString(), NewValue = request.IsDefault.ToString() });
+                
+                // If this is set as default, unmark any existing default
+                if (request.IsDefault)
+                {
+                    foreach (var existing in _brandingProfiles.Where(p => p.IsDefault && p.Id != id))
+                    {
+                        existing.IsDefault = false;
+                    }
+                }
+            }
+            
+            if (profile.IsActive != request.IsActive)
+            {
+                changes.Add(new FieldChange { Field = "IsActive", OldValue = profile.IsActive.ToString(), NewValue = request.IsActive.ToString() });
+            }
+            
+            // Update fields
+            profile.Name = request.Name;
+            profile.Description = request.Description;
+            profile.SubsidiaryName = request.SubsidiaryName;
+            profile.LogoData = request.LogoData;
+            profile.LogoContentType = request.LogoContentType;
+            profile.PrimaryColor = request.PrimaryColor;
+            profile.SecondaryColor = request.SecondaryColor;
+            profile.AccentColor = request.AccentColor;
+            profile.FooterText = request.FooterText;
+            profile.IsDefault = request.IsDefault;
+            profile.IsActive = request.IsActive;
+            profile.UpdatedBy = request.UpdatedBy;
+            profile.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            // Add audit log entry
+            var user = GetUser(request.UpdatedBy);
+            CreateAuditLogEntry(request.UpdatedBy, user?.Name ?? request.UpdatedBy, "update", "BrandingProfile", 
+                profile.Id, changes, $"Updated branding profile '{profile.Name}'");
+            
+            return (true, null, profile);
+        }
+    }
+    
+    public List<BrandingProfile> GetBrandingProfiles()
+    {
+        lock (_lock)
+        {
+            return _brandingProfiles.ToList();
+        }
+    }
+    
+    public BrandingProfile? GetBrandingProfile(string id)
+    {
+        lock (_lock)
+        {
+            return _brandingProfiles.FirstOrDefault(p => p.Id == id);
+        }
+    }
+    
+    public BrandingProfile? GetDefaultBrandingProfile()
+    {
+        lock (_lock)
+        {
+            return _brandingProfiles.FirstOrDefault(p => p.IsDefault && p.IsActive);
+        }
+    }
+    
+    public bool DeleteBrandingProfile(string id, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var profile = _brandingProfiles.FirstOrDefault(p => p.Id == id);
+            if (profile == null)
+            {
+                return false;
+            }
+            
+            _brandingProfiles.Remove(profile);
+            
+            // Add audit log entry
+            var user = GetUser(deletedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Deleted", OldValue = "false", NewValue = "true" }
+            };
+            CreateAuditLogEntry(deletedBy, user?.Name ?? deletedBy, "delete", "BrandingProfile", 
+                profile.Id, changes, $"Deleted branding profile '{profile.Name}'");
+            
+            return true;
+        }
+    }
+    
+    #endregion
+    
+    #region Document Templates
+    
+    public (bool IsValid, string? ErrorMessage, DocumentTemplate? Template) CreateDocumentTemplate(CreateDocumentTemplateRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.CreatedBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+            
+            // Validate template type
+            var validTypes = new[] { "pdf", "docx", "excel" };
+            if (!validTypes.Contains(request.TemplateType, StringComparer.OrdinalIgnoreCase))
+            {
+                return (false, $"TemplateType must be one of: {string.Join(", ", validTypes)}.", null);
+            }
+            
+            // If this is set as default for its type, unmark any existing default of the same type
+            if (request.IsDefault)
+            {
+                foreach (var existing in _documentTemplates.Where(t => t.IsDefault && t.TemplateType == request.TemplateType))
+                {
+                    existing.IsDefault = false;
+                }
+            }
+            
+            var now = DateTime.UtcNow.ToString("O");
+            var template = new DocumentTemplate
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                Description = request.Description,
+                TemplateType = request.TemplateType,
+                Version = 1,
+                Configuration = request.Configuration,
+                IsDefault = request.IsDefault,
+                IsActive = true,
+                CreatedBy = request.CreatedBy,
+                CreatedAt = now
+            };
+            
+            _documentTemplates.Add(template);
+            
+            // Add audit log entry
+            var user = GetUser(request.CreatedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", NewValue = request.Name },
+                new FieldChange { Field = "Version", NewValue = "1" },
+                new FieldChange { Field = "IsDefault", NewValue = request.IsDefault.ToString() }
+            };
+            CreateAuditLogEntry(request.CreatedBy, user?.Name ?? request.CreatedBy, "create", "DocumentTemplate", 
+                template.Id, changes, $"Created document template '{request.Name}' version 1");
+            
+            return (true, null, template);
+        }
+    }
+    
+    public (bool IsValid, string? ErrorMessage, DocumentTemplate? Template) UpdateDocumentTemplate(string id, UpdateDocumentTemplateRequest request)
+    {
+        lock (_lock)
+        {
+            var template = _documentTemplates.FirstOrDefault(t => t.Id == id);
+            if (template == null)
+            {
+                return (false, "DocumentTemplate not found.", null);
+            }
+            
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.UpdatedBy))
+            {
+                return (false, "UpdatedBy is required.", null);
+            }
+            
+            // Track changes for audit log
+            var changes = new List<FieldChange>();
+            
+            if (template.Name != request.Name)
+            {
+                changes.Add(new FieldChange { Field = "Name", OldValue = template.Name, NewValue = request.Name });
+            }
+            
+            if (template.Configuration != request.Configuration)
+            {
+                changes.Add(new FieldChange { Field = "Configuration", OldValue = "updated", NewValue = "updated" });
+                // Increment version when configuration changes
+                template.Version++;
+                changes.Add(new FieldChange { Field = "Version", OldValue = (template.Version - 1).ToString(), NewValue = template.Version.ToString() });
+            }
+            
+            if (template.IsDefault != request.IsDefault)
+            {
+                changes.Add(new FieldChange { Field = "IsDefault", OldValue = template.IsDefault.ToString(), NewValue = request.IsDefault.ToString() });
+                
+                // If this is set as default, unmark any existing default of the same type
+                if (request.IsDefault)
+                {
+                    foreach (var existing in _documentTemplates.Where(t => t.IsDefault && t.TemplateType == template.TemplateType && t.Id != id))
+                    {
+                        existing.IsDefault = false;
+                    }
+                }
+            }
+            
+            if (template.IsActive != request.IsActive)
+            {
+                changes.Add(new FieldChange { Field = "IsActive", OldValue = template.IsActive.ToString(), NewValue = request.IsActive.ToString() });
+            }
+            
+            // Update fields
+            template.Name = request.Name;
+            template.Description = request.Description;
+            template.Configuration = request.Configuration;
+            template.IsDefault = request.IsDefault;
+            template.IsActive = request.IsActive;
+            template.UpdatedBy = request.UpdatedBy;
+            template.UpdatedAt = DateTime.UtcNow.ToString("O");
+            
+            // Add audit log entry
+            var user = GetUser(request.UpdatedBy);
+            CreateAuditLogEntry(request.UpdatedBy, user?.Name ?? request.UpdatedBy, "update", "DocumentTemplate", 
+                template.Id, changes, $"Updated document template '{template.Name}' to version {template.Version}");
+            
+            return (true, null, template);
+        }
+    }
+    
+    public List<DocumentTemplate> GetDocumentTemplates()
+    {
+        lock (_lock)
+        {
+            return _documentTemplates.ToList();
+        }
+    }
+    
+    public List<DocumentTemplate> GetDocumentTemplatesByType(string templateType)
+    {
+        lock (_lock)
+        {
+            return _documentTemplates.Where(t => t.TemplateType == templateType).ToList();
+        }
+    }
+    
+    public DocumentTemplate? GetDocumentTemplate(string id)
+    {
+        lock (_lock)
+        {
+            return _documentTemplates.FirstOrDefault(t => t.Id == id);
+        }
+    }
+    
+    public DocumentTemplate? GetDefaultDocumentTemplate(string templateType)
+    {
+        lock (_lock)
+        {
+            return _documentTemplates.FirstOrDefault(t => t.TemplateType == templateType && t.IsDefault && t.IsActive);
+        }
+    }
+    
+    public bool DeleteDocumentTemplate(string id, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var template = _documentTemplates.FirstOrDefault(t => t.Id == id);
+            if (template == null)
+            {
+                return false;
+            }
+            
+            _documentTemplates.Remove(template);
+            
+            // Add audit log entry
+            var user = GetUser(deletedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Deleted", OldValue = "false", NewValue = "true" }
+            };
+            CreateAuditLogEntry(deletedBy, user?.Name ?? deletedBy, "delete", "DocumentTemplate", 
+                template.Id, changes, $"Deleted document template '{template.Name}'");
+            
+            return true;
+        }
+    }
+    
+    public void RecordTemplateUsage(string templateId, string periodId, string? brandingProfileId, string exportType, string generatedBy)
+    {
+        lock (_lock)
+        {
+            var template = _documentTemplates.FirstOrDefault(t => t.Id == templateId);
+            if (template == null)
+            {
+                return;
+            }
+            
+            var usage = new TemplateUsageRecord
+            {
+                Id = Guid.NewGuid().ToString(),
+                TemplateId = templateId,
+                TemplateVersion = template.Version,
+                PeriodId = periodId,
+                BrandingProfileId = brandingProfileId,
+                ExportType = exportType,
+                GeneratedBy = generatedBy,
+                GeneratedAt = DateTime.UtcNow.ToString("O")
+            };
+            
+            _templateUsageRecords.Add(usage);
+            
+            // Add audit log entry
+            var user = GetUser(generatedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "TemplateId", NewValue = templateId },
+                new FieldChange { Field = "TemplateVersion", NewValue = template.Version.ToString() },
+                new FieldChange { Field = "ExportType", NewValue = exportType }
+            };
+            CreateAuditLogEntry(generatedBy, user?.Name ?? generatedBy, "use", "DocumentTemplate", 
+                templateId, changes, $"Used template '{template.Name}' version {template.Version} for {exportType} export");
+        }
+    }
+    
+    public List<TemplateUsageRecord> GetTemplateUsageHistory(string templateId)
+    {
+        lock (_lock)
+        {
+            return _templateUsageRecords.Where(r => r.TemplateId == templateId).OrderByDescending(r => r.GeneratedAt).ToList();
+        }
+    }
+    
+    public List<TemplateUsageRecord> GetPeriodTemplateUsage(string periodId)
+    {
+        lock (_lock)
+        {
+            return _templateUsageRecords.Where(r => r.PeriodId == periodId).OrderByDescending(r => r.GeneratedAt).ToList();
         }
     }
     
