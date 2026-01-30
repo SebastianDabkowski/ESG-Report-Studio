@@ -41,7 +41,8 @@ public sealed class DocxExportTests
         Assert.True(resultIsValid);
         Assert.NotNull(report);
         
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         
         // Act
         var docxBytes = docxService.GenerateDocx(report!);
@@ -88,7 +89,8 @@ public sealed class DocxExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         var options = new DocxExportOptions
         {
             IncludeTitlePage = true,
@@ -138,7 +140,8 @@ public sealed class DocxExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         
         // Act
         var filename = docxService.GenerateFilename(report!);
@@ -182,7 +185,8 @@ public sealed class DocxExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         
         // Act
         var filename = docxService.GenerateFilename(report!, "Executive Summary");

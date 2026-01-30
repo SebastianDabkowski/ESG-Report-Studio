@@ -178,7 +178,8 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Export with attachments included
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         var docxBytes = docxService.GenerateDocx(report!, new DocxExportOptions
         {
             IncludeAttachments = true,
@@ -325,7 +326,8 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Export with attachments enabled but no evidence exists
-        var docxService = new DocxExportService();
+        var localizationService = ExportTestHelpers.CreateTestLocalizationService();
+        var docxService = new DocxExportService(localizationService);
         var docxBytes = docxService.GenerateDocx(report!, new DocxExportOptions
         {
             IncludeAttachments = true,
