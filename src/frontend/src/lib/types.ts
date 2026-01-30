@@ -1318,3 +1318,95 @@ export interface OutstandingActionsResponse {
   actions: OutstandingAction[]
   summary: OutstandingActionsSummary
 }
+
+// ============================================================================
+// Year-over-Year Annex Export Types
+// ============================================================================
+
+export interface ExportYoYAnnexRequest {
+  currentPeriodId: string
+  priorPeriodId: string
+  sectionIds?: string[]
+  includeVarianceExplanations?: boolean
+  includeEvidenceReferences?: boolean
+  includeNarrativeDiffs?: boolean
+  exportedBy: string
+  exportNote?: string
+}
+
+export interface YoYAnnexSummary {
+  currentPeriodId: string
+  currentPeriodName: string
+  priorPeriodId: string
+  priorPeriodName: string
+  sectionCount: number
+  metricRowCount: number
+  narrativeComparisonCount: number
+  varianceExplanationCount: number
+  evidenceReferenceCount: number
+  confidentialItemsExcluded: number
+}
+
+export interface ExportYoYAnnexResult {
+  exportId: string
+  exportedAt: string
+  exportedBy: string
+  exportedByName: string
+  checksum: string
+  packageSize: number
+  summary: YoYAnnexSummary
+}
+
+export interface YoYMetricRow {
+  dataPointId: string
+  metricTitle: string
+  currentValue: string
+  priorValue: string
+  unit?: string
+  percentageChange?: number
+  absoluteChange?: number
+  varianceExplanationId?: string
+  varianceExplanationSummary?: string
+  hasVarianceFlag: boolean
+  currentEvidenceCount: number
+  priorEvidenceCount: number
+  ownerName: string
+  informationType: string
+}
+
+export interface YoYAnnexSectionData {
+  sectionId: string
+  title: string
+  category: string
+  ownerName: string
+  metrics: YoYMetricRow[]
+}
+
+export interface NarrativeDiffSummary {
+  dataPointId: string
+  title: string
+  addedSegments: number
+  removedSegments: number
+  unchangedSegments: number
+  totalSegments: number
+  hasChanges: boolean
+  changeDescription: string
+}
+
+export interface YoYAnnexExportRecord {
+  id: string
+  currentPeriodId: string
+  currentPeriodName: string
+  priorPeriodId: string
+  priorPeriodName: string
+  sectionIds: string[]
+  exportedAt: string
+  exportedBy: string
+  exportedByName: string
+  exportNote?: string
+  checksum: string
+  packageSize: number
+  metricRowCount: number
+  varianceExplanationCount: number
+  evidenceReferenceCount: number
+}

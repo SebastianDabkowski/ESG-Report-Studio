@@ -24,7 +24,9 @@ import type {
   MaturityAssessment,
   CalculateMaturityAssessmentPayload,
   ProgressTrendsResponse,
-  OutstandingActionsResponse
+  OutstandingActionsResponse,
+  ExportYoYAnnexRequest,
+  YoYAnnexExportRecord
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1355,3 +1357,31 @@ export function getProgressDashboardExportUrl(params: ExportProgressDashboardPar
   
   return buildUrl(`progress-dashboard/export?${searchParams.toString()}`)
 }
+
+// ==================== Year-over-Year Annex Export ====================
+
+export async function exportYoYAnnex(
+  request: ExportYoYAnnexRequest
+): Promise<Blob> {
+  const response = await fetch(buildUrl('yoy-annex/export'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(request)
+  })
+  
+  if (!response.ok) {
+    const errorData = await response.json()
+    throw new Error(errorData.error || 'Failed to export YoY annex')
+  }
+  
+  return response.blob()
+}
+
+export async function getYoYAnnexExports(
+  currentPeriodId: string
+): Promise<YoYAnnexExportRecord[]> {
+  return requestJson<YoYAnnexExportRecord[]>(`yoy-annex/exports/${currentPeriodId}`)
+}
+
