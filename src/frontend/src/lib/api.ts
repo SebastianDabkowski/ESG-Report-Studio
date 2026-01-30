@@ -1421,3 +1421,32 @@ export async function previewReport(
   return requestJson<GeneratedReport>(`periods/${periodId}/preview-report?${queryParams.toString()}`)
 }
 
+export interface ExportPdfPayload {
+  generatedBy: string
+  sectionIds?: string[]
+  variantName?: string
+  includeTitlePage?: boolean
+  includeTableOfContents?: boolean
+  includePageNumbers?: boolean
+}
+
+export async function exportReportPdf(
+  periodId: string,
+  payload: ExportPdfPayload
+): Promise<Blob> {
+  const response = await fetch(`${API_BASE_URL}/periods/${periodId}/export-pdf`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to export PDF' }))
+    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+  }
+
+  return response.blob()
+}
+
