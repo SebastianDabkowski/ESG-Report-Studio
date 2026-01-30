@@ -52,6 +52,61 @@ public sealed class ConsistencyController : ControllerBase
     }
 
     /// <summary>
+    /// Retrieves validation history for a reporting period.
+    /// Returns all validation runs with timestamp and user for audit trail.
+    /// </summary>
+    /// <param name="periodId">The ID of the reporting period.</param>
+    /// <returns>List of validation results ordered by timestamp (most recent first).</returns>
+    [HttpGet("validation-history/{periodId}")]
+    public ActionResult<IReadOnlyList<ValidationResult>> GetValidationHistory(string periodId)
+    {
+        if (string.IsNullOrWhiteSpace(periodId))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "PeriodId is required.",
+                Status = 400
+            });
+        }
+
+        var history = _store.GetValidationHistory(periodId);
+        return Ok(history);
+    }
+
+    /// <summary>
+    /// Retrieves the most recent validation result for a reporting period.
+    /// </summary>
+    /// <param name="periodId">The ID of the reporting period.</param>
+    /// <returns>The most recent validation result.</returns>
+    [HttpGet("latest-validation/{periodId}")]
+    public ActionResult<ValidationResult> GetLatestValidation(string periodId)
+    {
+        if (string.IsNullOrWhiteSpace(periodId))
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Title = "Invalid Request",
+                Detail = "PeriodId is required.",
+                Status = 400
+            });
+        }
+
+        var latestValidation = _store.GetLatestValidationResult(periodId);
+        if (latestValidation == null)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Not Found",
+                Detail = $"No validation results found for reporting period '{periodId}'.",
+                Status = 404
+            });
+        }
+
+        return Ok(latestValidation);
+    }
+
+    /// <summary>
     /// Attempts to publish a reporting period.
     /// Runs validation first and blocks publication if errors exist (unless override is specified).
     /// </summary>
