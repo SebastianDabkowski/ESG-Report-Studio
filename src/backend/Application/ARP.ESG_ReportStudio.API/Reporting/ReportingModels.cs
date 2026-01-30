@@ -3762,3 +3762,115 @@ public sealed class CleanupResult
     public string? ErrorMessage { get; set; }
     public string ExecutedAt { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Options for rolling over content from one reporting period to another.
+/// </summary>
+public sealed class RolloverOptions
+{
+    /// <summary>
+    /// Copy section structure (titles, descriptions, ownership).
+    /// </summary>
+    public bool CopyStructure { get; set; } = true;
+    
+    /// <summary>
+    /// Copy disclosures (gaps, assumptions, remediation plans).
+    /// Requires CopyStructure to be true.
+    /// </summary>
+    public bool CopyDisclosures { get; set; }
+    
+    /// <summary>
+    /// Copy data values (data points, narratives, metrics).
+    /// Requires CopyStructure to be true.
+    /// </summary>
+    public bool CopyDataValues { get; set; }
+    
+    /// <summary>
+    /// Copy attachments (evidence files).
+    /// Requires CopyDataValues to be true.
+    /// </summary>
+    public bool CopyAttachments { get; set; }
+}
+
+/// <summary>
+/// Request to rollover (copy) a reporting period to a new period.
+/// </summary>
+public sealed class RolloverRequest
+{
+    /// <summary>
+    /// ID of the source reporting period to copy from.
+    /// </summary>
+    public string SourcePeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name for the new reporting period.
+    /// </summary>
+    public string TargetPeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Start date for the new reporting period (ISO 8601 format).
+    /// </summary>
+    public string TargetPeriodStartDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// End date for the new reporting period (ISO 8601 format).
+    /// </summary>
+    public string TargetPeriodEndDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting mode for the new period (simplified or extended).
+    /// Defaults to the source period's mode if not specified.
+    /// </summary>
+    public string? TargetReportingMode { get; set; }
+    
+    /// <summary>
+    /// Report scope for the new period (single-company or group).
+    /// Defaults to the source period's scope if not specified.
+    /// </summary>
+    public string? TargetReportScope { get; set; }
+    
+    /// <summary>
+    /// Options controlling what content to copy.
+    /// </summary>
+    public RolloverOptions Options { get; set; } = new();
+    
+    /// <summary>
+    /// ID of the user performing the rollover (for audit trail).
+    /// </summary>
+    public string PerformedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Audit log entry for a period rollover operation.
+/// </summary>
+public sealed class RolloverAuditLog
+{
+    public string Id { get; set; } = string.Empty;
+    public string SourcePeriodId { get; set; } = string.Empty;
+    public string SourcePeriodName { get; set; } = string.Empty;
+    public string TargetPeriodId { get; set; } = string.Empty;
+    public string TargetPeriodName { get; set; } = string.Empty;
+    public string PerformedBy { get; set; } = string.Empty;
+    public string PerformedByName { get; set; } = string.Empty;
+    public string PerformedAt { get; set; } = string.Empty;
+    public RolloverOptions Options { get; set; } = new();
+    
+    // Statistics about what was copied
+    public int SectionsCopied { get; set; }
+    public int DataPointsCopied { get; set; }
+    public int GapsCopied { get; set; }
+    public int AssumptionsCopied { get; set; }
+    public int RemediationPlansCopied { get; set; }
+    public int EvidenceCopied { get; set; }
+}
+
+/// <summary>
+/// Result of a rollover operation.
+/// </summary>
+public sealed class RolloverResult
+{
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public ReportingPeriod? TargetPeriod { get; set; }
+    public RolloverAuditLog? AuditLog { get; set; }
+}

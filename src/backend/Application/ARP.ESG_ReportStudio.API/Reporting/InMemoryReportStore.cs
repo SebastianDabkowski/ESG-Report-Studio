@@ -37,6 +37,7 @@ public sealed class InMemoryReportStore
     private readonly List<RetentionPolicy> _retentionPolicies = new();
     private readonly List<LegalHold> _legalHolds = new();
     private readonly List<DeletionReport> _deletionReports = new();
+    private readonly List<RolloverAuditLog> _rolloverAuditLogs = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -9425,6 +9426,449 @@ public sealed class InMemoryReportStore
             );
             
             return (true, null, dataPoint);
+        }
+    }
+    
+    #endregion
+    
+    #region Period Rollover
+    
+    /// <summary>
+    /// Performs a rollover from an existing reporting period to a new period with selected content.
+    /// Validates source period status and applies rollover options to control what is copied.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, RolloverResult? Result) RolloverPeriod(RolloverRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate source period exists
+            var sourcePeriod = _periods.FirstOrDefault(p => p.Id == request.SourcePeriodId);
+            if (sourcePeriod == null)
+            {
+                return (false, $"Source period with ID '{request.SourcePeriodId}' not found.", null);
+            }
+            
+            // Validate source period is not in draft status (governance requirement)
+            if (sourcePeriod.Status == "draft")
+            {
+                return (false, "Cannot rollover from a period in 'draft' status. Source period must be in a stable state.", null);
+            }
+            
+            // Validate rollover options dependencies
+            if (request.Options.CopyDisclosures && !request.Options.CopyStructure)
+            {
+                return (false, "CopyDisclosures requires CopyStructure to be enabled.", null);
+            }
+            if (request.Options.CopyDataValues && !request.Options.CopyStructure)
+            {
+                return (false, "CopyDataValues requires CopyStructure to be enabled.", null);
+            }
+            if (request.Options.CopyAttachments && !request.Options.CopyDataValues)
+            {
+                return (false, "CopyAttachments requires CopyDataValues to be enabled.", null);
+            }
+            
+            // Create the new target period
+            var targetPeriodId = Guid.NewGuid().ToString();
+            var now = DateTime.UtcNow.ToString("o");
+            
+            var targetPeriod = new ReportingPeriod
+            {
+                Id = targetPeriodId,
+                Name = request.TargetPeriodName,
+                StartDate = request.TargetPeriodStartDate,
+                EndDate = request.TargetPeriodEndDate,
+                ReportingMode = request.TargetReportingMode ?? sourcePeriod.ReportingMode,
+                ReportScope = request.TargetReportScope ?? sourcePeriod.ReportScope,
+                Status = "active",
+                CreatedAt = now,
+                OwnerId = sourcePeriod.OwnerId,
+                OrganizationId = sourcePeriod.OrganizationId
+            };
+            
+            // Calculate integrity hash
+            targetPeriod.IntegrityHash = Services.IntegrityService.CalculateReportingPeriodHash(targetPeriod);
+            
+            _periods.Add(targetPeriod);
+            
+            // Initialize rollover statistics
+            int sectionsCopied = 0;
+            int dataPointsCopied = 0;
+            int gapsCopied = 0;
+            int assumptionsCopied = 0;
+            int remediationPlansCopied = 0;
+            int evidenceCopied = 0;
+            
+            // Dictionary to map source section IDs to target section IDs
+            var sectionIdMapping = new Dictionary<string, string>();
+            
+            // Copy structure (sections with ownership)
+            if (request.Options.CopyStructure)
+            {
+                var sourceSections = _sections.Where(s => s.PeriodId == request.SourcePeriodId).ToList();
+                
+                foreach (var sourceSection in sourceSections)
+                {
+                    var targetSectionId = Guid.NewGuid().ToString();
+                    sectionIdMapping[sourceSection.Id] = targetSectionId;
+                    
+                    var targetSection = new ReportSection
+                    {
+                        Id = targetSectionId,
+                        PeriodId = targetPeriodId,
+                        Title = sourceSection.Title,
+                        Category = sourceSection.Category,
+                        Description = sourceSection.Description,
+                        OwnerId = sourceSection.OwnerId,
+                        Status = "draft", // Reset to draft for new period
+                        Completeness = "empty", // Reset completeness
+                        Order = sourceSection.Order,
+                        CatalogCode = sourceSection.CatalogCode
+                    };
+                    
+                    _sections.Add(targetSection);
+                    
+                    // Create corresponding summary
+                    var ownerName = "Unassigned";
+                    if (!string.IsNullOrWhiteSpace(sourceSection.OwnerId))
+                    {
+                        var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
+                        ownerName = owner?.Name ?? $"Unknown User ({sourceSection.OwnerId})";
+                    }
+                    
+                    _summaries.Add(new SectionSummary
+                    {
+                        Id = targetSection.Id,
+                        PeriodId = targetSection.PeriodId,
+                        Title = targetSection.Title,
+                        Category = targetSection.Category,
+                        Description = targetSection.Description,
+                        OwnerId = targetSection.OwnerId,
+                        Status = targetSection.Status,
+                        Completeness = targetSection.Completeness,
+                        Order = targetSection.Order,
+                        CatalogCode = targetSection.CatalogCode,
+                        DataPointCount = 0,
+                        EvidenceCount = 0,
+                        GapCount = 0,
+                        AssumptionCount = 0,
+                        CompletenessPercentage = 0,
+                        OwnerName = ownerName,
+                        ProgressStatus = "not-started"
+                    });
+                    
+                    sectionsCopied++;
+                }
+            }
+            
+            // Dictionary to map source data point IDs to target data point IDs (for evidence linking)
+            var dataPointIdMapping = new Dictionary<string, string>();
+            
+            // Copy data values (data points)
+            if (request.Options.CopyDataValues && request.Options.CopyStructure)
+            {
+                var sourceDataPoints = _dataPoints
+                    .Where(dp => sectionIdMapping.ContainsKey(dp.SectionId))
+                    .ToList();
+                
+                foreach (var sourceDataPoint in sourceDataPoints)
+                {
+                    var targetDataPointId = Guid.NewGuid().ToString();
+                    dataPointIdMapping[sourceDataPoint.Id] = targetDataPointId;
+                    
+                    var targetDataPoint = new DataPoint
+                    {
+                        Id = targetDataPointId,
+                        SectionId = sectionIdMapping[sourceDataPoint.SectionId],
+                        Type = sourceDataPoint.Type,
+                        Classification = sourceDataPoint.Classification,
+                        Title = sourceDataPoint.Title,
+                        Content = sourceDataPoint.Content,
+                        Value = sourceDataPoint.Value,
+                        Unit = sourceDataPoint.Unit,
+                        OwnerId = sourceDataPoint.OwnerId,
+                        ContributorIds = new List<string>(sourceDataPoint.ContributorIds),
+                        Source = sourceDataPoint.Source,
+                        InformationType = sourceDataPoint.InformationType,
+                        Assumptions = sourceDataPoint.Assumptions,
+                        CompletenessStatus = "empty", // Reset completeness for new period
+                        ReviewStatus = "draft", // Reset review status
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        EvidenceIds = new List<string>(), // Will be populated if CopyAttachments is true
+                        Deadline = sourceDataPoint.Deadline,
+                        IsBlocked = false, // Reset blocking status
+                        IsMissing = false, // Reset missing status
+                        // Copy estimate metadata if present
+                        EstimateType = sourceDataPoint.EstimateType,
+                        EstimateMethod = sourceDataPoint.EstimateMethod,
+                        ConfidenceLevel = sourceDataPoint.ConfidenceLevel,
+                        EstimateInputSources = new List<EstimateInputSource>(sourceDataPoint.EstimateInputSources),
+                        EstimateInputs = sourceDataPoint.EstimateInputs,
+                        SourceReferences = new List<NarrativeSourceReference>(sourceDataPoint.SourceReferences)
+                    };
+                    
+                    _dataPoints.Add(targetDataPoint);
+                    dataPointsCopied++;
+                }
+            }
+            
+            // Copy attachments (evidence)
+            if (request.Options.CopyAttachments && request.Options.CopyDataValues)
+            {
+                var sourceEvidence = _evidence
+                    .Where(e => sectionIdMapping.ContainsKey(e.SectionId))
+                    .ToList();
+                
+                var evidenceIdMapping = new Dictionary<string, string>();
+                
+                foreach (var sourceEv in sourceEvidence)
+                {
+                    var targetEvidenceId = Guid.NewGuid().ToString();
+                    evidenceIdMapping[sourceEv.Id] = targetEvidenceId;
+                    
+                    var targetEvidence = new Evidence
+                    {
+                        Id = targetEvidenceId,
+                        SectionId = sectionIdMapping[sourceEv.SectionId],
+                        Title = sourceEv.Title,
+                        Description = sourceEv.Description,
+                        FileUrl = sourceEv.FileUrl,
+                        FileName = sourceEv.FileName,
+                        SourceUrl = sourceEv.SourceUrl,
+                        UploadedBy = request.PerformedBy,
+                        UploadedAt = now,
+                        LinkedDataPoints = new List<string>(),
+                        FileSize = sourceEv.FileSize,
+                        Checksum = sourceEv.Checksum,
+                        ContentType = sourceEv.ContentType,
+                        IntegrityStatus = sourceEv.IntegrityStatus
+                    };
+                    
+                    _evidence.Add(targetEvidence);
+                    evidenceCopied++;
+                }
+                
+                // Update data points with linked evidence IDs
+                foreach (var targetDataPoint in _dataPoints.Where(dp => dataPointIdMapping.ContainsValue(dp.Id)))
+                {
+                    var sourceDataPointId = dataPointIdMapping.First(kvp => kvp.Value == targetDataPoint.Id).Key;
+                    var sourceDataPoint = _dataPoints.First(dp => dp.Id == sourceDataPointId);
+                    
+                    foreach (var sourceEvidenceId in sourceDataPoint.EvidenceIds)
+                    {
+                        if (evidenceIdMapping.TryGetValue(sourceEvidenceId, out var targetEvidenceId))
+                        {
+                            targetDataPoint.EvidenceIds.Add(targetEvidenceId);
+                            
+                            // Update evidence linked data points
+                            var evidence = _evidence.First(e => e.Id == targetEvidenceId);
+                            evidence.LinkedDataPoints.Add(targetDataPoint.Id);
+                        }
+                    }
+                }
+            }
+            
+            // Copy disclosures (gaps, assumptions, remediation plans)
+            if (request.Options.CopyDisclosures && request.Options.CopyStructure)
+            {
+                // Copy gaps (only open gaps)
+                var sourceGaps = _gaps
+                    .Where(g => sectionIdMapping.ContainsKey(g.SectionId) && !g.Resolved)
+                    .ToList();
+                
+                foreach (var sourceGap in sourceGaps)
+                {
+                    var targetGap = new Gap
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        SectionId = sectionIdMapping[sourceGap.SectionId],
+                        Title = sourceGap.Title,
+                        Description = $"[Carried forward from previous period] {sourceGap.Description}",
+                        Impact = sourceGap.Impact,
+                        Resolved = false,
+                        CreatedBy = "system",
+                        CreatedAt = now
+                    };
+                    
+                    _gaps.Add(targetGap);
+                    gapsCopied++;
+                }
+                
+                // Copy assumptions (only active assumptions)
+                var sourceAssumptions = _assumptions
+                    .Where(a => sectionIdMapping.ContainsKey(a.SectionId) && a.Status == "active")
+                    .ToList();
+                
+                foreach (var sourceAssumption in sourceAssumptions)
+                {
+                    var targetAssumption = new Assumption
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        SectionId = sectionIdMapping[sourceAssumption.SectionId],
+                        DataPointId = sourceAssumption.DataPointId != null && dataPointIdMapping.ContainsKey(sourceAssumption.DataPointId)
+                            ? dataPointIdMapping[sourceAssumption.DataPointId]
+                            : null,
+                        Title = sourceAssumption.Title,
+                        Description = sourceAssumption.Description,
+                        Scope = sourceAssumption.Scope,
+                        Methodology = sourceAssumption.Methodology,
+                        Rationale = sourceAssumption.Rationale,
+                        Limitations = sourceAssumption.Limitations,
+                        Status = "active",
+                        ValidityStartDate = request.TargetPeriodStartDate,
+                        ValidityEndDate = sourceAssumption.ValidityEndDate,
+                        CreatedBy = "system",
+                        CreatedAt = now,
+                        UpdatedAt = now,
+                        Sources = new List<AssumptionSource>(sourceAssumption.Sources)
+                    };
+                    
+                    // Check if assumption is expired and flag it
+                    if (!string.IsNullOrWhiteSpace(sourceAssumption.ValidityEndDate) &&
+                        DateTime.TryParse(sourceAssumption.ValidityEndDate, out var validityEnd) &&
+                        DateTime.TryParse(request.TargetPeriodStartDate, out var periodStart) &&
+                        validityEnd < periodStart)
+                    {
+                        targetAssumption.Description = $"[Carried forward from previous period] ⚠️ WARNING: This assumption expired on {sourceAssumption.ValidityEndDate}. Please review and update before use. {sourceAssumption.Description}";
+                        targetAssumption.Limitations = $"[EXPIRED - Requires Review] {sourceAssumption.Limitations}";
+                    }
+                    else
+                    {
+                        targetAssumption.Description = $"[Carried forward from previous period] {sourceAssumption.Description}";
+                    }
+                    
+                    _assumptions.Add(targetAssumption);
+                    assumptionsCopied++;
+                }
+                
+                // Copy remediation plans (only active plans)
+                var sourceRemediationPlans = _remediationPlans
+                    .Where(rp => sectionIdMapping.ContainsKey(rp.SectionId) && 
+                                 rp.Status != "completed" && rp.Status != "cancelled")
+                    .ToList();
+                
+                var remediationPlanIdMapping = new Dictionary<string, string>();
+                
+                foreach (var sourceRP in sourceRemediationPlans)
+                {
+                    var targetRPId = Guid.NewGuid().ToString();
+                    remediationPlanIdMapping[sourceRP.Id] = targetRPId;
+                    
+                    var targetRP = new RemediationPlan
+                    {
+                        Id = targetRPId,
+                        SectionId = sectionIdMapping[sourceRP.SectionId],
+                        GapId = sourceRP.GapId, // Note: Gap IDs won't match since new gaps are created
+                        Title = sourceRP.Title,
+                        Description = $"[Carried forward from previous period] {sourceRP.Description}",
+                        OwnerId = sourceRP.OwnerId,
+                        OwnerName = sourceRP.OwnerName,
+                        Status = sourceRP.Status,
+                        Priority = sourceRP.Priority,
+                        TargetPeriod = sourceRP.TargetPeriod,
+                        CreatedBy = "system",
+                        CreatedAt = now
+                    };
+                    
+                    _remediationPlans.Add(targetRP);
+                    remediationPlansCopied++;
+                }
+                
+                // Copy remediation actions for carried forward plans
+                foreach (var sourceAction in _remediationActions.Where(a => remediationPlanIdMapping.ContainsKey(a.RemediationPlanId)))
+                {
+                    if (sourceAction.Status == "pending" || sourceAction.Status == "in-progress")
+                    {
+                        var targetAction = new RemediationAction
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RemediationPlanId = remediationPlanIdMapping[sourceAction.RemediationPlanId],
+                            Title = sourceAction.Title,
+                            Description = sourceAction.Description,
+                            OwnerId = sourceAction.OwnerId,
+                            OwnerName = sourceAction.OwnerName,
+                            Status = sourceAction.Status,
+                            DueDate = sourceAction.DueDate,
+                            CreatedBy = "system",
+                            CreatedAt = now
+                        };
+                        
+                        _remediationActions.Add(targetAction);
+                    }
+                }
+            }
+            
+            // Create rollover audit log
+            var performedByUser = _users.FirstOrDefault(u => u.Id == request.PerformedBy);
+            var performedByName = performedByUser?.Name ?? request.PerformedBy;
+            
+            var auditLog = new RolloverAuditLog
+            {
+                Id = Guid.NewGuid().ToString(),
+                SourcePeriodId = sourcePeriod.Id,
+                SourcePeriodName = sourcePeriod.Name,
+                TargetPeriodId = targetPeriod.Id,
+                TargetPeriodName = targetPeriod.Name,
+                PerformedBy = request.PerformedBy,
+                PerformedByName = performedByName,
+                PerformedAt = now,
+                Options = request.Options,
+                SectionsCopied = sectionsCopied,
+                DataPointsCopied = dataPointsCopied,
+                GapsCopied = gapsCopied,
+                AssumptionsCopied = assumptionsCopied,
+                RemediationPlansCopied = remediationPlansCopied,
+                EvidenceCopied = evidenceCopied
+            };
+            
+            _rolloverAuditLogs.Add(auditLog);
+            
+            // Create audit log entry for the rollover operation
+            CreateAuditLogEntry(
+                request.PerformedBy,
+                performedByName,
+                "rollover",
+                "ReportingPeriod",
+                targetPeriod.Id,
+                new List<FieldChange>
+                {
+                    new() { Field = "SourcePeriodId", OldValue = "", NewValue = sourcePeriod.Id },
+                    new() { Field = "SourcePeriodName", OldValue = "", NewValue = sourcePeriod.Name },
+                    new() { Field = "CopyStructure", OldValue = "", NewValue = request.Options.CopyStructure.ToString() },
+                    new() { Field = "CopyDisclosures", OldValue = "", NewValue = request.Options.CopyDisclosures.ToString() },
+                    new() { Field = "CopyDataValues", OldValue = "", NewValue = request.Options.CopyDataValues.ToString() },
+                    new() { Field = "CopyAttachments", OldValue = "", NewValue = request.Options.CopyAttachments.ToString() }
+                },
+                $"Rolled over period '{sourcePeriod.Name}' to '{targetPeriod.Name}'"
+            );
+            
+            var result = new RolloverResult
+            {
+                Success = true,
+                TargetPeriod = targetPeriod,
+                AuditLog = auditLog
+            };
+            
+            return (true, null, result);
+        }
+    }
+    
+    /// <summary>
+    /// Gets rollover audit logs, optionally filtered by target period ID.
+    /// </summary>
+    public IReadOnlyList<RolloverAuditLog> GetRolloverAuditLogs(string? targetPeriodId = null)
+    {
+        lock (_lock)
+        {
+            var logs = _rolloverAuditLogs.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(targetPeriodId))
+            {
+                logs = logs.Where(l => l.TargetPeriodId == targetPeriodId);
+            }
+            
+            return logs.OrderByDescending(l => l.PerformedAt).ToList();
         }
     }
     
