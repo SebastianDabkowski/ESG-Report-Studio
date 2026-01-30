@@ -165,6 +165,14 @@ function ExportHistoryCard({ entry, formatFileSize }: ExportHistoryCardProps) {
         </div>
       </div>
 
+      <div className="text-xs text-muted-foreground">
+        <span className="font-semibold">Generation ID:</span>{' '}
+        <span className="font-mono">{entry.generationId}</span>
+        {' • '}
+        <span className="font-semibold">Export ID:</span>{' '}
+        <span className="font-mono">{entry.id}</span>
+      </div>
+
       <div className="flex flex-wrap gap-2 pt-2 border-t text-xs text-muted-foreground">
         {entry.includedTitlePage && <Badge variant="outline" className="text-xs">Title Page</Badge>}
         {entry.includedTableOfContents && <Badge variant="outline" className="text-xs">Table of Contents</Badge>}
