@@ -776,3 +776,46 @@ export interface FragmentMapping {
   paragraphNumber?: string
   sectionHeading?: string
 }
+
+export interface RolloverOptions {
+  copyStructure: boolean
+  copyDisclosures: boolean
+  copyDataValues: boolean
+  copyAttachments: boolean
+}
+
+export interface RolloverRequest {
+  sourcePeriodId: string
+  targetPeriodName: string
+  targetPeriodStartDate: string
+  targetPeriodEndDate: string
+  targetReportingMode?: ReportingMode
+  targetReportScope?: ReportScope
+  options: RolloverOptions
+  performedBy: string
+}
+
+export interface RolloverAuditLog {
+  id: string
+  sourcePeriodId: string
+  sourcePeriodName: string
+  targetPeriodId: string
+  targetPeriodName: string
+  performedBy: string
+  performedByName: string
+  performedAt: string
+  options: RolloverOptions
+  sectionsCopied: number
+  dataPointsCopied: number
+  gapsCopied: number
+  assumptionsCopied: number
+  remediationPlansCopied: number
+  evidenceCopied: number
+}
+
+export interface RolloverResult {
+  success: boolean
+  errorMessage?: string
+  targetPeriod?: ReportingPeriod
+  auditLog?: RolloverAuditLog
+}

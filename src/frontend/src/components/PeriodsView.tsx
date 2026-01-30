@@ -8,10 +8,11 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple } from '@phosphor-icons/react'
+import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple, ArrowsClockwise } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportingMode, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
 import { createReportingPeriod, getReportingData, updateReportingPeriod, hasReportingStarted } from '@/lib/api'
+import RolloverWizard from '@/components/RolloverWizard'
 
 interface PeriodsViewProps {
   currentUser: User
@@ -46,6 +47,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
+  const [isRolloverOpen, setIsRolloverOpen] = useState(false)
   const [editingPeriod, setEditingPeriod] = useState<ReportingPeriod | null>(null)
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -291,6 +293,27 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     }
   }
 
+  const handleRolloverSuccess = async () => {
+    try {
+      // Reload all data from the API after successful rollover
+      const snapshot = await getReportingData()
+      
+      if (snapshot.periods.length > 0) {
+        setPeriods(snapshot.periods)
+      }
+      if (snapshot.sections.length > 0) {
+        setSections(snapshot.sections)
+      }
+      if (snapshot.sectionSummaries.length > 0) {
+        setSectionSummaries(snapshot.sectionSummaries)
+      }
+      
+      setSyncError(null)
+    } catch (error) {
+      setSyncError('Failed to reload data after rollover.')
+    }
+  }
+
   return (
     <div className="space-y-6">
       {!organization && (
@@ -341,19 +364,30 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
         </div>
         
         {currentUser.role !== 'auditor' && (
-          <Dialog open={isCreateOpen} onOpenChange={(open) => {
-            setIsCreateOpen(open)
-            if (!open) {
-              setValidationError(null)
-              setSyncError(null)
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button className="gap-2" disabled={!organization}>
-                <Plus size={16} weight="bold" />
-                New Period
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              className="gap-2"
+              onClick={() => setIsRolloverOpen(true)}
+              disabled={!organization || periods.length === 0}
+            >
+              <ArrowsClockwise size={16} weight="bold" />
+              Rollover Period
+            </Button>
+            
+            <Dialog open={isCreateOpen} onOpenChange={(open) => {
+              setIsCreateOpen(open)
+              if (!open) {
+                setValidationError(null)
+                setSyncError(null)
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button className="gap-2" disabled={!organization}>
+                  <Plus size={16} weight="bold" />
+                  New Period
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Reporting Period</DialogTitle>
@@ -506,6 +540,7 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         )}
       </div>
 
@@ -705,6 +740,14 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
           </Card>
         )}
       </div>
+      
+      <RolloverWizard
+        isOpen={isRolloverOpen}
+        onClose={() => setIsRolloverOpen(false)}
+        periods={periods || []}
+        currentUser={currentUser}
+        onSuccess={handleRolloverSuccess}
+      />
     </div>
   )
 }
