@@ -358,5 +358,397 @@ namespace SD.ProjectName.Tests.Products
             Assert.Contains("EXPIRED", copiedAssumption.Limitations);
             Assert.Contains("WARNING", copiedAssumption.Description);
         }
+        
+        [Fact]
+        public void Rollover_ShouldMapSectionsByCatalogCode()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Add a section with catalog code to source period using reflection
+            var section = new ReportSection
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = sourcePeriodId,
+                Title = "Test Custom Emissions",
+                Category = "environmental",
+                Description = "GHG Emissions Test",
+                OwnerId = "user1",
+                CatalogCode = "ENV-TEST-001",
+                Status = "draft",
+                Completeness = "empty",
+                Order = 100
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section);
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions { CopyStructure = true },
+                PerformedBy = "user1"
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.True(result.Reconciliation.TotalSourceSections > 0);
+            Assert.True(result.Reconciliation.MappedSections > 0);
+            Assert.Equal(0, result.Reconciliation.UnmappedSections);
+            
+            // Find our specific mapped section
+            var mappedSection = result.Reconciliation.MappedItems.FirstOrDefault(m => m.SourceCatalogCode == "ENV-TEST-001");
+            Assert.NotNull(mappedSection);
+            Assert.Equal("ENV-TEST-001", mappedSection.TargetCatalogCode);
+            Assert.Equal("automatic", mappedSection.MappingType);
+        }
+        
+        [Fact]
+        public void Rollover_ShouldDetectUnmappedSectionsWithoutCatalogCode()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Add a section WITHOUT catalog code to source period using reflection
+            var section = new ReportSection
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = sourcePeriodId,
+                Title = "Custom Section Without Code",
+                Category = "environmental",
+                Description = "Custom section without catalog code",
+                OwnerId = "user1",
+                // No CatalogCode provided
+                Status = "draft",
+                Completeness = "empty",
+                Order = 100
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section);
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions { CopyStructure = true },
+                PerformedBy = "user1"
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.True(result.Reconciliation.UnmappedSections > 0);
+            
+            // Find our specific unmapped section
+            var unmappedSection = result.Reconciliation.UnmappedItems.FirstOrDefault(u => u.SourceTitle == "Custom Section Without Code");
+            Assert.NotNull(unmappedSection);
+            Assert.Contains("no catalog code", unmappedSection.Reason, StringComparison.OrdinalIgnoreCase);
+            Assert.NotEmpty(unmappedSection.SuggestedActions);
+        }
+        
+        [Fact]
+        public void Rollover_ShouldApplyManualMappings()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Add a section with old catalog code to source period using reflection
+            var section = new ReportSection
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = sourcePeriodId,
+                Title = "Old Emissions Section",
+                Category = "environmental",
+                Description = "Old section structure",
+                OwnerId = "user1",
+                CatalogCode = "ENV-OLD-001",
+                Status = "draft",
+                Completeness = "empty",
+                Order = 100
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section);
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions { CopyStructure = true },
+                PerformedBy = "user1",
+                ManualMappings = new List<ManualSectionMapping>
+                {
+                    new ManualSectionMapping
+                    {
+                        SourceCatalogCode = "ENV-OLD-001",
+                        TargetCatalogCode = "ENV-NEW-001"
+                    }
+                }
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.True(result.Reconciliation.MappedSections > 0);
+            
+            // Find our specific manually mapped section
+            var mappedSection = result.Reconciliation.MappedItems.FirstOrDefault(m => m.SourceCatalogCode == "ENV-OLD-001");
+            Assert.NotNull(mappedSection);
+            Assert.Equal("ENV-NEW-001", mappedSection.TargetCatalogCode);
+            Assert.Equal("manual", mappedSection.MappingType);
+        }
+        
+        [Fact]
+        public void Rollover_ShouldTrackDataPointsPerSection()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Add a section using reflection
+            var sectionId = Guid.NewGuid().ToString();
+            var section = new ReportSection
+            {
+                Id = sectionId,
+                PeriodId = sourcePeriodId,
+                Title = "Test Emissions With Data",
+                Category = "environmental",
+                Description = "Test GHG Emissions",
+                OwnerId = "user1",
+                CatalogCode = "ENV-TEST-002",
+                Status = "draft",
+                Completeness = "empty",
+                Order = 100
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section);
+            
+            // Add data points to the section using reflection
+            var dataPointsField = typeof(InMemoryReportStore).GetField("_dataPoints", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var dataPoints = dataPointsField!.GetValue(store) as List<DataPoint>;
+            
+            dataPoints!.Add(new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Total Emissions",
+                OwnerId = "user1",
+                Content = "",
+                CompletenessStatus = "empty",
+                ReviewStatus = "draft",
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                UpdatedAt = DateTime.UtcNow.ToString("o")
+            });
+            
+            dataPoints.Add(new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                Type = "metric",
+                Title = "Scope 1 Emissions",
+                OwnerId = "user1",
+                Content = "",
+                CompletenessStatus = "empty",
+                ReviewStatus = "draft",
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                UpdatedAt = DateTime.UtcNow.ToString("o")
+            });
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions 
+                { 
+                    CopyStructure = true,
+                    CopyDataValues = true
+                },
+                PerformedBy = "user1"
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.True(result.Reconciliation.MappedSections > 0);
+            
+            // Find our specific section with data points
+            var mappedSection = result.Reconciliation.MappedItems.FirstOrDefault(m => m.SourceCatalogCode == "ENV-TEST-002");
+            Assert.NotNull(mappedSection);
+            Assert.Equal(2, mappedSection.DataPointsCopied);
+        }
+        
+        [Fact]
+        public void GetRolloverReconciliation_ShouldReturnStoredReconciliation()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Add a section using reflection
+            var section = new ReportSection
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = sourcePeriodId,
+                Title = "Emissions",
+                Category = "environmental",
+                Description = "GHG Emissions",
+                OwnerId = "user1",
+                CatalogCode = "ENV-001",
+                Status = "draft",
+                Completeness = "empty",
+                Order = 1
+            };
+            
+            var sectionsField = typeof(InMemoryReportStore).GetField("_sections", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var sections = sectionsField!.GetValue(store) as List<ReportSection>;
+            sections!.Add(section);
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions { CopyStructure = true },
+                PerformedBy = "user1"
+            };
+            
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            Assert.True(success, errorMessage);
+            
+            // Act
+            var reconciliation = store.GetRolloverReconciliation(result.TargetPeriod!.Id);
+            
+            // Assert
+            Assert.NotNull(reconciliation);
+            Assert.True(reconciliation.TotalSourceSections > 0);
+            Assert.True(reconciliation.MappedSections > 0);
+        }
+        
+        [Fact]
+        public void Rollover_ShouldMapToExistingTargetSection()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Get one of the automatically created sections from the source period
+            var sourceSections = store.GetSections(sourcePeriodId);
+            var firstSourceSection = sourceSections.First();
+            
+            // Add a data point to this section
+            var dataPointsField = typeof(InMemoryReportStore).GetField("_dataPoints", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var dataPoints = dataPointsField!.GetValue(store) as List<DataPoint>;
+            
+            dataPoints!.Add(new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = firstSourceSection.Id,
+                Type = "metric",
+                Title = "Test Metric",
+                OwnerId = "user1",
+                Content = "Test content",
+                CompletenessStatus = "complete",
+                ReviewStatus = "approved",
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                UpdatedAt = DateTime.UtcNow.ToString("o")
+            });
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions 
+                { 
+                    CopyStructure = true,
+                    CopyDataValues = true
+                },
+                PerformedBy = "user1"
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.NotNull(result.TargetPeriod);
+            
+            // The catalog section should be mapped automatically
+            var mappedSection = result.Reconciliation.MappedItems.FirstOrDefault(m => 
+                m.SourceCatalogCode == firstSourceSection.CatalogCode);
+            Assert.NotNull(mappedSection);
+            Assert.Equal("automatic", mappedSection.MappingType);
+            Assert.Equal(1, mappedSection.DataPointsCopied);
+            
+            // Verify that the target period has a section with the same catalog code
+            var targetSections = store.GetSections(result.TargetPeriod.Id);
+            var matchingTargetSection = targetSections.FirstOrDefault(s => s.CatalogCode == firstSourceSection.CatalogCode);
+            Assert.NotNull(matchingTargetSection);
+            
+            // Verify data point was copied to the target section
+            var targetDataPoints = dataPoints.Where(dp => dp.SectionId == matchingTargetSection.Id).ToList();
+            Assert.Single(targetDataPoints);
+            Assert.Equal("Test Metric", targetDataPoints.First().Title);
+        }
     }
 }

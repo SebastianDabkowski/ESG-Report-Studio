@@ -3844,6 +3844,12 @@ public sealed class RolloverRequest
     /// These temporary rules apply only to this rollover and don't affect the global configuration.
     /// </summary>
     public List<RolloverRuleOverride> RuleOverrides { get; set; } = new();
+    
+    /// <summary>
+    /// Optional manual mappings for sections that cannot be automatically mapped.
+    /// Maps source section CatalogCode to target section CatalogCode.
+    /// </summary>
+    public List<ManualSectionMapping> ManualMappings { get; set; } = new();
 }
 
 /// <summary>
@@ -3879,6 +3885,131 @@ public sealed class RolloverResult
     public string? ErrorMessage { get; set; }
     public ReportingPeriod? TargetPeriod { get; set; }
     public RolloverAuditLog? AuditLog { get; set; }
+    
+    /// <summary>
+    /// Reconciliation report showing mapping results and any unmapped items.
+    /// </summary>
+    public RolloverReconciliation? Reconciliation { get; set; }
+}
+
+/// <summary>
+/// Manual mapping of a source section to a target section.
+/// Used when automatic mapping by CatalogCode is not possible.
+/// </summary>
+public sealed class ManualSectionMapping
+{
+    /// <summary>
+    /// Source section catalog code.
+    /// </summary>
+    public string SourceCatalogCode { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target section catalog code to map to.
+    /// </summary>
+    public string TargetCatalogCode { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Reconciliation report for a rollover operation showing mapping results.
+/// </summary>
+public sealed class RolloverReconciliation
+{
+    /// <summary>
+    /// Total number of sections in the source period.
+    /// </summary>
+    public int TotalSourceSections { get; set; }
+    
+    /// <summary>
+    /// Number of sections successfully mapped (automatically or manually).
+    /// </summary>
+    public int MappedSections { get; set; }
+    
+    /// <summary>
+    /// Number of sections that could not be mapped.
+    /// </summary>
+    public int UnmappedSections { get; set; }
+    
+    /// <summary>
+    /// List of sections that were successfully mapped.
+    /// </summary>
+    public List<MappedSection> MappedItems { get; set; } = new();
+    
+    /// <summary>
+    /// List of sections that could not be mapped with reasons.
+    /// </summary>
+    public List<UnmappedSection> UnmappedItems { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a successfully mapped section during rollover.
+/// </summary>
+public sealed class MappedSection
+{
+    /// <summary>
+    /// Source section catalog code.
+    /// </summary>
+    public string SourceCatalogCode { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Source section title.
+    /// </summary>
+    public string SourceTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target section catalog code.
+    /// </summary>
+    public string TargetCatalogCode { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target section title.
+    /// </summary>
+    public string TargetTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// How the mapping was performed: "automatic" or "manual".
+    /// </summary>
+    public string MappingType { get; set; } = "automatic";
+    
+    /// <summary>
+    /// Number of data points copied.
+    /// </summary>
+    public int DataPointsCopied { get; set; }
+}
+
+/// <summary>
+/// Represents a section that could not be mapped during rollover.
+/// </summary>
+public sealed class UnmappedSection
+{
+    /// <summary>
+    /// Source section catalog code (may be null if section has no catalog code).
+    /// </summary>
+    public string? SourceCatalogCode { get; set; }
+    
+    /// <summary>
+    /// Source section title.
+    /// </summary>
+    public string SourceTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Source section ID.
+    /// </summary>
+    public string SourceSectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason why the section could not be mapped.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Suggested actions to resolve the unmapped item.
+    /// </summary>
+    public List<string> SuggestedActions { get; set; } = new();
+    
+    /// <summary>
+    /// Number of data points that were not copied due to unmapped section.
+    /// </summary>
+    public int AffectedDataPoints { get; set; }
 }
 
 /// <summary>

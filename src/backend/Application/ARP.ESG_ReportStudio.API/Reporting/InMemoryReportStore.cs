@@ -40,6 +40,7 @@ public sealed class InMemoryReportStore
     private readonly List<RolloverAuditLog> _rolloverAuditLogs = new();
     private readonly List<DataTypeRolloverRule> _rolloverRules = new();
     private readonly List<RolloverRuleHistory> _rolloverRuleHistory = new();
+    private readonly Dictionary<string, RolloverReconciliation> _rolloverReconciliations = new(); // Key: targetPeriodId
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -9504,67 +9505,178 @@ public sealed class InMemoryReportStore
             // Dictionary to map source section IDs to target section IDs
             var sectionIdMapping = new Dictionary<string, string>();
             
+            // Reconciliation tracking
+            var mappedSections = new List<MappedSection>();
+            var unmappedSections = new List<UnmappedSection>();
+            
             // Copy structure (sections with ownership)
             if (request.Options.CopyStructure)
             {
                 var sourceSections = _sections.Where(s => s.PeriodId == request.SourcePeriodId).ToList();
                 
+                // Get existing sections in target period (if any)
+                var existingTargetSections = _sections.Where(s => s.PeriodId == targetPeriodId).ToList();
+                
+                // Build manual mapping lookup - handle duplicates by taking the first occurrence
+                var manualMappingLookup = request.ManualMappings
+                    .GroupBy(m => m.SourceCatalogCode)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.First().TargetCatalogCode
+                    );
+                
                 foreach (var sourceSection in sourceSections)
                 {
-                    var targetSectionId = Guid.NewGuid().ToString();
-                    sectionIdMapping[sourceSection.Id] = targetSectionId;
+                    string? targetCatalogCode = null;
+                    string mappingType = "automatic";
                     
-                    var targetSection = new ReportSection
+                    // Try to find target section by CatalogCode
+                    if (!string.IsNullOrWhiteSpace(sourceSection.CatalogCode))
                     {
-                        Id = targetSectionId,
-                        PeriodId = targetPeriodId,
-                        Title = sourceSection.Title,
-                        Category = sourceSection.Category,
-                        Description = sourceSection.Description,
-                        OwnerId = sourceSection.OwnerId,
-                        Status = "draft", // Reset to draft for new period
-                        Completeness = "empty", // Reset completeness
-                        Order = sourceSection.Order,
-                        CatalogCode = sourceSection.CatalogCode
-                    };
-                    
-                    _sections.Add(targetSection);
-                    
-                    // Create corresponding summary
-                    var ownerName = "Unassigned";
-                    if (!string.IsNullOrWhiteSpace(sourceSection.OwnerId))
-                    {
-                        var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
-                        ownerName = owner?.Name ?? $"Unknown User ({sourceSection.OwnerId})";
+                        // Check for manual mapping first
+                        if (manualMappingLookup.TryGetValue(sourceSection.CatalogCode, out var manualTargetCode))
+                        {
+                            targetCatalogCode = manualTargetCode;
+                            mappingType = "manual";
+                        }
+                        else
+                        {
+                            // Auto-map by matching CatalogCode
+                            targetCatalogCode = sourceSection.CatalogCode;
+                            mappingType = "automatic";
+                        }
                     }
                     
-                    _summaries.Add(new SectionSummary
-                    {
-                        Id = targetSection.Id,
-                        PeriodId = targetSection.PeriodId,
-                        Title = targetSection.Title,
-                        Category = targetSection.Category,
-                        Description = targetSection.Description,
-                        OwnerId = targetSection.OwnerId,
-                        Status = targetSection.Status,
-                        Completeness = targetSection.Completeness,
-                        Order = targetSection.Order,
-                        CatalogCode = targetSection.CatalogCode,
-                        DataPointCount = 0,
-                        EvidenceCount = 0,
-                        GapCount = 0,
-                        AssumptionCount = 0,
-                        CompletenessPercentage = 0,
-                        OwnerName = ownerName,
-                        ProgressStatus = "not-started"
-                    });
+                    // Try to find existing target section with matching catalog code
+                    var existingTargetSection = targetCatalogCode != null
+                        ? existingTargetSections.FirstOrDefault(s => s.CatalogCode == targetCatalogCode)
+                        : null;
                     
-                    sectionsCopied++;
+                    ReportSection targetSection;
+                    string targetSectionId;
+                    
+                    if (existingTargetSection != null)
+                    {
+                        // Map to existing section (no new section created, so sectionsCopied not incremented)
+                        targetSectionId = existingTargetSection.Id;
+                        targetSection = existingTargetSection;
+                        sectionIdMapping[sourceSection.Id] = targetSectionId;
+                        
+                        // Track successful mapping
+                        mappedSections.Add(new MappedSection
+                        {
+                            SourceCatalogCode = sourceSection.CatalogCode ?? "",
+                            SourceTitle = sourceSection.Title,
+                            TargetCatalogCode = targetSection.CatalogCode ?? "",
+                            TargetTitle = targetSection.Title,
+                            MappingType = mappingType,
+                            DataPointsCopied = 0 // Will be updated later
+                        });
+                    }
+                    else if (targetCatalogCode != null)
+                    {
+                        // Create new section with the target catalog code
+                        targetSectionId = Guid.NewGuid().ToString();
+                        sectionIdMapping[sourceSection.Id] = targetSectionId;
+                        
+                        targetSection = new ReportSection
+                        {
+                            Id = targetSectionId,
+                            PeriodId = targetPeriodId,
+                            Title = sourceSection.Title,
+                            Category = sourceSection.Category,
+                            Description = sourceSection.Description,
+                            OwnerId = sourceSection.OwnerId,
+                            Status = "draft", // Reset to draft for new period
+                            Completeness = "empty", // Reset completeness
+                            Order = sourceSection.Order,
+                            CatalogCode = targetCatalogCode
+                        };
+                        
+                        _sections.Add(targetSection);
+                        
+                        // Create corresponding summary
+                        var ownerName = "Unassigned";
+                        if (!string.IsNullOrWhiteSpace(sourceSection.OwnerId))
+                        {
+                            var owner = _users.FirstOrDefault(u => u.Id == sourceSection.OwnerId);
+                            ownerName = owner?.Name ?? $"Unknown User ({sourceSection.OwnerId})";
+                        }
+                        
+                        _summaries.Add(new SectionSummary
+                        {
+                            Id = targetSection.Id,
+                            PeriodId = targetSection.PeriodId,
+                            Title = targetSection.Title,
+                            Category = targetSection.Category,
+                            Description = targetSection.Description,
+                            OwnerId = targetSection.OwnerId,
+                            Status = targetSection.Status,
+                            Completeness = targetSection.Completeness,
+                            Order = targetSection.Order,
+                            CatalogCode = targetSection.CatalogCode,
+                            DataPointCount = 0,
+                            EvidenceCount = 0,
+                            GapCount = 0,
+                            AssumptionCount = 0,
+                            CompletenessPercentage = 0,
+                            OwnerName = ownerName,
+                            ProgressStatus = "not-started"
+                        });
+                        
+                        sectionsCopied++;
+                        
+                        // Track successful mapping
+                        mappedSections.Add(new MappedSection
+                        {
+                            SourceCatalogCode = sourceSection.CatalogCode ?? "",
+                            SourceTitle = sourceSection.Title,
+                            TargetCatalogCode = targetSection.CatalogCode ?? "",
+                            TargetTitle = targetSection.Title,
+                            MappingType = mappingType,
+                            DataPointsCopied = 0 // Will be updated later
+                        });
+                    }
+                    else
+                    {
+                        // Cannot map - section has no catalog code
+                        var affectedDataPoints = _dataPoints.Count(dp => dp.SectionId == sourceSection.Id);
+                        
+                        var reason = string.IsNullOrWhiteSpace(sourceSection.CatalogCode)
+                            ? "Source section has no catalog code for stable identification"
+                            : $"No target section found with catalog code '{targetCatalogCode}'";
+                        
+                        var suggestedActions = new List<string>();
+                        
+                        if (string.IsNullOrWhiteSpace(sourceSection.CatalogCode))
+                        {
+                            suggestedActions.Add("Assign a catalog code to the source section before rollover");
+                            suggestedActions.Add("Manually create the section in the target period and provide a manual mapping");
+                        }
+                        else
+                        {
+                            suggestedActions.Add($"Create a section with catalog code '{targetCatalogCode}' in the target period");
+                            suggestedActions.Add("Provide a manual mapping to an existing section with a different catalog code");
+                        }
+                        
+                        unmappedSections.Add(new UnmappedSection
+                        {
+                            SourceCatalogCode = sourceSection.CatalogCode,
+                            SourceTitle = sourceSection.Title,
+                            SourceSectionId = sourceSection.Id,
+                            Reason = reason,
+                            SuggestedActions = suggestedActions,
+                            AffectedDataPoints = affectedDataPoints
+                        });
+                    }
                 }
             }
             
             // Dictionary to map source data point IDs to target data point IDs (for evidence linking)
             var dataPointIdMapping = new Dictionary<string, string>();
+            
+            // Track data points copied per source section for reconciliation
+            var dataPointsPerSourceSection = new Dictionary<string, int>();
             
             // Copy data values (data points)
             if (request.Options.CopyDataValues && request.Options.CopyStructure)
@@ -9577,6 +9689,13 @@ public sealed class InMemoryReportStore
                 {
                     var targetDataPointId = Guid.NewGuid().ToString();
                     dataPointIdMapping[sourceDataPoint.Id] = targetDataPointId;
+                    
+                    // Track data points copied per source section
+                    if (!dataPointsPerSourceSection.ContainsKey(sourceDataPoint.SectionId))
+                    {
+                        dataPointsPerSourceSection[sourceDataPoint.SectionId] = 0;
+                    }
+                    dataPointsPerSourceSection[sourceDataPoint.SectionId]++;
                     
                     // Get effective rollover rule for this data type
                     var ruleType = GetEffectiveRolloverRule(sourceDataPoint.Type, request.RuleOverrides);
@@ -9854,6 +9973,27 @@ public sealed class InMemoryReportStore
             var performedByUser = _users.FirstOrDefault(u => u.Id == request.PerformedBy);
             var performedByName = performedByUser?.Name ?? request.PerformedBy;
             
+            // Update mapped sections with data point counts
+            var allSourceSections = _sections.Where(s => s.PeriodId == request.SourcePeriodId).ToList();
+            foreach (var mappedSection in mappedSections)
+            {
+                var sourceSection = allSourceSections.FirstOrDefault(s => s.CatalogCode == mappedSection.SourceCatalogCode);
+                if (sourceSection != null && dataPointsPerSourceSection.TryGetValue(sourceSection.Id, out var count))
+                {
+                    mappedSection.DataPointsCopied = count;
+                }
+            }
+            
+            // Create reconciliation report
+            var reconciliation = new RolloverReconciliation
+            {
+                TotalSourceSections = allSourceSections.Count,
+                MappedSections = mappedSections.Count,
+                UnmappedSections = unmappedSections.Count,
+                MappedItems = mappedSections,
+                UnmappedItems = unmappedSections
+            };
+            
             var auditLog = new RolloverAuditLog
             {
                 Id = Guid.NewGuid().ToString(),
@@ -9874,6 +10014,9 @@ public sealed class InMemoryReportStore
             };
             
             _rolloverAuditLogs.Add(auditLog);
+            
+            // Store reconciliation report for later retrieval
+            _rolloverReconciliations[targetPeriod.Id] = reconciliation;
             
             // Create audit log entry for the rollover operation
             CreateAuditLogEntry(
@@ -9898,7 +10041,8 @@ public sealed class InMemoryReportStore
             {
                 Success = true,
                 TargetPeriod = targetPeriod,
-                AuditLog = auditLog
+                AuditLog = auditLog,
+                Reconciliation = reconciliation
             };
             
             return (true, null, result);
@@ -9920,6 +10064,18 @@ public sealed class InMemoryReportStore
             }
             
             return logs.OrderByDescending(l => l.PerformedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Gets the rollover reconciliation report for a target period.
+    /// </summary>
+    public RolloverReconciliation? GetRolloverReconciliation(string targetPeriodId)
+    {
+        lock (_lock)
+        {
+            _rolloverReconciliations.TryGetValue(targetPeriodId, out var reconciliation);
+            return reconciliation;
         }
     }
     
