@@ -40,6 +40,7 @@ public sealed class InMemoryReportStore
     private readonly List<RolloverAuditLog> _rolloverAuditLogs = new();
     private readonly List<DataTypeRolloverRule> _rolloverRules = new();
     private readonly List<RolloverRuleHistory> _rolloverRuleHistory = new();
+    private readonly Dictionary<string, RolloverReconciliation> _rolloverReconciliations = new(); // Key: targetPeriodId
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -10012,6 +10013,9 @@ public sealed class InMemoryReportStore
             
             _rolloverAuditLogs.Add(auditLog);
             
+            // Store reconciliation report for later retrieval
+            _rolloverReconciliations[targetPeriod.Id] = reconciliation;
+            
             // Create audit log entry for the rollover operation
             CreateAuditLogEntry(
                 request.PerformedBy,
@@ -10058,6 +10062,18 @@ public sealed class InMemoryReportStore
             }
             
             return logs.OrderByDescending(l => l.PerformedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Gets the rollover reconciliation report for a target period.
+    /// </summary>
+    public RolloverReconciliation? GetRolloverReconciliation(string targetPeriodId)
+    {
+        lock (_lock)
+        {
+            _rolloverReconciliations.TryGetValue(targetPeriodId, out var reconciliation);
+            return reconciliation;
         }
     }
     

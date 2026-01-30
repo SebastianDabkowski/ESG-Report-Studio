@@ -226,4 +226,22 @@ public sealed class ReportingController : ControllerBase
         var logs = _store.GetRolloverAuditLogs(periodId);
         return Ok(logs);
     }
+    
+    /// <summary>
+    /// Get the rollover reconciliation report for a target period.
+    /// Returns the mapping results showing which sections were successfully mapped
+    /// and which sections could not be mapped with reasons and suggested actions.
+    /// </summary>
+    [HttpGet("periods/{periodId}/rollover-reconciliation")]
+    public ActionResult<RolloverReconciliation> GetRolloverReconciliation(string periodId)
+    {
+        var reconciliation = _store.GetRolloverReconciliation(periodId);
+        
+        if (reconciliation == null)
+        {
+            return NotFound(new { message = $"No rollover reconciliation found for period '{periodId}'" });
+        }
+        
+        return Ok(reconciliation);
+    }
 }
