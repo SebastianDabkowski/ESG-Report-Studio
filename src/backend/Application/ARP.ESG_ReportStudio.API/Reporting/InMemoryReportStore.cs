@@ -12112,4 +12112,285 @@ public sealed class InMemoryReportStore
     }
     
     #endregion
+    
+    #region Progress Dashboard
+    
+    /// <summary>
+    /// Gets progress trends across multiple periods.
+    /// Shows completeness percentages, maturity scores, and outstanding issues for each period.
+    /// </summary>
+    /// <param name="periodIds">Optional list of specific period IDs to include. If null or empty, all periods are included.</param>
+    /// <param name="category">Optional category filter (environmental, social, governance).</param>
+    /// <param name="organizationalUnitId">Optional organizational unit filter (not fully implemented in current schema).</param>
+    /// <param name="sectionId">Optional section ID to filter to a specific section.</param>
+    /// <param name="ownerId">Optional owner ID to filter by data owner.</param>
+    /// <returns>Progress trends response with period data and summary statistics.</returns>
+    public ProgressTrendsResponse GetProgressTrends(
+        List<string>? periodIds = null,
+        string? category = null,
+        string? organizationalUnitId = null,
+        string? sectionId = null,
+        string? ownerId = null)
+    {
+        // Get periods to analyze
+        var periodsToAnalyze = periodIds != null && periodIds.Any()
+            ? _periods.Where(p => periodIds.Contains(p.Id)).ToList()
+            : _periods.OrderBy(p => p.StartDate).ToList();
+        
+        var response = new ProgressTrendsResponse();
+        
+        foreach (var period in periodsToAnalyze)
+        {
+            // Get sections for this period with filters
+            var sections = _summaries.Where(s => s.PeriodId == period.Id).ToList();
+            
+            if (!string.IsNullOrEmpty(category))
+                sections = sections.Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+            
+            if (!string.IsNullOrEmpty(sectionId))
+                sections = sections.Where(s => s.Id == sectionId).ToList();
+            
+            if (!string.IsNullOrEmpty(ownerId))
+                sections = sections.Where(s => s.OwnerId == ownerId).ToList();
+            
+            // Get data points for these sections
+            var sectionIds = sections.Select(s => s.Id).ToList();
+            var dataPoints = _dataPoints.Where(dp => sectionIds.Contains(dp.SectionId)).ToList();
+            
+            // Note: OrganizationalUnit filter cannot be applied at data point level as the field doesn't exist
+            // This would need to be implemented at the section or period level if needed
+            
+            // Calculate completeness
+            var totalDataPoints = dataPoints.Count;
+            var completeDataPoints = dataPoints.Count(dp => 
+                dp.CompletenessStatus == "complete" || dp.CompletenessStatus == "not applicable");
+            var completenessPercentage = totalDataPoints > 0 
+                ? (decimal)completeDataPoints / totalDataPoints * 100 
+                : 0;
+            
+            // Get maturity assessment for this period
+            var maturityAssessment = _maturityAssessments
+                .Where(ma => ma.PeriodId == period.Id && ma.IsCurrent)
+                .OrderByDescending(ma => ma.CalculatedAt)
+                .FirstOrDefault();
+            
+            // Get gaps
+            var gaps = _gaps.Where(g => 
+                sectionIds.Contains(g.SectionId) && 
+                !g.Resolved).ToList();
+            var openGaps = gaps.Count;
+            var highRiskGaps = gaps.Count(g => g.Impact.Equals("high", StringComparison.OrdinalIgnoreCase));
+            
+            // Get blocked data points
+            var blockedDataPoints = dataPoints.Count(dp => 
+                dp.ReviewStatus == "changes-requested");
+            
+            var periodData = new PeriodTrendData
+            {
+                PeriodId = period.Id,
+                PeriodName = period.Name,
+                StartDate = period.StartDate,
+                EndDate = period.EndDate,
+                Status = period.Status,
+                IsLocked = period.Status == "closed",
+                CompletenessPercentage = completenessPercentage,
+                CompleteDataPoints = completeDataPoints,
+                TotalDataPoints = totalDataPoints,
+                MaturityScore = maturityAssessment?.OverallScore,
+                MaturityLevel = maturityAssessment?.AchievedLevelName,
+                MaturityLevelOrder = maturityAssessment?.AchievedLevelOrder,
+                OpenGaps = openGaps,
+                HighRiskGaps = highRiskGaps,
+                BlockedDataPoints = blockedDataPoints
+            };
+            
+            response.Periods.Add(periodData);
+        }
+        
+        // Calculate summary
+        response.Summary = new TrendsSummary
+        {
+            TotalPeriods = response.Periods.Count,
+            LockedPeriods = response.Periods.Count(p => p.IsLocked),
+            LatestCompletenessPercentage = response.Periods.LastOrDefault()?.CompletenessPercentage,
+            LatestMaturityScore = response.Periods.LastOrDefault()?.MaturityScore
+        };
+        
+        // Calculate changes
+        if (response.Periods.Count >= 2)
+        {
+            var latest = response.Periods[^1];
+            var previous = response.Periods[^2];
+            
+            response.Summary.CompletenessChange = latest.CompletenessPercentage - previous.CompletenessPercentage;
+            
+            if (latest.MaturityScore.HasValue && previous.MaturityScore.HasValue)
+            {
+                response.Summary.MaturityChange = latest.MaturityScore.Value - previous.MaturityScore.Value;
+            }
+        }
+        
+        return response;
+    }
+    
+    /// <summary>
+    /// Gets outstanding actions across periods that require attention.
+    /// Includes gaps, blocked data points, and pending approvals.
+    /// </summary>
+    /// <param name="periodIds">Optional list of specific period IDs to include. If null or empty, all periods are included.</param>
+    /// <param name="category">Optional category filter (environmental, social, governance).</param>
+    /// <param name="organizationalUnitId">Optional organizational unit filter (not fully implemented in current schema).</param>
+    /// <param name="sectionId">Optional section ID to filter to a specific section.</param>
+    /// <param name="ownerId">Optional owner ID to filter by data owner.</param>
+    /// <param name="priority">Optional priority filter (high, medium, low).</param>
+    /// <returns>Outstanding actions response with actions list and summary statistics.</returns>
+    public OutstandingActionsResponse GetOutstandingActions(
+        List<string>? periodIds = null,
+        string? category = null,
+        string? organizationalUnitId = null,
+        string? sectionId = null,
+        string? ownerId = null,
+        string? priority = null)
+    {
+        var response = new OutstandingActionsResponse();
+        
+        // Get periods
+        var periods = periodIds != null && periodIds.Any()
+            ? _periods.Where(p => periodIds.Contains(p.Id)).ToList()
+            : _periods.ToList();
+        
+        foreach (var period in periods)
+        {
+            // Get sections with filters
+            var sections = _summaries.Where(s => s.PeriodId == period.Id).ToList();
+            
+            if (!string.IsNullOrEmpty(category))
+                sections = sections.Where(s => s.Category.Equals(category, StringComparison.OrdinalIgnoreCase)).ToList();
+            
+            if (!string.IsNullOrEmpty(sectionId))
+                sections = sections.Where(s => s.Id == sectionId).ToList();
+            
+            if (!string.IsNullOrEmpty(ownerId))
+                sections = sections.Where(s => s.OwnerId == ownerId).ToList();
+            
+            var sectionIds = sections.Select(s => s.Id).ToList();
+            
+            // Get gaps as actions
+            var gaps = _gaps.Where(g => 
+                sectionIds.Contains(g.SectionId) && 
+                !g.Resolved).ToList();
+            
+            foreach (var gap in gaps)
+            {
+                var section = sections.FirstOrDefault(s => s.Id == gap.SectionId);
+                if (section == null) continue;
+                
+                var gapPriority = gap.Impact.ToLower() switch
+                {
+                    "high" => "high",
+                    "medium" => "medium",
+                    _ => "low"
+                };
+                
+                // Apply priority filter
+                if (!string.IsNullOrEmpty(priority) && gapPriority != priority.ToLower())
+                    continue;
+                
+                response.Actions.Add(new OutstandingAction
+                {
+                    Id = gap.Id,
+                    ActionType = "gap",
+                    Title = gap.Title,
+                    PeriodId = period.Id,
+                    PeriodName = period.Name,
+                    PeriodIsLocked = period.Status == "closed",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    OwnerId = section.OwnerId,  // Use section owner as gap doesn't have owner field
+                    OwnerName = section.OwnerName,
+                    Priority = gapPriority,
+                    DueDate = gap.TargetDate  // Use TargetDate instead of DuePeriod
+                });
+            }
+            
+            // Get blocked data points as actions
+            var dataPoints = _dataPoints.Where(dp => 
+                sectionIds.Contains(dp.SectionId) && 
+                dp.ReviewStatus == "changes-requested").ToList();
+            
+            foreach (var dataPoint in dataPoints)
+            {
+                var section = sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+                if (section == null) continue;
+                
+                var dpPriority = dataPoint.IsMissing ? "high" : "medium";
+                
+                // Apply priority filter
+                if (!string.IsNullOrEmpty(priority) && dpPriority != priority.ToLower())
+                    continue;
+                
+                response.Actions.Add(new OutstandingAction
+                {
+                    Id = dataPoint.Id,
+                    ActionType = "blocked-datapoint",
+                    Title = dataPoint.Title,
+                    PeriodId = period.Id,
+                    PeriodName = period.Name,
+                    PeriodIsLocked = period.Status == "closed",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    OwnerId = dataPoint.OwnerId,
+                    OwnerName = _users.FirstOrDefault(u => u.Id == dataPoint.OwnerId)?.Name,
+                    Priority = dpPriority,
+                    DueDate = dataPoint.Deadline
+                });
+            }
+            
+            // Get pending approvals as actions
+            var pendingSections = sections.Where(s => s.Status == "in-review").ToList();
+            
+            foreach (var section in pendingSections)
+            {
+                var approvalPriority = "medium";
+                
+                // Apply priority filter
+                if (!string.IsNullOrEmpty(priority) && approvalPriority != priority.ToLower())
+                    continue;
+                
+                response.Actions.Add(new OutstandingAction
+                {
+                    Id = section.Id,
+                    ActionType = "pending-approval",
+                    Title = $"Section approval: {section.Title}",
+                    PeriodId = period.Id,
+                    PeriodName = period.Name,
+                    PeriodIsLocked = period.Status == "closed",
+                    SectionId = section.Id,
+                    SectionTitle = section.Title,
+                    Category = section.Category,
+                    OwnerId = section.OwnerId,
+                    OwnerName = section.OwnerName,
+                    Priority = approvalPriority
+                });
+            }
+        }
+        
+        // Calculate summary
+        response.Summary = new OutstandingActionsSummary
+        {
+            TotalActions = response.Actions.Count,
+            HighPriority = response.Actions.Count(a => a.Priority == "high"),
+            MediumPriority = response.Actions.Count(a => a.Priority == "medium"),
+            LowPriority = response.Actions.Count(a => a.Priority == "low"),
+            OpenGaps = response.Actions.Count(a => a.ActionType == "gap"),
+            BlockedDataPoints = response.Actions.Count(a => a.ActionType == "blocked-datapoint"),
+            PendingApprovals = response.Actions.Count(a => a.ActionType == "pending-approval")
+        };
+        
+        return response;
+    }
+    
+    #endregion
 }

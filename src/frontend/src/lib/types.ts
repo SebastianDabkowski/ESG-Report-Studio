@@ -1195,3 +1195,70 @@ export interface CalculateMaturityAssessmentPayload {
   calculatedBy: string
   calculatedByName: string
 }
+
+// ==================== Progress Dashboard Types ====================
+
+export interface PeriodTrendData {
+  periodId: string
+  periodName: string
+  startDate: string
+  endDate: string
+  status: string
+  isLocked: boolean
+  completenessPercentage: number
+  completeDataPoints: number
+  totalDataPoints: number
+  maturityScore?: number
+  maturityLevel?: string
+  maturityLevelOrder?: number
+  openGaps: number
+  highRiskGaps: number
+  blockedDataPoints: number
+}
+
+export interface TrendsSummary {
+  totalPeriods: number
+  lockedPeriods: number
+  latestCompletenessPercentage?: number
+  latestMaturityScore?: number
+  completenessChange?: number
+  maturityChange?: number
+}
+
+export interface ProgressTrendsResponse {
+  periods: PeriodTrendData[]
+  summary: TrendsSummary
+}
+
+export interface OutstandingAction {
+  id: string
+  actionType: 'gap' | 'blocked-datapoint' | 'pending-approval'
+  title: string
+  periodId: string
+  periodName: string
+  periodIsLocked: boolean
+  sectionId: string
+  sectionTitle: string
+  category: string
+  ownerId?: string
+  ownerName?: string
+  priority: 'high' | 'medium' | 'low'
+  dueDate?: string
+  organizationalUnitId?: string
+  organizationalUnitName?: string
+}
+
+export interface OutstandingActionsSummary {
+  totalActions: number
+  highPriority: number
+  mediumPriority: number
+  lowPriority: number
+  openGaps: number
+  blockedDataPoints: number
+  pendingApprovals: number
+}
+
+export interface OutstandingActionsResponse {
+  actions: OutstandingAction[]
+  summary: OutstandingActionsSummary
+}

@@ -5529,3 +5529,181 @@ public sealed class CalculateMaturityAssessmentRequest
     /// </summary>
     public string CalculatedByName { get; set; } = string.Empty;
 }
+
+// ==================== Progress Dashboard Models ====================
+
+/// <summary>
+/// Response containing trends for completeness and maturity across multiple periods.
+/// </summary>
+public sealed class ProgressTrendsResponse
+{
+    /// <summary>
+    /// Trend data for each period.
+    /// </summary>
+    public List<PeriodTrendData> Periods { get; set; } = new();
+    
+    /// <summary>
+    /// Overall summary of the trends.
+    /// </summary>
+    public TrendsSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Trend data for a single period.
+/// </summary>
+public sealed class PeriodTrendData
+{
+    /// <summary>
+    /// Period information.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public string StartDate { get; set; } = string.Empty;
+    public string EndDate { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public bool IsLocked { get; set; }
+    
+    /// <summary>
+    /// Completeness metrics.
+    /// </summary>
+    public decimal CompletenessPercentage { get; set; }
+    public int CompleteDataPoints { get; set; }
+    public int TotalDataPoints { get; set; }
+    
+    /// <summary>
+    /// Maturity metrics.
+    /// </summary>
+    public decimal? MaturityScore { get; set; }
+    public string? MaturityLevel { get; set; }
+    public int? MaturityLevelOrder { get; set; }
+    
+    /// <summary>
+    /// Outstanding actions count.
+    /// </summary>
+    public int OpenGaps { get; set; }
+    public int HighRiskGaps { get; set; }
+    public int BlockedDataPoints { get; set; }
+}
+
+/// <summary>
+/// Summary statistics for trends across all periods.
+/// </summary>
+public sealed class TrendsSummary
+{
+    /// <summary>
+    /// Number of periods included in the trends.
+    /// </summary>
+    public int TotalPeriods { get; set; }
+    
+    /// <summary>
+    /// Number of locked periods.
+    /// </summary>
+    public int LockedPeriods { get; set; }
+    
+    /// <summary>
+    /// Latest period completeness.
+    /// </summary>
+    public decimal? LatestCompletenessPercentage { get; set; }
+    
+    /// <summary>
+    /// Latest period maturity score.
+    /// </summary>
+    public decimal? LatestMaturityScore { get; set; }
+    
+    /// <summary>
+    /// Change in completeness from previous to latest period.
+    /// </summary>
+    public decimal? CompletenessChange { get; set; }
+    
+    /// <summary>
+    /// Change in maturity from previous to latest period.
+    /// </summary>
+    public decimal? MaturityChange { get; set; }
+}
+
+/// <summary>
+/// Response containing outstanding actions across periods.
+/// </summary>
+public sealed class OutstandingActionsResponse
+{
+    /// <summary>
+    /// All outstanding actions.
+    /// </summary>
+    public List<OutstandingAction> Actions { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics.
+    /// </summary>
+    public OutstandingActionsSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// An outstanding action requiring attention.
+/// </summary>
+public sealed class OutstandingAction
+{
+    /// <summary>
+    /// Unique identifier for the action.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of action: "gap", "blocked-datapoint", "pending-approval"
+    /// </summary>
+    public string ActionType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title/description of the action.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Period information.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public bool PeriodIsLocked { get; set; }
+    
+    /// <summary>
+    /// Section information.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    public string SectionTitle { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner information.
+    /// </summary>
+    public string? OwnerId { get; set; }
+    public string? OwnerName { get; set; }
+    
+    /// <summary>
+    /// Priority: "high", "medium", "low"
+    /// </summary>
+    public string Priority { get; set; } = "medium";
+    
+    /// <summary>
+    /// Due date or period.
+    /// </summary>
+    public string? DueDate { get; set; }
+    
+    /// <summary>
+    /// Organizational unit.
+    /// </summary>
+    public string? OrganizationalUnitId { get; set; }
+    public string? OrganizationalUnitName { get; set; }
+}
+
+/// <summary>
+/// Summary of outstanding actions.
+/// </summary>
+public sealed class OutstandingActionsSummary
+{
+    public int TotalActions { get; set; }
+    public int HighPriority { get; set; }
+    public int MediumPriority { get; set; }
+    public int LowPriority { get; set; }
+    public int OpenGaps { get; set; }
+    public int BlockedDataPoints { get; set; }
+    public int PendingApprovals { get; set; }
+}
