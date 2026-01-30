@@ -179,4 +179,51 @@ public sealed class ReportingController : ControllerBase
         var matrix = _store.GetResponsibilityMatrix(periodId, ownerFilter);
         return Ok(matrix);
     }
+    
+    [HttpPost("periods/rollover")]
+    public ActionResult<RolloverResult> RolloverPeriod([FromBody] RolloverRequest request)
+    {
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(request.SourcePeriodId))
+        {
+            return BadRequest(new { error = "SourcePeriodId is required." });
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.TargetPeriodName))
+        {
+            return BadRequest(new { error = "TargetPeriodName is required." });
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.TargetPeriodStartDate))
+        {
+            return BadRequest(new { error = "TargetPeriodStartDate is required." });
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.TargetPeriodEndDate))
+        {
+            return BadRequest(new { error = "TargetPeriodEndDate is required." });
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.PerformedBy))
+        {
+            return BadRequest(new { error = "PerformedBy is required." });
+        }
+        
+        // Perform rollover
+        var (success, errorMessage, result) = _store.RolloverPeriod(request);
+        
+        if (!success)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(result);
+    }
+    
+    [HttpGet("periods/{periodId}/rollover-audit")]
+    public ActionResult<IReadOnlyList<RolloverAuditLog>> GetRolloverAuditLogs(string periodId)
+    {
+        var logs = _store.GetRolloverAuditLogs(periodId);
+        return Ok(logs);
+    }
 }

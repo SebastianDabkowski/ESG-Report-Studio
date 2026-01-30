@@ -1,4 +1,4 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix, ReadinessReport } from '@/lib/types'
+import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix, ReadinessReport, RolloverRequest, RolloverResult, RolloverAuditLog } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -1012,4 +1012,15 @@ export async function getStableFragmentIdentifier(
   fragmentId: string
 ): Promise<{ stableFragmentIdentifier: string }> {
   return requestJson<{ stableFragmentIdentifier: string }>(`fragment-audit/${fragmentType}/${fragmentId}/stable-identifier`)
+}
+
+export async function rolloverPeriod(request: RolloverRequest): Promise<RolloverResult> {
+  return requestJson<RolloverResult>('periods/rollover', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function getRolloverAuditLogs(periodId: string): Promise<RolloverAuditLog[]> {
+  return requestJson<RolloverAuditLog[]>(`periods/${periodId}/rollover-audit`)
 }
