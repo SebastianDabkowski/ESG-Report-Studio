@@ -5,10 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye } from '@phosphor-icons/react'
+import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye, FilePdf } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate } from '@/lib/helpers'
-import { getCompletenessStats } from '@/lib/api'
+import { getCompletenessStats, exportReportPdf } from '@/lib/api'
 import ReportPreviewDialog from './ReportPreviewDialog'
 
 interface DashboardProps {
@@ -26,6 +26,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>('all')
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
 
   const activePeriod = (periods || []).find(p => p.status === 'active')
   const activeSections = (sections || []).filter(s => activePeriod && s.periodId === activePeriod.id)
@@ -43,6 +44,26 @@ export default function Dashboard({ currentUser }: DashboardProps) {
     : 0
 
   const criticalGaps = (gaps || []).filter(g => !g.resolved && g.impact === 'high')
+
+  // Export PDF handler
+  const handleExportPdf = async () => {
+    if (!activePeriod) return
+
+    setIsExportingPdf(true)
+    try {
+      await exportReportPdf(activePeriod.id, {
+        generatedBy: currentUser.id,
+        includeTitlePage: true,
+        includeTableOfContents: true,
+        includePageNumbers: true
+      })
+    } catch (error) {
+      console.error('Failed to export PDF:', error)
+      alert('Failed to export PDF. Please try again.')
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   // Fetch completeness stats when filters change
   useEffect(() => {
@@ -94,15 +115,27 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                     {activePeriod.name} • {formatDate(activePeriod.startDate)} - {formatDate(activePeriod.endDate)}
                   </CardDescription>
                 </div>
-                <Button 
-                  onClick={() => setShowPreview(true)}
-                  variant="outline"
-                  size="sm"
-                  className="gap-2"
-                >
-                  <Eye weight="regular" className="h-4 w-4" />
-                  Preview Report
-                </Button>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={() => setShowPreview(true)}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <Eye weight="regular" className="h-4 w-4" />
+                    Preview Report
+                  </Button>
+                  <Button 
+                    onClick={handleExportPdf}
+                    disabled={isExportingPdf}
+                    variant="default"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <FilePdf weight="regular" className="h-4 w-4" />
+                    {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
