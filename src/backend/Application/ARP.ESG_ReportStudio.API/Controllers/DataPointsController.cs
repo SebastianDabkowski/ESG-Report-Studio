@@ -292,4 +292,24 @@ public sealed class DataPointsController : ControllerBase
         
         return Ok(lineage);
     }
+
+    /// <summary>
+    /// Compares a numeric metric across reporting periods for year-over-year analysis.
+    /// Shows current value, prior value, and percentage change.
+    /// </summary>
+    /// <param name="id">Data point ID</param>
+    /// <param name="priorPeriodId">Optional ID of the prior period to compare against. If not provided, uses the most recent prior period.</param>
+    /// <returns>Metric comparison response with values and percentage change</returns>
+    [HttpGet("{id}/compare-periods")]
+    public ActionResult<MetricComparisonResponse> CompareMetrics(string id, [FromQuery] string? priorPeriodId = null)
+    {
+        var comparison = _store.CompareMetrics(id, priorPeriodId);
+        
+        if (comparison == null)
+        {
+            return NotFound(new { error = $"DataPoint with ID '{id}' not found." });
+        }
+        
+        return Ok(comparison);
+    }
 }

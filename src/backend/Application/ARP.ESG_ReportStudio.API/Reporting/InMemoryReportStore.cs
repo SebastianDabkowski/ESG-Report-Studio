@@ -1496,6 +1496,270 @@ public sealed class InMemoryReportStore
     }
 
     /// <summary>
+    /// Compares a numeric metric across two reporting periods.
+    /// </summary>
+    /// <param name="dataPointId">ID of the data point in the current period.</param>
+    /// <param name="priorPeriodId">ID of the prior reporting period to compare against. If null, uses the most recent prior period.</param>
+    /// <returns>Metric comparison response with current value, prior value, and percentage change.</returns>
+    public MetricComparisonResponse? CompareMetrics(string dataPointId, string? priorPeriodId = null)
+    {
+        lock (_lock)
+        {
+            var currentDataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (currentDataPoint == null)
+            {
+                return null;
+            }
+            
+            // Get current period info
+            var currentSection = _sections.FirstOrDefault(s => s.Id == currentDataPoint.SectionId);
+            if (currentSection == null)
+            {
+                return null;
+            }
+            
+            var currentPeriod = _periods.FirstOrDefault(p => p.Id == currentSection.PeriodId);
+            if (currentPeriod == null)
+            {
+                return null;
+            }
+            
+            var currentOwner = _users.FirstOrDefault(u => u.Id == currentDataPoint.OwnerId);
+            
+            // Build current period value
+            var currentPeriodValue = new MetricPeriodValue
+            {
+                PeriodId = currentPeriod.Id,
+                PeriodName = currentPeriod.Name,
+                StartDate = currentPeriod.StartDate,
+                EndDate = currentPeriod.EndDate,
+                Value = currentDataPoint.Value,
+                NumericValue = ParseNumericValue(currentDataPoint.Value),
+                Unit = currentDataPoint.Unit,
+                Source = currentDataPoint.Source,
+                InformationType = currentDataPoint.InformationType,
+                OwnerName = currentOwner?.Name ?? "Unknown",
+                EvidenceCount = currentDataPoint.EvidenceIds?.Count ?? 0,
+                IsMissing = currentDataPoint.IsMissing,
+                MissingReason = currentDataPoint.MissingReason
+            };
+            
+            // Find available baselines by tracing lineage
+            var availableBaselines = new List<AvailableBaselinePeriod>();
+            var priorDataPoint = currentDataPoint;
+            var yearsBack = 0;
+            var visitedDataPoints = new HashSet<string> { dataPointId };
+            
+            while (!string.IsNullOrEmpty(priorDataPoint.SourceDataPointId) && yearsBack < 5)
+            {
+                var sourceDataPointId = priorDataPoint.SourceDataPointId;
+                if (visitedDataPoints.Contains(sourceDataPointId))
+                {
+                    break; // Prevent circular references
+                }
+                visitedDataPoints.Add(sourceDataPointId);
+                
+                priorDataPoint = _dataPoints.FirstOrDefault(d => d.Id == sourceDataPointId);
+                if (priorDataPoint == null)
+                {
+                    break;
+                }
+                
+                var priorSection = _sections.FirstOrDefault(s => s.Id == priorDataPoint.SectionId);
+                if (priorSection == null)
+                {
+                    break;
+                }
+                
+                var period = _periods.FirstOrDefault(p => p.Id == priorSection.PeriodId);
+                if (period == null)
+                {
+                    break;
+                }
+                
+                yearsBack++;
+                var label = yearsBack == 1 ? "Previous Year" : $"{yearsBack} Years Back";
+                
+                availableBaselines.Add(new AvailableBaselinePeriod
+                {
+                    PeriodId = period.Id,
+                    PeriodName = period.Name,
+                    Label = label,
+                    HasData = !priorDataPoint.IsMissing && !string.IsNullOrEmpty(priorDataPoint.Value),
+                    StartDate = period.StartDate,
+                    EndDate = period.EndDate
+                });
+            }
+            
+            // Determine which prior period to use
+            string? targetPriorPeriodId = priorPeriodId;
+            if (string.IsNullOrEmpty(targetPriorPeriodId) && availableBaselines.Count > 0)
+            {
+                targetPriorPeriodId = availableBaselines[0].PeriodId; // Use most recent
+            }
+            
+            MetricPeriodValue? priorPeriodValue = null;
+            bool isComparisonAvailable = false;
+            string? unavailableReason = null;
+            bool unitsCompatible = true;
+            string? unitWarning = null;
+            decimal? percentageChange = null;
+            decimal? absoluteChange = null;
+            
+            if (!string.IsNullOrEmpty(targetPriorPeriodId))
+            {
+                // Find the data point in the prior period by traversing lineage
+                DataPoint? targetPriorDataPoint = null;
+                var tempDataPoint = currentDataPoint;
+                var tempVisited = new HashSet<string> { dataPointId };
+                
+                while (!string.IsNullOrEmpty(tempDataPoint.SourceDataPointId))
+                {
+                    var sourceId = tempDataPoint.SourceDataPointId;
+                    if (tempVisited.Contains(sourceId))
+                    {
+                        break;
+                    }
+                    tempVisited.Add(sourceId);
+                    
+                    tempDataPoint = _dataPoints.FirstOrDefault(d => d.Id == sourceId);
+                    if (tempDataPoint == null)
+                    {
+                        break;
+                    }
+                    
+                    var tempSection = _sections.FirstOrDefault(s => s.Id == tempDataPoint.SectionId);
+                    if (tempSection != null && tempSection.PeriodId == targetPriorPeriodId)
+                    {
+                        targetPriorDataPoint = tempDataPoint;
+                        break;
+                    }
+                }
+                
+                if (targetPriorDataPoint != null)
+                {
+                    var priorPeriod = _periods.FirstOrDefault(p => p.Id == targetPriorPeriodId);
+                    var priorOwner = _users.FirstOrDefault(u => u.Id == targetPriorDataPoint.OwnerId);
+                    
+                    priorPeriodValue = new MetricPeriodValue
+                    {
+                        PeriodId = targetPriorPeriodId,
+                        PeriodName = priorPeriod?.Name ?? "Unknown",
+                        StartDate = priorPeriod?.StartDate ?? string.Empty,
+                        EndDate = priorPeriod?.EndDate ?? string.Empty,
+                        Value = targetPriorDataPoint.Value,
+                        NumericValue = ParseNumericValue(targetPriorDataPoint.Value),
+                        Unit = targetPriorDataPoint.Unit,
+                        Source = targetPriorDataPoint.Source,
+                        InformationType = targetPriorDataPoint.InformationType,
+                        OwnerName = priorOwner?.Name ?? "Unknown",
+                        EvidenceCount = targetPriorDataPoint.EvidenceIds?.Count ?? 0,
+                        IsMissing = targetPriorDataPoint.IsMissing,
+                        MissingReason = targetPriorDataPoint.MissingReason
+                    };
+                    
+                    // Check if comparison is possible
+                    if (targetPriorDataPoint.IsMissing || currentDataPoint.IsMissing)
+                    {
+                        unavailableReason = "Missing data in one or both periods";
+                    }
+                    else if (currentPeriodValue.NumericValue == null || priorPeriodValue.NumericValue == null)
+                    {
+                        unavailableReason = "Non-numeric values";
+                    }
+                    else
+                    {
+                        // Check unit compatibility
+                        var currentUnit = currentDataPoint.Unit?.Trim() ?? string.Empty;
+                        var priorUnit = targetPriorDataPoint.Unit?.Trim() ?? string.Empty;
+                        
+                        if (currentUnit != priorUnit)
+                        {
+                            unitsCompatible = false;
+                            
+                            if (string.IsNullOrEmpty(currentUnit) || string.IsNullOrEmpty(priorUnit))
+                            {
+                                unitWarning = "One period has a unit while the other does not. Comparison may not be valid.";
+                            }
+                            else
+                            {
+                                unitWarning = $"Units differ: current period uses '{currentUnit}', prior period uses '{priorUnit}'. Explicit conversion required.";
+                            }
+                            unavailableReason = "Unit mismatch";
+                        }
+                        else
+                        {
+                            // Calculate changes
+                            var currentValue = currentPeriodValue.NumericValue.Value;
+                            var priorValue = priorPeriodValue.NumericValue.Value;
+                            
+                            absoluteChange = currentValue - priorValue;
+                            
+                            if (priorValue != 0)
+                            {
+                                percentageChange = ((currentValue - priorValue) / priorValue) * 100;
+                            }
+                            else if (currentValue != 0)
+                            {
+                                // Prior value was 0, current is not - can't calculate percentage
+                                unavailableReason = "Prior period value is zero, percentage change cannot be calculated";
+                            }
+                            
+                            isComparisonAvailable = true;
+                        }
+                    }
+                }
+                else
+                {
+                    unavailableReason = "No data point found in the specified prior period";
+                }
+            }
+            else
+            {
+                unavailableReason = "No prior period data available";
+            }
+            
+            return new MetricComparisonResponse
+            {
+                DataPointId = dataPointId,
+                Title = currentDataPoint.Title,
+                CurrentPeriod = currentPeriodValue,
+                PriorPeriod = priorPeriodValue,
+                PercentageChange = percentageChange,
+                AbsoluteChange = absoluteChange,
+                IsComparisonAvailable = isComparisonAvailable,
+                UnavailableReason = unavailableReason,
+                UnitsCompatible = unitsCompatible,
+                UnitWarning = unitWarning,
+                AvailableBaselines = availableBaselines
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Attempts to parse a string value as a decimal number.
+    /// </summary>
+    /// <param name="value">The value to parse.</param>
+    /// <returns>Parsed decimal value, or null if not numeric.</returns>
+    private decimal? ParseNumericValue(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+        
+        // Remove common formatting (spaces, commas)
+        var cleanValue = value.Replace(" ", "").Replace(",", "");
+        
+        if (decimal.TryParse(cleanValue, out var result))
+        {
+            return result;
+        }
+        
+        return null;
+    }
+
+    /// <summary>
     /// Calculates the completeness status based on data point fields and evidence.
     /// </summary>
     /// <param name="dataPoint">The data point to evaluate.</param>

@@ -4368,3 +4368,175 @@ public sealed class CrossPeriodLineageResponse
     /// </summary>
     public bool HasMoreHistory { get; set; }
 }
+
+/// <summary>
+/// Response containing year-over-year comparison for a numeric metric.
+/// Compares a metric's value across two reporting periods.
+/// </summary>
+public sealed class MetricComparisonResponse
+{
+    /// <summary>
+    /// ID of the current data point being compared.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title of the metric.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current period value information.
+    /// </summary>
+    public MetricPeriodValue CurrentPeriod { get; set; } = new();
+    
+    /// <summary>
+    /// Prior period value information.
+    /// </summary>
+    public MetricPeriodValue? PriorPeriod { get; set; }
+    
+    /// <summary>
+    /// Percentage change from prior period to current period.
+    /// Null if prior period data is unavailable or values are not numeric.
+    /// </summary>
+    public decimal? PercentageChange { get; set; }
+    
+    /// <summary>
+    /// Absolute change from prior period to current period.
+    /// Null if prior period data is unavailable or values are not numeric.
+    /// </summary>
+    public decimal? AbsoluteChange { get; set; }
+    
+    /// <summary>
+    /// Indicates whether comparison is available.
+    /// </summary>
+    public bool IsComparisonAvailable { get; set; }
+    
+    /// <summary>
+    /// Reason why comparison is unavailable (if applicable).
+    /// Examples: "No prior period data", "Unit mismatch", "Non-numeric values"
+    /// </summary>
+    public string? UnavailableReason { get; set; }
+    
+    /// <summary>
+    /// Indicates if units are compatible between periods.
+    /// </summary>
+    public bool UnitsCompatible { get; set; }
+    
+    /// <summary>
+    /// Warning message if units differ but could potentially be converted.
+    /// </summary>
+    public string? UnitWarning { get; set; }
+    
+    /// <summary>
+    /// List of available baseline periods for comparison.
+    /// </summary>
+    public List<AvailableBaselinePeriod> AvailableBaselines { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a metric value for a specific reporting period.
+/// </summary>
+public sealed class MetricPeriodValue
+{
+    /// <summary>
+    /// ID of the reporting period.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the reporting period.
+    /// </summary>
+    public string PeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Start date of the reporting period.
+    /// </summary>
+    public string StartDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// End date of the reporting period.
+    /// </summary>
+    public string EndDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Metric value (as string for display).
+    /// </summary>
+    public string? Value { get; set; }
+    
+    /// <summary>
+    /// Numeric value (parsed from Value if numeric).
+    /// </summary>
+    public decimal? NumericValue { get; set; }
+    
+    /// <summary>
+    /// Unit of measurement.
+    /// </summary>
+    public string? Unit { get; set; }
+    
+    /// <summary>
+    /// Source of the data.
+    /// </summary>
+    public string Source { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Information type (fact, estimate, etc.).
+    /// </summary>
+    public string InformationType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner of the data point.
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Number of evidence items attached.
+    /// </summary>
+    public int EvidenceCount { get; set; }
+    
+    /// <summary>
+    /// Indicates if this value is missing or unavailable.
+    /// </summary>
+    public bool IsMissing { get; set; }
+    
+    /// <summary>
+    /// Reason for missing data (if applicable).
+    /// </summary>
+    public string? MissingReason { get; set; }
+}
+
+/// <summary>
+/// Represents an available baseline period for comparison.
+/// </summary>
+public sealed class AvailableBaselinePeriod
+{
+    /// <summary>
+    /// ID of the baseline period.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the baseline period.
+    /// </summary>
+    public string PeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Label for this baseline (e.g., "Previous Year", "2 Years Back").
+    /// </summary>
+    public string Label { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Indicates if data exists for this period.
+    /// </summary>
+    public bool HasData { get; set; }
+    
+    /// <summary>
+    /// Start date of the baseline period.
+    /// </summary>
+    public string StartDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// End date of the baseline period.
+    /// </summary>
+    public string EndDate { get; set; } = string.Empty;
+}
