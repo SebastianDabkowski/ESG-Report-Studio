@@ -114,6 +114,17 @@ export interface DataPoint {
   provenanceReviewReason?: string
   provenanceFlaggedBy?: string
   provenanceFlaggedAt?: string
+  // Calculation Lineage fields
+  isCalculated?: boolean
+  calculationFormula?: string
+  calculationInputIds?: string[]
+  calculationInputSnapshot?: string
+  calculationVersion?: number
+  calculatedAt?: string
+  calculatedBy?: string
+  calculationNeedsRecalculation?: boolean
+  recalculationReason?: string
+  recalculationFlaggedAt?: string
 }
 
 export interface EstimateInputSource {
@@ -146,6 +157,33 @@ export interface DataPointNote {
 export interface CreateDataPointNoteRequest {
   content: string
   createdBy: string
+}
+
+export interface CalculationLineageResponse {
+  dataPointId: string
+  formula?: string
+  version: number
+  calculatedAt?: string
+  calculatedBy?: string
+  inputs: LineageInput[]
+  inputSnapshot?: string
+  needsRecalculation: boolean
+  recalculationReason?: string
+}
+
+export interface LineageInput {
+  dataPointId: string
+  title: string
+  currentValue?: string
+  unit?: string
+  valueAtCalculation?: string
+  lastUpdated?: string
+  hasChanged: boolean
+}
+
+export interface RecalculateDataPointRequest {
+  calculatedBy: string
+  changeNote?: string
 }
 
 export interface Evidence {

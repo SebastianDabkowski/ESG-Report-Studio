@@ -226,4 +226,34 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    [HttpGet("{id}/lineage")]
+    public ActionResult<CalculationLineageResponse> GetCalculationLineage(string id)
+    {
+        var lineage = _store.GetCalculationLineage(id);
+        
+        if (lineage == null)
+        {
+            return NotFound(new { error = $"DataPoint with ID '{id}' not found or is not a calculated value." });
+        }
+
+        return Ok(lineage);
+    }
+
+    [HttpPost("{id}/recalculate")]
+    public ActionResult<DataPoint> RecalculateDataPoint(string id, [FromBody] RecalculateDataPointRequest request)
+    {
+        // Note: In a real implementation, the calculation logic would be executed here
+        // based on the formula and input values. For now, we just update the lineage metadata.
+        // The actual value should be passed in or calculated based on the formula.
+        
+        var (isValid, errorMessage, dataPoint) = _store.RecalculateDataPoint(id, request, null, null);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
 }
