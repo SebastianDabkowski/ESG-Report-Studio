@@ -7125,3 +7125,79 @@ public sealed class GenerationComparisonSummary
     /// </summary>
     public int TotalDataPoints2 { get; set; }
 }
+
+/// <summary>
+/// Represents a system role with permissions and metadata.
+/// Predefined roles cannot be deleted to ensure consistent access control.
+/// </summary>
+public sealed class SystemRole
+{
+    /// <summary>
+    /// Unique identifier for the role.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Role name (e.g., "Admin", "Management", "Compliance Officer").
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Brief description of the role's purpose and responsibilities.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of permission codes granted to this role.
+    /// </summary>
+    public List<string> Permissions { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates if this is a predefined role that cannot be deleted.
+    /// </summary>
+    public bool IsPredefined { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when role was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who created the role.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when role was last updated (null if never updated).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// User who last updated the role.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// Version number for audit trail (increments with each update).
+    /// </summary>
+    public int Version { get; set; } = 1;
+}
+
+/// <summary>
+/// Request to create a new custom role.
+/// </summary>
+public sealed class CreateRoleRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public List<string> Permissions { get; set; } = new();
+}
+
+/// <summary>
+/// Request to update an existing role's description.
+/// Permissions cannot be updated to maintain consistency.
+/// </summary>
+public sealed class UpdateRoleRequest
+{
+    public string Description { get; set; } = string.Empty;
+}

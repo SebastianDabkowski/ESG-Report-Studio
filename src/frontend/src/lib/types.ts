@@ -1674,3 +1674,26 @@ export interface GenerationComparison {
   summary: GenerationComparisonSummary
 }
 
+export interface SystemRole {
+  id: string
+  name: string
+  description: string
+  permissions: string[]
+  isPredefined: boolean
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+  version: number
+}
+
+export interface CreateRoleRequest {
+  name: string
+  description: string
+  permissions: string[]
+}
+
+export interface UpdateRoleRequest {
+  description: string
+}
+
