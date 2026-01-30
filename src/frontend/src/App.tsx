@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Building } from '@phosphor-icons/react'
 import Dashboard from '@/components/Dashboard'
 import ProgressDashboard from '@/components/ProgressDashboard'
+import CompletenessComparisonView from '@/components/CompletenessComparisonView'
 import ReportingContextSummary from '@/components/ReportingContextSummary'
 import OrganizationView from '@/components/OrganizationView'
 import OrganizationalStructureView from '@/components/OrganizationalStructureView'
@@ -68,6 +69,7 @@ function App() {
           <TabsList className="bg-muted">
             <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
             <TabsTrigger value="progress">Progress Trends</TabsTrigger>
+            <TabsTrigger value="comparison">Period Comparison</TabsTrigger>
             <TabsTrigger value="summary">Summary</TabsTrigger>
             <TabsTrigger value="organization">Organization</TabsTrigger>
             <TabsTrigger value="structure">Structure</TabsTrigger>
@@ -91,6 +93,10 @@ function App() {
 
           <TabsContent value="progress" className="space-y-6">
             <ProgressDashboard currentUser={currentUser} />
+          </TabsContent>
+
+          <TabsContent value="comparison" className="space-y-6">
+            <CompletenessComparisonView />
           </TabsContent>
 
           <TabsContent value="summary" className="space-y-6">
