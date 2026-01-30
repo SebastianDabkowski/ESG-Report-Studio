@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 
 namespace ARP.ESG_ReportStudio.API.Reporting;
@@ -33,6 +34,9 @@ public sealed class InMemoryReportStore
     private readonly List<DecisionVersion> _decisionVersions = new();
     private readonly List<ApprovalRequest> _approvalRequests = new();
     private readonly List<ApprovalRecord> _approvalRecords = new();
+    private readonly List<RetentionPolicy> _retentionPolicies = new();
+    private readonly List<LegalHold> _legalHolds = new();
+    private readonly List<DeletionReport> _deletionReports = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -78,6 +82,11 @@ public sealed class InMemoryReportStore
         "simplified-scope",
         "other"
     };
+    
+    // Retention policy priority weights (higher = more specific)
+    private const int TenantSpecificityPriority = 10;
+    private const int ReportTypeSpecificityPriority = 5;
+    private const int DataCategorySpecificityPriority = 3;
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -8692,6 +8701,442 @@ public sealed class InMemoryReportStore
                 WarningDetails = period.IntegrityWarningDetails
             };
         }
+    }
+    
+    #endregion
+    
+    #region Retention Policies and Data Cleanup
+    
+    /// <summary>
+    /// Creates a new retention policy.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, RetentionPolicy? Policy) CreateRetentionPolicy(CreateRetentionPolicyRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(request.CreatedBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+            
+            if (request.RetentionDays < 1)
+            {
+                return (false, "Retention days must be at least 1.", null);
+            }
+            
+            // Validate data category
+            var validCategories = new[] { "all", "audit-log", "evidence" };
+            if (!validCategories.Contains(request.DataCategory))
+            {
+                return (false, $"DataCategory must be one of: {string.Join(", ", validCategories)}", null);
+            }
+            
+            // Calculate priority based on specificity (more specific = higher priority)
+            int priority = 0;
+            if (request.TenantId != null) priority += TenantSpecificityPriority;
+            if (request.ReportType != null) priority += ReportTypeSpecificityPriority;
+            if (request.DataCategory != "all") priority += DataCategorySpecificityPriority;
+            
+            var policy = new RetentionPolicy
+            {
+                Id = Guid.NewGuid().ToString(),
+                TenantId = request.TenantId,
+                ReportType = request.ReportType,
+                DataCategory = request.DataCategory,
+                RetentionDays = request.RetentionDays,
+                IsActive = true,
+                Priority = priority,
+                AllowDeletion = request.AllowDeletion,
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                CreatedBy = request.CreatedBy,
+                UpdatedAt = DateTime.UtcNow.ToString("o")
+            };
+            
+            _retentionPolicies.Add(policy);
+            
+            // Audit log entry
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.CreatedBy,
+                UserName = _users.FirstOrDefault(u => u.Id == request.CreatedBy)?.Name ?? request.CreatedBy,
+                Action = "create-retention-policy",
+                EntityType = "RetentionPolicy",
+                EntityId = policy.Id,
+                Changes = new List<FieldChange>
+                {
+                    new() { Field = "TenantId", OldValue = "", NewValue = policy.TenantId ?? "null" },
+                    new() { Field = "ReportType", OldValue = "", NewValue = policy.ReportType ?? "null" },
+                    new() { Field = "DataCategory", OldValue = "", NewValue = policy.DataCategory },
+                    new() { Field = "RetentionDays", OldValue = "", NewValue = policy.RetentionDays.ToString() },
+                    new() { Field = "AllowDeletion", OldValue = "", NewValue = policy.AllowDeletion.ToString() }
+                }
+            });
+            
+            return (true, null, policy);
+        }
+    }
+    
+    /// <summary>
+    /// Gets all retention policies.
+    /// </summary>
+    public IReadOnlyList<RetentionPolicy> GetRetentionPolicies(string? tenantId = null, bool activeOnly = true)
+    {
+        lock (_lock)
+        {
+            var policies = _retentionPolicies.AsEnumerable();
+            
+            if (activeOnly)
+            {
+                policies = policies.Where(p => p.IsActive);
+            }
+            
+            if (tenantId != null)
+            {
+                policies = policies.Where(p => p.TenantId == null || p.TenantId == tenantId);
+            }
+            
+            return policies.OrderByDescending(p => p.Priority).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Gets the applicable retention policy for a specific context.
+    /// Returns the highest priority matching policy.
+    /// </summary>
+    public RetentionPolicy? GetApplicableRetentionPolicy(string dataCategory, string? tenantId = null, string? reportType = null)
+    {
+        lock (_lock)
+        {
+            var policies = _retentionPolicies
+                .Where(p => p.IsActive)
+                .Where(p => p.DataCategory == "all" || p.DataCategory == dataCategory)
+                .Where(p => p.TenantId == null || p.TenantId == tenantId)
+                .Where(p => p.ReportType == null || p.ReportType == reportType)
+                .OrderByDescending(p => p.Priority)
+                .ToList();
+            
+            return policies.FirstOrDefault();
+        }
+    }
+    
+    /// <summary>
+    /// Runs cleanup based on retention policies.
+    /// </summary>
+    public CleanupResult RunCleanup(RunCleanupRequest request)
+    {
+        lock (_lock)
+        {
+            var result = new CleanupResult
+            {
+                Success = true,
+                WasDryRun = request.DryRun,
+                ExecutedAt = DateTime.UtcNow.ToString("o")
+            };
+            
+            try
+            {
+                // Get applicable policies
+                var policies = GetRetentionPolicies(request.TenantId, activeOnly: true);
+                
+                if (!policies.Any())
+                {
+                    result.ErrorMessage = "No active retention policies found.";
+                    return result;
+                }
+                
+                // Process audit log cleanup
+                var auditPolicy = GetApplicableRetentionPolicy("audit-log", request.TenantId);
+                if (auditPolicy != null)
+                {
+                    var cutoffDate = DateTime.UtcNow.AddDays(-auditPolicy.RetentionDays);
+                    var eligibleEntries = _auditLog
+                        .Where(e => DateTime.TryParse(e.Timestamp, null, System.Globalization.DateTimeStyles.RoundtripKind, out var timestamp) && timestamp < cutoffDate)
+                        .ToList();
+                    
+                    result.RecordsIdentified += eligibleEntries.Count;
+                    
+                    if (!request.DryRun && auditPolicy.AllowDeletion && eligibleEntries.Any())
+                    {
+                        // Check for legal holds
+                        var hasLegalHold = _legalHolds.Any(h => 
+                            h.IsActive && 
+                            (h.TenantId == null || h.TenantId == request.TenantId));
+                        
+                        if (!hasLegalHold)
+                        {
+                            // Create deletion report
+                            var deletionReport = CreateDeletionReport(
+                                auditPolicy.Id,
+                                "audit-log",
+                                eligibleEntries.Count,
+                                eligibleEntries.Min(e => e.Timestamp),
+                                eligibleEntries.Max(e => e.Timestamp),
+                                request.TenantId,
+                                request.InitiatedBy
+                            );
+                            
+                            result.DeletionReportIds.Add(deletionReport.Id);
+                            
+                            // Perform deletion
+                            foreach (var entry in eligibleEntries)
+                            {
+                                _auditLog.Remove(entry);
+                                result.RecordsDeleted++;
+                            }
+                        }
+                        else
+                        {
+                            result.ErrorMessage = "Legal hold prevents deletion.";
+                        }
+                    }
+                }
+                
+                // Process evidence cleanup (similar pattern)
+                var evidencePolicy = GetApplicableRetentionPolicy("evidence", request.TenantId);
+                if (evidencePolicy != null && evidencePolicy.AllowDeletion)
+                {
+                    var cutoffDate = DateTime.UtcNow.AddDays(-evidencePolicy.RetentionDays);
+                    var eligibleEvidence = _evidence
+                        .Where(e => DateTime.TryParse(e.UploadedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out var uploadedAt) && uploadedAt < cutoffDate)
+                        .ToList();
+                    
+                    result.RecordsIdentified += eligibleEvidence.Count;
+                    
+                    if (!request.DryRun && eligibleEvidence.Any())
+                    {
+                        var hasLegalHold = _legalHolds.Any(h => 
+                            h.IsActive && 
+                            (h.TenantId == null || h.TenantId == request.TenantId));
+                        
+                        if (!hasLegalHold)
+                        {
+                            var deletionReport = CreateDeletionReport(
+                                evidencePolicy.Id,
+                                "evidence",
+                                eligibleEvidence.Count,
+                                eligibleEvidence.Min(e => e.UploadedAt),
+                                eligibleEvidence.Max(e => e.UploadedAt),
+                                request.TenantId,
+                                request.InitiatedBy
+                            );
+                            
+                            result.DeletionReportIds.Add(deletionReport.Id);
+                            
+                            foreach (var evidence in eligibleEvidence)
+                            {
+                                _evidence.Remove(evidence);
+                                result.RecordsDeleted++;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                result.Success = false;
+                result.ErrorMessage = ex.Message;
+            }
+            
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Creates a deletion report with cryptographic signature.
+    /// </summary>
+    private DeletionReport CreateDeletionReport(
+        string policyId,
+        string dataCategory,
+        int recordCount,
+        string dateRangeStart,
+        string dateRangeEnd,
+        string? tenantId,
+        string deletedBy)
+    {
+        var report = new DeletionReport
+        {
+            Id = Guid.NewGuid().ToString(),
+            DeletedAt = DateTime.UtcNow.ToString("o"),
+            DeletedBy = deletedBy,
+            PolicyId = policyId,
+            DataCategory = dataCategory,
+            RecordCount = recordCount,
+            DateRangeStart = dateRangeStart,
+            DateRangeEnd = dateRangeEnd,
+            TenantId = tenantId,
+            DeletionSummary = $"{recordCount} {dataCategory} records from {FormatTimestampForReport(dateRangeStart)} to {FormatTimestampForReport(dateRangeEnd)}"
+        };
+        
+        // Generate content hash
+        var contentForHash = $"{report.Id}|{report.DeletedAt}|{report.PolicyId}|{dataCategory}|{recordCount}|{dateRangeStart}|{dateRangeEnd}";
+        report.ContentHash = ComputeSha256Hash(contentForHash);
+        
+        // Generate signature (simplified - in production, use proper cryptographic signing)
+        // TODO: Replace with proper asymmetric cryptography (RSA/ECDSA) before production use
+        var signatureContent = $"{report.ContentHash}|{deletedBy}|{DateTime.UtcNow:o}";
+        report.Signature = ComputeSha256Hash(signatureContent);
+        
+        _deletionReports.Add(report);
+        
+        // Audit log entry for deletion report creation
+        _auditLog.Add(new AuditLogEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow.ToString("o"),
+            UserId = deletedBy,
+            UserName = _users.FirstOrDefault(u => u.Id == deletedBy)?.Name ?? deletedBy,
+            Action = "create-deletion-report",
+            EntityType = "DeletionReport",
+            EntityId = report.Id,
+            Changes = new List<FieldChange>
+            {
+                new() { Field = "DataCategory", OldValue = "", NewValue = dataCategory },
+                new() { Field = "RecordCount", OldValue = "", NewValue = recordCount.ToString() },
+                new() { Field = "ContentHash", OldValue = "", NewValue = report.ContentHash }
+            }
+        });
+        
+        return report;
+    }
+    
+    /// <summary>
+    /// Gets all deletion reports.
+    /// </summary>
+    public IReadOnlyList<DeletionReport> GetDeletionReports(string? tenantId = null)
+    {
+        lock (_lock)
+        {
+            var reports = _deletionReports.AsEnumerable();
+            
+            if (tenantId != null)
+            {
+                reports = reports.Where(r => r.TenantId == tenantId);
+            }
+            
+            return reports.OrderByDescending(r => r.DeletedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Updates a retention policy.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) UpdateRetentionPolicy(string policyId, int retentionDays, bool allowDeletion, string updatedBy)
+    {
+        lock (_lock)
+        {
+            var policy = _retentionPolicies.FirstOrDefault(p => p.Id == policyId);
+            if (policy == null)
+            {
+                return (false, "Retention policy not found.");
+            }
+            
+            var changes = new List<FieldChange>();
+            
+            if (policy.RetentionDays != retentionDays)
+            {
+                changes.Add(new FieldChange
+                {
+                    Field = "RetentionDays",
+                    OldValue = policy.RetentionDays.ToString(),
+                    NewValue = retentionDays.ToString()
+                });
+                policy.RetentionDays = retentionDays;
+            }
+            
+            if (policy.AllowDeletion != allowDeletion)
+            {
+                changes.Add(new FieldChange
+                {
+                    Field = "AllowDeletion",
+                    OldValue = policy.AllowDeletion.ToString(),
+                    NewValue = allowDeletion.ToString()
+                });
+                policy.AllowDeletion = allowDeletion;
+            }
+            
+            policy.UpdatedAt = DateTime.UtcNow.ToString("o");
+            
+            if (changes.Any())
+            {
+                _auditLog.Add(new AuditLogEntry
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    Timestamp = DateTime.UtcNow.ToString("o"),
+                    UserId = updatedBy,
+                    UserName = _users.FirstOrDefault(u => u.Id == updatedBy)?.Name ?? updatedBy,
+                    Action = "update-retention-policy",
+                    EntityType = "RetentionPolicy",
+                    EntityId = policyId,
+                    Changes = changes
+                });
+            }
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Deactivates a retention policy.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) DeactivateRetentionPolicy(string policyId, string deactivatedBy)
+    {
+        lock (_lock)
+        {
+            var policy = _retentionPolicies.FirstOrDefault(p => p.Id == policyId);
+            if (policy == null)
+            {
+                return (false, "Retention policy not found.");
+            }
+            
+            policy.IsActive = false;
+            policy.UpdatedAt = DateTime.UtcNow.ToString("o");
+            
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = deactivatedBy,
+                UserName = _users.FirstOrDefault(u => u.Id == deactivatedBy)?.Name ?? deactivatedBy,
+                Action = "deactivate-retention-policy",
+                EntityType = "RetentionPolicy",
+                EntityId = policyId,
+                Changes = new List<FieldChange>
+                {
+                    new() { Field = "IsActive", OldValue = "True", NewValue = "False" }
+                }
+            });
+            
+            return (true, null);
+        }
+    }
+    
+    #endregion
+    
+    #region Helper Methods
+    
+    /// <summary>
+    /// Computes SHA-256 hash of the given content.
+    /// </summary>
+    private static string ComputeSha256Hash(string content)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+    
+    /// <summary>
+    /// Formats ISO 8601 timestamp for deletion report summary.
+    /// </summary>
+    private static string FormatTimestampForReport(string isoTimestamp)
+    {
+        if (DateTime.TryParse(isoTimestamp, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return dt.ToString("yyyy-MM-dd");
+        }
+        return isoTimestamp; // Fallback to original if parsing fails
     }
     
     #endregion

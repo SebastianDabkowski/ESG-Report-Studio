@@ -3324,3 +3324,241 @@ public sealed class OverrideIntegrityWarningRequest
 {
     public string Justification { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Retention policy configuration for audit data.
+/// Supports both tenant-level and report-type-level retention periods.
+/// </summary>
+public sealed class RetentionPolicy
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional tenant ID for tenant-specific policies.
+    /// If null, applies as a default policy.
+    /// </summary>
+    public string? TenantId { get; set; }
+    
+    /// <summary>
+    /// Optional report type for report-type-specific policies.
+    /// Examples: "simplified", "extended", "csrd-aligned"
+    /// If null, applies to all report types.
+    /// </summary>
+    public string? ReportType { get; set; }
+    
+    /// <summary>
+    /// Data category this policy applies to.
+    /// Examples: "audit-log", "evidence", "all"
+    /// </summary>
+    public string DataCategory { get; set; } = "all";
+    
+    /// <summary>
+    /// Retention period in days.
+    /// Data older than this period becomes eligible for cleanup.
+    /// </summary>
+    public int RetentionDays { get; set; }
+    
+    /// <summary>
+    /// Whether this policy is currently active.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Priority level for policy resolution (higher = more specific).
+    /// Used when multiple policies could apply.
+    /// </summary>
+    public int Priority { get; set; }
+    
+    /// <summary>
+    /// Whether deletion is actually performed or just logged.
+    /// For regulated customers, may be set to false.
+    /// </summary>
+    public bool AllowDeletion { get; set; } = true;
+    
+    /// <summary>
+    /// Timestamp when this policy was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who created this policy.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this policy was last updated.
+    /// </summary>
+    public string UpdatedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Legal hold status for preserving data beyond retention periods.
+/// Future feature - placeholder for now.
+/// </summary>
+public sealed class LegalHold
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional tenant ID if hold is tenant-specific.
+    /// </summary>
+    public string? TenantId { get; set; }
+    
+    /// <summary>
+    /// Optional period ID if hold is period-specific.
+    /// </summary>
+    public string? PeriodId { get; set; }
+    
+    /// <summary>
+    /// Reason for the legal hold.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reference number (e.g., case number, matter ID).
+    /// </summary>
+    public string ReferenceNumber { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether this hold is currently active.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Timestamp when hold was placed.
+    /// </summary>
+    public string PlacedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who placed the hold.
+    /// </summary>
+    public string PlacedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional timestamp when hold will be automatically released.
+    /// </summary>
+    public string? ExpiresAt { get; set; }
+}
+
+/// <summary>
+/// Metadata-only record of data deletion for audit compliance.
+/// Does not contain the deleted data itself, only information about what was deleted.
+/// </summary>
+public sealed class DeletionReport
+{
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when deletion occurred.
+    /// </summary>
+    public string DeletedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who initiated the deletion.
+    /// </summary>
+    public string DeletedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Retention policy that triggered this deletion.
+    /// </summary>
+    public string PolicyId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Data category that was deleted.
+    /// </summary>
+    public string DataCategory { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Number of records deleted.
+    /// </summary>
+    public int RecordCount { get; set; }
+    
+    /// <summary>
+    /// Date range of deleted records (start).
+    /// </summary>
+    public string DateRangeStart { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Date range of deleted records (end).
+    /// </summary>
+    public string DateRangeEnd { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional tenant ID for tenant-specific deletions.
+    /// </summary>
+    public string? TenantId { get; set; }
+    
+    /// <summary>
+    /// Summary of what was deleted (metadata only, no actual data).
+    /// Example: "127 audit log entries from 2023-01-01 to 2023-03-31"
+    /// </summary>
+    public string DeletionSummary { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Cryptographic signature of the report for tamper detection.
+    /// Future: Should be signed with a private key for non-repudiation.
+    /// </summary>
+    public string? Signature { get; set; }
+    
+    /// <summary>
+    /// Hash of report content for integrity verification.
+    /// </summary>
+    public string ContentHash { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a retention policy.
+/// </summary>
+/// <summary>
+/// Request to create a retention policy.
+/// </summary>
+public sealed class CreateRetentionPolicyRequest
+{
+    public string? TenantId { get; set; }
+    public string? ReportType { get; set; }
+    public string DataCategory { get; set; } = "all";
+    public int RetentionDays { get; set; }
+    public bool AllowDeletion { get; set; } = true;
+    
+    /// <summary>
+    /// User creating the policy. Set automatically by controller from authenticated user.
+    /// API consumers should not set this field; it will be overwritten.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to run cleanup based on retention policies.
+/// </summary>
+public sealed class RunCleanupRequest
+{
+    /// <summary>
+    /// If true, performs a dry run without actually deleting data.
+    /// </summary>
+    public bool DryRun { get; set; } = true;
+    
+    /// <summary>
+    /// Optional tenant ID to limit cleanup to specific tenant.
+    /// </summary>
+    public string? TenantId { get; set; }
+    
+    /// <summary>
+    /// User initiating the cleanup. Set automatically by controller from authenticated user.
+    /// API consumers should not set this field; it will be overwritten.
+    /// </summary>
+    public string InitiatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of a cleanup operation.
+/// </summary>
+public sealed class CleanupResult
+{
+    public bool Success { get; set; }
+    public bool WasDryRun { get; set; }
+    public int RecordsIdentified { get; set; }
+    public int RecordsDeleted { get; set; }
+    public List<string> DeletionReportIds { get; set; } = new();
+    public string? ErrorMessage { get; set; }
+    public string ExecutedAt { get; set; } = string.Empty;
+}

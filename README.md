@@ -32,6 +32,20 @@ The system covers Environmental, Social, and Governance areas and can be mapped 
 
 For each part of the report, the system records data sources, assumptions, missing data, responsible persons, and change history, enabling defensible and auditable reporting.
 
+### Audit Data Retention and Access Control
+
+The platform includes comprehensive audit data retention policies and role-based access controls:
+
+- **Retention Policies**: Configure data retention periods per tenant or report type to meet compliance requirements
+- **Access Controls**: Role-based permissions (admin, auditor, report-owner, contributor) for audit log access
+- **Cleanup Service**: Automated or manual cleanup with dry-run support and signed deletion reports
+- **Deletion Reports**: Metadata-only reports with cryptographic signatures for audit trail preservation
+- **Legal Holds**: Future support for preserving data beyond normal retention periods
+
+For detailed information, see:
+- [Retention API Documentation](RETENTION_API_DOCUMENTATION.md)
+- [Retention Configuration Guide](RETENTION_CONFIGURATION_GUIDE.md)
+
 ## Target Users
 
 The platform is designed for management boards, ESG advisors, compliance teams, finance and HR departments, and external consultants.
