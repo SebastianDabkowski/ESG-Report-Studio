@@ -945,7 +945,6 @@ export interface DiffSummaryDto {
   totalSegments: number
   addedSegments: number
   removedSegments: number
-  modifiedSegments: number
   unchangedSegments: number
   oldTextLength: number
   newTextLength: number

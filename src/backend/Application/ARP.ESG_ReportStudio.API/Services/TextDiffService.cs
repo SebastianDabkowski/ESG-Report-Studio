@@ -55,7 +55,6 @@ public sealed class TextDiffService
             TotalSegments = segments.Count,
             AddedSegments = segments.Count(s => s.ChangeType == "added"),
             RemovedSegments = segments.Count(s => s.ChangeType == "removed"),
-            ModifiedSegments = segments.Count(s => s.ChangeType == "modified"),
             UnchangedSegments = segments.Count(s => s.ChangeType == "unchanged"),
             OldTextLength = oldText.Length,
             NewTextLength = newText.Length,
@@ -271,7 +270,6 @@ public sealed class DiffSummary
     public int TotalSegments { get; set; }
     public int AddedSegments { get; set; }
     public int RemovedSegments { get; set; }
-    public int ModifiedSegments { get; set; }
     public int UnchangedSegments { get; set; }
     public int OldTextLength { get; set; }
     public int NewTextLength { get; set; }

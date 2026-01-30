@@ -10819,17 +10819,19 @@ public sealed class InMemoryReportStore
             }
             
             // Check if this is a draft copy (rolled over but not yet edited)
+            // A true draft copy must have rollover lineage AND draft status
             bool isDraftCopy = !string.IsNullOrEmpty(currentDataPoint.SourceDataPointId) && 
-                              currentDataPoint.ReviewStatus == "draft";
+                              currentDataPoint.ReviewStatus == "draft" &&
+                              !string.IsNullOrEmpty(currentDataPoint.RolloverTimestamp);
                               
             bool hasBeenEdited = false;
             
             if (isDraftCopy && previousDataPoint != null)
             {
                 // Check if content has been edited since rollover
-                // Compare content and key fields to determine if editing occurred
+                // For narrative disclosures, compare the Content field (primary narrative text)
+                // and Title to determine if editing occurred
                 hasBeenEdited = currentDataPoint.Content != previousDataPoint.Content ||
-                               currentDataPoint.Value != previousDataPoint.Value ||
                                currentDataPoint.Title != previousDataPoint.Title;
             }
             
@@ -10904,7 +10906,6 @@ public sealed class InMemoryReportStore
                     TotalSegments = summary.TotalSegments,
                     AddedSegments = summary.AddedSegments,
                     RemovedSegments = summary.RemovedSegments,
-                    ModifiedSegments = summary.ModifiedSegments,
                     UnchangedSegments = summary.UnchangedSegments,
                     OldTextLength = summary.OldTextLength,
                     NewTextLength = summary.NewTextLength,
@@ -10928,7 +10929,6 @@ public sealed class InMemoryReportStore
                     TotalSegments = 1,
                     AddedSegments = 1,
                     RemovedSegments = 0,
-                    ModifiedSegments = 0,
                     UnchangedSegments = 0,
                     OldTextLength = 0,
                     NewTextLength = currentDataPoint.Content.Length,

@@ -4641,7 +4641,6 @@ public sealed class DiffSummaryDto
     public int TotalSegments { get; set; }
     public int AddedSegments { get; set; }
     public int RemovedSegments { get; set; }
-    public int ModifiedSegments { get; set; }
     public int UnchangedSegments { get; set; }
     public int OldTextLength { get; set; }
     public int NewTextLength { get; set; }
