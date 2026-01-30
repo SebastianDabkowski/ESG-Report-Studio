@@ -6,45 +6,12 @@ namespace SD.ProjectName.Tests.Products;
 
 public sealed class PdfExportTests
 {
-    private static void CreateTestOrganization(InMemoryReportStore store)
-    {
-        var request = new CreateOrganizationRequest
-        {
-            Name = "Test Corporation",
-            LegalForm = "corporation",
-            Country = "US",
-            Identifier = "TEST123",
-            CreatedBy = "test-user"
-        };
-        
-        store.CreateOrganization(request);
-    }
-    
-    private static void CreateTestOrganizationalUnit(InMemoryReportStore store)
-    {
-        var request = new CreateOrganizationalUnitRequest
-        {
-            Name = "Headquarters",
-            ParentId = null,
-            Description = "Main office",
-            CreatedBy = "test-user"
-        };
-        
-        store.CreateOrganizationalUnit(request);
-    }
-
-    private static void CreateTestConfiguration(InMemoryReportStore store)
-    {
-        CreateTestOrganization(store);
-        CreateTestOrganizationalUnit(store);
-    }
-
     [Fact]
     public void GeneratePdf_WithValidReport_ReturnsPdfBytes()
     {
         // Arrange
         var store = new InMemoryReportStore();
-        CreateTestConfiguration(store);
+        ExportTestHelpers.CreateTestConfiguration(store);
         
         var createPeriodRequest = new CreateReportingPeriodRequest
         {
@@ -94,7 +61,7 @@ public sealed class PdfExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        CreateTestConfiguration(store);
+        ExportTestHelpers.CreateTestConfiguration(store);
         
         var createPeriodRequest = new CreateReportingPeriodRequest
         {
@@ -144,7 +111,7 @@ public sealed class PdfExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        CreateTestConfiguration(store);
+        ExportTestHelpers.CreateTestConfiguration(store);
         
         var createPeriodRequest = new CreateReportingPeriodRequest
         {
@@ -188,7 +155,7 @@ public sealed class PdfExportTests
     {
         // Arrange
         var store = new InMemoryReportStore();
-        CreateTestConfiguration(store);
+        ExportTestHelpers.CreateTestConfiguration(store);
         
         var createPeriodRequest = new CreateReportingPeriodRequest
         {
