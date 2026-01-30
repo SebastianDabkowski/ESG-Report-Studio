@@ -26,7 +26,8 @@ import type {
   ProgressTrendsResponse,
   OutstandingActionsResponse,
   ExportYoYAnnexRequest,
-  YoYAnnexExportRecord
+  YoYAnnexExportRecord,
+  GeneratedReport
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1383,5 +1384,23 @@ export async function getYoYAnnexExports(
   currentPeriodId: string
 ): Promise<YoYAnnexExportRecord[]> {
   return requestJson<YoYAnnexExportRecord[]>(`yoy-annex/exports/${currentPeriodId}`)
+}
+
+// ==================== Report Generation ====================
+
+export interface GenerateReportPayload {
+  generatedBy: string
+  sectionIds?: string[]
+  generationNote?: string
+}
+
+export async function generateReport(
+  periodId: string,
+  payload: GenerateReportPayload
+): Promise<GeneratedReport> {
+  return requestJson<GeneratedReport>(`periods/${periodId}/generate-report`, {
+    method: 'POST',
+    body: JSON.stringify({ ...payload, periodId })
+  })
 }
 

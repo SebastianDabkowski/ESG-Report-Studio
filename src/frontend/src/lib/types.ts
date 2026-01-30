@@ -1410,3 +1410,78 @@ export interface YoYAnnexExportRecord {
   varianceExplanationCount: number
   evidenceReferenceCount: number
 }
+
+// ==================== Report Generation ====================
+
+export interface GenerateReportRequest {
+  periodId: string
+  generatedBy: string
+  sectionIds?: string[]
+  generationNote?: string
+}
+
+export interface GeneratedReport {
+  id: string
+  period: ReportingPeriod
+  organization: Organization | null
+  sections: GeneratedReportSection[]
+  generatedAt: string
+  generatedBy: string
+  generatedByName: string
+  generationNote?: string
+  checksum: string
+}
+
+export interface GeneratedReportSection {
+  section: ReportSection
+  owner?: User
+  dataPoints: DataPointSnapshot[]
+  evidence: EvidenceMetadata[]
+  assumptions: AssumptionRecord[]
+  gaps: GapRecord[]
+}
+
+export interface DataPointSnapshot {
+  id: string
+  title: string
+  value: string
+  unit?: string
+  informationType: string
+  status: string
+  ownerId: string
+  ownerName: string
+  lastUpdatedAt?: string
+  evidenceCount: number
+  hasAssumptions: boolean
+}
+
+export interface EvidenceMetadata {
+  id: string
+  dataPointId: string
+  title: string
+  fileName: string
+  fileType: string
+  fileSize: number
+  uploadedAt: string
+  uploadedBy: string
+}
+
+export interface AssumptionRecord {
+  id: string
+  dataPointId: string
+  description: string
+  justification: string
+  confidenceLevel: string
+  status: string
+  createdAt: string
+  createdBy: string
+}
+
+export interface GapRecord {
+  id: string
+  dataPointId: string
+  description: string
+  missingReason: string
+  status: string
+  createdAt: string
+}
