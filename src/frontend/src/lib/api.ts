@@ -27,7 +27,9 @@ import type {
   OutstandingActionsResponse,
   ExportYoYAnnexRequest,
   YoYAnnexExportRecord,
-  GeneratedReport
+  GeneratedReport,
+  BrandingProfile,
+  DocumentTemplate
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1517,5 +1519,94 @@ export async function exportReportDocx(
   a.click()
   document.body.removeChild(a)
   window.URL.revokeObjectURL(blobUrl)
+}
+
+// ==================== Branding Profiles ====================
+
+export async function getBrandingProfiles(): Promise<import('@/lib/types').BrandingProfile[]> {
+  return requestJson<import('@/lib/types').BrandingProfile[]>('/branding-profiles')
+}
+
+export async function getBrandingProfile(id: string): Promise<import('@/lib/types').BrandingProfile> {
+  return requestJson<import('@/lib/types').BrandingProfile>(`/branding-profiles/${id}`)
+}
+
+export async function getDefaultBrandingProfile(): Promise<import('@/lib/types').BrandingProfile> {
+  return requestJson<import('@/lib/types').BrandingProfile>('/branding-profiles/default')
+}
+
+export async function createBrandingProfile(
+  payload: import('@/lib/types').CreateBrandingProfileRequest
+): Promise<import('@/lib/types').BrandingProfile> {
+  return requestJson<import('@/lib/types').BrandingProfile>('/branding-profiles', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateBrandingProfile(
+  id: string,
+  payload: import('@/lib/types').UpdateBrandingProfileRequest
+): Promise<import('@/lib/types').BrandingProfile> {
+  return requestJson<import('@/lib/types').BrandingProfile>(`/branding-profiles/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteBrandingProfile(id: string, deletedBy: string): Promise<void> {
+  return requestJson<void>(`/branding-profiles/${id}?deletedBy=${encodeURIComponent(deletedBy)}`, {
+    method: 'DELETE'
+  })
+}
+
+// ==================== Document Templates ====================
+
+export async function getDocumentTemplates(templateType?: string): Promise<import('@/lib/types').DocumentTemplate[]> {
+  const url = templateType 
+    ? `/document-templates?templateType=${encodeURIComponent(templateType)}`
+    : '/document-templates'
+  return requestJson<import('@/lib/types').DocumentTemplate[]>(url)
+}
+
+export async function getDocumentTemplate(id: string): Promise<import('@/lib/types').DocumentTemplate> {
+  return requestJson<import('@/lib/types').DocumentTemplate>(`/document-templates/${id}`)
+}
+
+export async function getDefaultDocumentTemplate(templateType: string): Promise<import('@/lib/types').DocumentTemplate> {
+  return requestJson<import('@/lib/types').DocumentTemplate>(`/document-templates/default/${templateType}`)
+}
+
+export async function createDocumentTemplate(
+  payload: import('@/lib/types').CreateDocumentTemplateRequest
+): Promise<import('@/lib/types').DocumentTemplate> {
+  return requestJson<import('@/lib/types').DocumentTemplate>('/document-templates', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateDocumentTemplate(
+  id: string,
+  payload: import('@/lib/types').UpdateDocumentTemplateRequest
+): Promise<import('@/lib/types').DocumentTemplate> {
+  return requestJson<import('@/lib/types').DocumentTemplate>(`/document-templates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteDocumentTemplate(id: string, deletedBy: string): Promise<void> {
+  return requestJson<void>(`/document-templates/${id}?deletedBy=${encodeURIComponent(deletedBy)}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getTemplateUsageHistory(templateId: string): Promise<import('@/lib/types').TemplateUsageRecord[]> {
+  return requestJson<import('@/lib/types').TemplateUsageRecord[]>(`/document-templates/${templateId}/usage-history`)
+}
+
+export async function getPeriodTemplateUsage(periodId: string): Promise<import('@/lib/types').TemplateUsageRecord[]> {
+  return requestJson<import('@/lib/types').TemplateUsageRecord[]>(`/document-templates/usage/period/${periodId}`)
 }
 
