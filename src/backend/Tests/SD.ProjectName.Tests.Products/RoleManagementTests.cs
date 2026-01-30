@@ -6,6 +6,7 @@ namespace SD.ProjectName.Tests.Products;
 /// <summary>
 /// Unit tests for role management functionality.
 /// Tests role catalog operations including predefined role protection.
+/// Tests user role assignment and effective permissions calculation.
 /// </summary>
 public sealed class RoleManagementTests
 {
@@ -425,4 +426,342 @@ public sealed class RoleManagementTests
         Assert.Contains(createEntry.Changes, c => c.Field == "Description");
         Assert.Contains(createEntry.Changes, c => c.Field == "Permissions");
     }
+    
+    #region User Role Assignment Tests
+    
+    [Fact]
+    public void AssignUserRoles_WithValidRoles_ShouldSucceed()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        var contributorRole = roles.First(r => r.Name == "Contributor");
+        
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { adminRole.Id, contributorRole.Id }
+        };
+        
+        // Act
+        var (success, errorMessage) = store.AssignUserRoles(user.Id, request, "test-user", "Test User");
+        
+        // Assert
+        Assert.True(success);
+        Assert.Null(errorMessage);
+        
+        var updatedUser = store.GetUser(user.Id);
+        Assert.NotNull(updatedUser);
+        Assert.Equal(2, updatedUser.RoleIds.Count);
+        Assert.Contains(adminRole.Id, updatedUser.RoleIds);
+        Assert.Contains(contributorRole.Id, updatedUser.RoleIds);
+    }
+    
+    [Fact]
+    public void AssignUserRoles_WithInvalidUserId_ShouldFail()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { "role-admin" }
+        };
+        
+        // Act
+        var (success, errorMessage) = store.AssignUserRoles("non-existent-user", request, "test-user", "Test User");
+        
+        // Assert
+        Assert.False(success);
+        Assert.Contains("not found", errorMessage);
+    }
+    
+    [Fact]
+    public void AssignUserRoles_WithInvalidRoleId_ShouldFail()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { "non-existent-role" }
+        };
+        
+        // Act
+        var (success, errorMessage) = store.AssignUserRoles(user.Id, request, "test-user", "Test User");
+        
+        // Assert
+        Assert.False(success);
+        Assert.Contains("not found", errorMessage);
+    }
+    
+    [Fact]
+    public void AssignUserRoles_ShouldCreateAuditLogEntry()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { adminRole.Id }
+        };
+        
+        // Act
+        store.AssignUserRoles(user.Id, request, "test-user", "Test User");
+        
+        // Assert
+        var auditEntries = store.GetAuditLog(entityType: "User", entityId: user.Id);
+        
+        Assert.NotEmpty(auditEntries);
+        var assignEntry = auditEntries.Where(e => e.Action == "assign-user-roles")
+            .OrderByDescending(e => e.Timestamp).First();
+        Assert.Equal("test-user", assignEntry.UserId);
+        Assert.Contains(assignEntry.Changes, c => c.Field == "RoleIds");
+    }
+    
+    [Fact]
+    public void RemoveUserRole_WithValidRole_ShouldSucceed()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        var contributorRole = roles.First(r => r.Name == "Contributor");
+        
+        // Assign multiple roles first
+        var assignRequest = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { adminRole.Id, contributorRole.Id }
+        };
+        store.AssignUserRoles(user.Id, assignRequest, "test-user", "Test User");
+        
+        // Act
+        var (success, errorMessage) = store.RemoveUserRole(user.Id, adminRole.Id, "test-user", "Test User");
+        
+        // Assert
+        Assert.True(success);
+        Assert.Null(errorMessage);
+        
+        var updatedUser = store.GetUser(user.Id);
+        Assert.NotNull(updatedUser);
+        Assert.Single(updatedUser.RoleIds);
+        Assert.DoesNotContain(adminRole.Id, updatedUser.RoleIds);
+        Assert.Contains(contributorRole.Id, updatedUser.RoleIds);
+    }
+    
+    [Fact]
+    public void RemoveUserRole_WithRoleNotAssigned_ShouldFail()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        
+        // Act
+        var (success, errorMessage) = store.RemoveUserRole(user.Id, adminRole.Id, "test-user", "Test User");
+        
+        // Assert
+        Assert.False(success);
+        Assert.Contains("does not have role", errorMessage);
+    }
+    
+    [Fact]
+    public void RemoveUserRole_ShouldCreateAuditLogEntry()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        
+        // Assign role first
+        var assignRequest = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { adminRole.Id }
+        };
+        store.AssignUserRoles(user.Id, assignRequest, "test-user", "Test User");
+        
+        // Act
+        store.RemoveUserRole(user.Id, adminRole.Id, "test-user", "Test User");
+        
+        // Assert
+        var auditEntries = store.GetAuditLog(entityType: "User", entityId: user.Id);
+        
+        Assert.NotEmpty(auditEntries);
+        var removeEntry = auditEntries.Where(e => e.Action == "remove-user-role")
+            .OrderByDescending(e => e.Timestamp).FirstOrDefault();
+        Assert.NotNull(removeEntry);
+        Assert.Equal("test-user", removeEntry.UserId);
+        Assert.Contains(removeEntry.Changes, c => c.Field == "RoleIds");
+    }
+    
+    [Fact]
+    public void GetEffectivePermissions_WithMultipleRoles_ShouldReturnUnion()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var contributorRole = roles.First(r => r.Name == "Contributor");
+        var reviewerRole = roles.First(r => r.Name == "Reviewer");
+        
+        // Assign multiple roles
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { contributorRole.Id, reviewerRole.Id }
+        };
+        store.AssignUserRoles(user.Id, request, "test-user", "Test User");
+        
+        // Act
+        var permissions = store.GetEffectivePermissions(user.Id);
+        
+        // Assert
+        Assert.NotNull(permissions);
+        Assert.Equal(user.Id, permissions.UserId);
+        Assert.Equal(2, permissions.RoleIds.Count);
+        
+        // Should have union of permissions from both roles
+        var contributorPermissions = contributorRole.Permissions;
+        var reviewerPermissions = reviewerRole.Permissions;
+        var expectedPermissions = contributorPermissions.Union(reviewerPermissions).ToList();
+        
+        Assert.Equal(expectedPermissions.Count, permissions.EffectivePermissions.Count);
+        foreach (var permission in expectedPermissions)
+        {
+            Assert.Contains(permission, permissions.EffectivePermissions);
+        }
+    }
+    
+    [Fact]
+    public void GetEffectivePermissions_WithNoRoles_ShouldReturnEmpty()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        // Act
+        var permissions = store.GetEffectivePermissions(user.Id);
+        
+        // Assert
+        Assert.NotNull(permissions);
+        Assert.Equal(user.Id, permissions.UserId);
+        Assert.Empty(permissions.RoleIds);
+        Assert.Empty(permissions.EffectivePermissions);
+    }
+    
+    [Fact]
+    public void GetEffectivePermissions_WithNonExistentUser_ShouldReturnEmpty()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Act
+        var permissions = store.GetEffectivePermissions("non-existent-user");
+        
+        // Assert
+        Assert.NotNull(permissions);
+        Assert.Equal("non-existent-user", permissions.UserId);
+        Assert.Empty(permissions.RoleIds);
+        Assert.Empty(permissions.EffectivePermissions);
+    }
+    
+    [Fact]
+    public void GetEffectivePermissions_ShouldIncludeRoleDetails()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        var roles = store.GetRoles();
+        var adminRole = roles.First(r => r.Name == "Admin");
+        
+        // Assign role
+        var request = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { adminRole.Id }
+        };
+        store.AssignUserRoles(user.Id, request, "test-user", "Test User");
+        
+        // Act
+        var permissions = store.GetEffectivePermissions(user.Id);
+        
+        // Assert
+        Assert.NotNull(permissions);
+        Assert.Single(permissions.RoleDetails);
+        
+        var detail = permissions.RoleDetails.First();
+        Assert.Equal(adminRole.Id, detail.RoleId);
+        Assert.Equal(adminRole.Name, detail.RoleName);
+        Assert.Equal(adminRole.Permissions.Count, detail.Permissions.Count);
+    }
+    
+    [Fact]
+    public void GetEffectivePermissions_WithDuplicatePermissions_ShouldDeduplicateInUnion()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        
+        // Create two roles with overlapping permissions
+        var role1Request = new CreateRoleRequest
+        {
+            Name = "Role1",
+            Description = "First role",
+            Permissions = new List<string> { "permission-a", "permission-b", "permission-c" }
+        };
+        var (_, _, role1) = store.CreateRole(role1Request, "test-user", "Test User");
+        
+        var role2Request = new CreateRoleRequest
+        {
+            Name = "Role2",
+            Description = "Second role",
+            Permissions = new List<string> { "permission-b", "permission-c", "permission-d" }
+        };
+        var (_, _, role2) = store.CreateRole(role2Request, "test-user", "Test User");
+        
+        var users = store.GetUsers();
+        var user = users.First();
+        
+        // Assign both roles
+        var assignRequest = new AssignUserRolesRequest
+        {
+            RoleIds = new List<string> { role1!.Id, role2!.Id }
+        };
+        store.AssignUserRoles(user.Id, assignRequest, "test-user", "Test User");
+        
+        // Act
+        var permissions = store.GetEffectivePermissions(user.Id);
+        
+        // Assert
+        Assert.NotNull(permissions);
+        
+        // Should have 4 unique permissions (union, not concatenation)
+        Assert.Equal(4, permissions.EffectivePermissions.Count);
+        Assert.Contains("permission-a", permissions.EffectivePermissions);
+        Assert.Contains("permission-b", permissions.EffectivePermissions);
+        Assert.Contains("permission-c", permissions.EffectivePermissions);
+        Assert.Contains("permission-d", permissions.EffectivePermissions);
+    }
+    
+    #endregion
 }
