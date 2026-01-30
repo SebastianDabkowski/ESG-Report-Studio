@@ -6318,3 +6318,367 @@ public sealed class GapRecord
     public string Status { get; set; } = string.Empty;
     public string CreatedAt { get; set; } = string.Empty;
 }
+
+// ============================================================================
+// Report Variants - Audience-specific report generation
+// ============================================================================
+
+/// <summary>
+/// Defines the type of audience for a report variant.
+/// </summary>
+public enum AudienceType
+{
+    Management,
+    Bank,
+    Client,
+    Auditor,
+    Regulator,
+    InternalTeam,
+    Custom
+}
+
+/// <summary>
+/// Report variant configuration for generating audience-specific reports.
+/// </summary>
+public sealed class ReportVariant
+{
+    /// <summary>
+    /// Unique identifier for this variant.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the variant (e.g., "Management Summary", "Bank Disclosure").
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of this variant and its purpose.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target audience for this variant.
+    /// </summary>
+    public string AudienceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Rules for filtering sections and data points.
+    /// </summary>
+    public List<VariantRule> Rules { get; set; } = new();
+    
+    /// <summary>
+    /// Redaction rules for masking sensitive information.
+    /// </summary>
+    public List<RedactionRule> RedactionRules { get; set; } = new();
+    
+    /// <summary>
+    /// Whether this variant is active and available for use.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// User ID who created this variant.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who created this variant.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this variant was created (ISO 8601 format).
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who last modified this variant.
+    /// </summary>
+    public string? LastModifiedBy { get; set; }
+    
+    /// <summary>
+    /// User name who last modified this variant.
+    /// </summary>
+    public string? LastModifiedByName { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this variant was last modified (ISO 8601 format).
+    /// </summary>
+    public string? LastModifiedAt { get; set; }
+}
+
+/// <summary>
+/// Rule for including or excluding content in a report variant.
+/// </summary>
+public sealed class VariantRule
+{
+    /// <summary>
+    /// Unique identifier for this rule.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of rule: "include-section", "exclude-section", "include-field-group", "exclude-field-group", "exclude-attachments".
+    /// </summary>
+    public string RuleType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target of the rule (section ID, field group name, etc.).
+    /// </summary>
+    public string Target { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional condition for when this rule applies.
+    /// </summary>
+    public string? Condition { get; set; }
+    
+    /// <summary>
+    /// Order in which rules are applied (lower values first).
+    /// </summary>
+    public int Order { get; set; }
+}
+
+/// <summary>
+/// Rule for redacting sensitive information in a report variant.
+/// </summary>
+public sealed class RedactionRule
+{
+    /// <summary>
+    /// Unique identifier for this redaction rule.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Field or data point identifier to redact.
+    /// </summary>
+    public string FieldIdentifier { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of redaction: "mask", "remove", "replace".
+    /// </summary>
+    public string RedactionType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Replacement value (for "replace" type).
+    /// </summary>
+    public string? ReplacementValue { get; set; }
+    
+    /// <summary>
+    /// Reason for redaction (for audit trail).
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new report variant.
+/// </summary>
+public sealed class CreateVariantRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string AudienceType { get; set; } = string.Empty;
+    public List<VariantRule> Rules { get; set; } = new();
+    public List<RedactionRule> RedactionRules { get; set; } = new();
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing report variant.
+/// </summary>
+public sealed class UpdateVariantRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string AudienceType { get; set; } = string.Empty;
+    public List<VariantRule> Rules { get; set; } = new();
+    public List<RedactionRule> RedactionRules { get; set; } = new();
+    public bool IsActive { get; set; } = true;
+    public string UpdatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to generate a report using a specific variant.
+/// </summary>
+public sealed class GenerateVariantRequest
+{
+    /// <summary>
+    /// The reporting period ID for which to generate the variant report.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The variant ID to use for generation.
+    /// </summary>
+    public string VariantId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person generating the variant report.
+    /// </summary>
+    public string GeneratedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about this generation.
+    /// </summary>
+    public string? GenerationNote { get; set; }
+}
+
+/// <summary>
+/// Result of variant report generation.
+/// </summary>
+public sealed class GeneratedReportVariant
+{
+    /// <summary>
+    /// The base generated report.
+    /// </summary>
+    public GeneratedReport Report { get; set; } = new();
+    
+    /// <summary>
+    /// The variant configuration used for generation.
+    /// </summary>
+    public ReportVariant Variant { get; set; } = new();
+    
+    /// <summary>
+    /// List of section IDs that were excluded by variant rules.
+    /// </summary>
+    public List<string> ExcludedSections { get; set; } = new();
+    
+    /// <summary>
+    /// List of field identifiers that were redacted.
+    /// </summary>
+    public List<string> RedactedFields { get; set; } = new();
+    
+    /// <summary>
+    /// Count of attachments excluded by variant rules.
+    /// </summary>
+    public int ExcludedAttachmentCount { get; set; }
+}
+
+/// <summary>
+/// Request to compare multiple report variants.
+/// </summary>
+public sealed class CompareVariantsRequest
+{
+    /// <summary>
+    /// The reporting period ID for comparison.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of variant IDs to compare (2 or more).
+    /// </summary>
+    public List<string> VariantIds { get; set; } = new();
+    
+    /// <summary>
+    /// User ID requesting the comparison.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of comparing multiple report variants.
+/// </summary>
+public sealed class VariantComparison
+{
+    /// <summary>
+    /// The reporting period being compared.
+    /// </summary>
+    public ReportingPeriod Period { get; set; } = new();
+    
+    /// <summary>
+    /// List of variants being compared.
+    /// </summary>
+    public List<ReportVariant> Variants { get; set; } = new();
+    
+    /// <summary>
+    /// Section-level differences between variants.
+    /// </summary>
+    public List<SectionDifference> SectionDifferences { get; set; } = new();
+    
+    /// <summary>
+    /// Field-level differences between variants.
+    /// </summary>
+    public List<FieldDifference> FieldDifferences { get; set; } = new();
+    
+    /// <summary>
+    /// Timestamp when comparison was performed.
+    /// </summary>
+    public string ComparedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who requested the comparison.
+    /// </summary>
+    public string ComparedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Difference in section inclusion between variants.
+/// </summary>
+public sealed class SectionDifference
+{
+    /// <summary>
+    /// Section ID.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section name.
+    /// </summary>
+    public string SectionName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Variant IDs that include this section.
+    /// </summary>
+    public List<string> IncludedInVariants { get; set; } = new();
+    
+    /// <summary>
+    /// Variant IDs that exclude this section.
+    /// </summary>
+    public List<string> ExcludedFromVariants { get; set; } = new();
+    
+    /// <summary>
+    /// Reason for exclusion (from variant rules).
+    /// </summary>
+    public string? ExclusionReason { get; set; }
+}
+
+/// <summary>
+/// Difference in field/data point visibility between variants.
+/// </summary>
+public sealed class FieldDifference
+{
+    /// <summary>
+    /// Field/data point identifier.
+    /// </summary>
+    public string FieldId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Field/data point name.
+    /// </summary>
+    public string FieldName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section containing this field.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Variant IDs where this field is visible (not redacted).
+    /// </summary>
+    public List<string> VisibleInVariants { get; set; } = new();
+    
+    /// <summary>
+    /// Variant IDs where this field is redacted or removed.
+    /// </summary>
+    public List<string> RedactedInVariants { get; set; } = new();
+    
+    /// <summary>
+    /// Redaction type applied.
+    /// </summary>
+    public string? RedactionType { get; set; }
+    
+    /// <summary>
+    /// Reason for redaction.
+    /// </summary>
+    public string? RedactionReason { get; set; }
+}

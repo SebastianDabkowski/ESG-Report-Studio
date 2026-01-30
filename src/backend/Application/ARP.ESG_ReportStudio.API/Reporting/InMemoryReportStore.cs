@@ -48,6 +48,7 @@ public sealed class InMemoryReportStore
     private readonly List<MaturityModel> _maturityModels = new();
     private readonly Dictionary<string, List<AuditLogEntry>> _periodAuditTrails = new(); // Key: periodId
     private readonly List<ValidationResult> _validationResults = new(); // Audit trail for validation runs
+    private readonly List<ReportVariant> _reportVariants = new(); // Report variant configurations
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -13754,6 +13755,571 @@ public sealed class InMemoryReportStore
         using var sha256 = SHA256.Create();
         var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(checksumBuilder.ToString()));
         return Convert.ToBase64String(hash);
+    }
+    
+    #endregion
+    
+    #region Report Variants
+    
+    /// <summary>
+    /// Get all report variants.
+    /// </summary>
+    public IReadOnlyList<ReportVariant> GetVariants()
+    {
+        lock (_lock)
+        {
+            return _reportVariants.ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get a specific report variant by ID.
+    /// </summary>
+    public ReportVariant? GetVariant(string variantId)
+    {
+        lock (_lock)
+        {
+            return _reportVariants.FirstOrDefault(v => v.Id == variantId);
+        }
+    }
+    
+    /// <summary>
+    /// Create a new report variant.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportVariant? Variant) CreateVariant(CreateVariantRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate request
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Variant name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.AudienceType))
+            {
+                return (false, "Audience type is required.", null);
+            }
+            
+            // Check for duplicate name
+            if (_reportVariants.Any(v => v.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, "A variant with this name already exists.", null);
+            }
+            
+            var user = GetUser(request.CreatedBy);
+            
+            var variant = new ReportVariant
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                Description = request.Description,
+                AudienceType = request.AudienceType.ToLowerInvariant(),
+                Rules = request.Rules,
+                RedactionRules = request.RedactionRules,
+                IsActive = true,
+                CreatedBy = request.CreatedBy,
+                CreatedByName = user?.Name ?? request.CreatedBy,
+                CreatedAt = DateTime.UtcNow.ToString("o")
+            };
+            
+            // Validate and assign IDs to rules
+            foreach (var rule in variant.Rules)
+            {
+                if (string.IsNullOrWhiteSpace(rule.Id))
+                {
+                    rule.Id = Guid.NewGuid().ToString();
+                }
+            }
+            
+            foreach (var redactionRule in variant.RedactionRules)
+            {
+                if (string.IsNullOrWhiteSpace(redactionRule.Id))
+                {
+                    redactionRule.Id = Guid.NewGuid().ToString();
+                }
+            }
+            
+            _reportVariants.Add(variant);
+            
+            // Add audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", NewValue = variant.Name },
+                new FieldChange { Field = "AudienceType", NewValue = variant.AudienceType }
+            };
+            CreateAuditLogEntry(request.CreatedBy, variant.CreatedByName, "create", "ReportVariant", variant.Id, changes, 
+                $"Created variant '{variant.Name}' for audience '{variant.AudienceType}'");
+            
+            return (true, null, variant);
+        }
+    }
+    
+    /// <summary>
+    /// Update an existing report variant.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportVariant? Variant) UpdateVariant(string variantId, UpdateVariantRequest request)
+    {
+        lock (_lock)
+        {
+            var variant = _reportVariants.FirstOrDefault(v => v.Id == variantId);
+            if (variant == null)
+            {
+                return (false, "Variant not found.", null);
+            }
+            
+            // Validate request
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Variant name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.AudienceType))
+            {
+                return (false, "Audience type is required.", null);
+            }
+            
+            // Check for duplicate name (excluding current variant)
+            if (_reportVariants.Any(v => v.Id != variantId && v.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, "A variant with this name already exists.", null);
+            }
+            
+            var user = GetUser(request.UpdatedBy);
+            
+            // Update variant properties
+            variant.Name = request.Name;
+            variant.Description = request.Description;
+            variant.AudienceType = request.AudienceType.ToLowerInvariant();
+            variant.Rules = request.Rules;
+            variant.RedactionRules = request.RedactionRules;
+            variant.IsActive = request.IsActive;
+            variant.LastModifiedBy = request.UpdatedBy;
+            variant.LastModifiedByName = user?.Name ?? request.UpdatedBy;
+            variant.LastModifiedAt = DateTime.UtcNow.ToString("o");
+            
+            // Validate and assign IDs to rules
+            foreach (var rule in variant.Rules)
+            {
+                if (string.IsNullOrWhiteSpace(rule.Id))
+                {
+                    rule.Id = Guid.NewGuid().ToString();
+                }
+            }
+            
+            foreach (var redactionRule in variant.RedactionRules)
+            {
+                if (string.IsNullOrWhiteSpace(redactionRule.Id))
+                {
+                    redactionRule.Id = Guid.NewGuid().ToString();
+                }
+            }
+            
+            // Add audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", NewValue = variant.Name },
+                new FieldChange { Field = "AudienceType", NewValue = variant.AudienceType },
+                new FieldChange { Field = "IsActive", NewValue = variant.IsActive.ToString() }
+            };
+            CreateAuditLogEntry(request.UpdatedBy, variant.LastModifiedByName ?? request.UpdatedBy, "update", "ReportVariant", variant.Id, changes, 
+                $"Updated variant '{variant.Name}'");
+            
+            return (true, null, variant);
+        }
+    }
+    
+    /// <summary>
+    /// Delete a report variant.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage) DeleteVariant(string variantId, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var variant = _reportVariants.FirstOrDefault(v => v.Id == variantId);
+            if (variant == null)
+            {
+                return (false, "Variant not found.");
+            }
+            
+            var variantName = variant.Name;
+            _reportVariants.Remove(variant);
+            
+            // Add audit log entry
+            var user = GetUser(deletedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Deleted", OldValue = "false", NewValue = "true" }
+            };
+            CreateAuditLogEntry(deletedBy, user?.Name ?? deletedBy, "delete", "ReportVariant", variantId, changes, 
+                $"Deleted variant '{variantName}'");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Generate a report using a specific variant configuration.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, GeneratedReportVariant? VariantReport) GenerateReportVariant(GenerateVariantRequest request)
+    {
+        lock (_lock)
+        {
+            // Get the variant
+            var variant = _reportVariants.FirstOrDefault(v => v.Id == request.VariantId);
+            if (variant == null)
+            {
+                return (false, "Variant not found.", null);
+            }
+            
+            if (!variant.IsActive)
+            {
+                return (false, "Variant is not active.", null);
+            }
+            
+            // First, generate the base report with all sections
+            var baseRequest = new GenerateReportRequest
+            {
+                PeriodId = request.PeriodId,
+                GeneratedBy = request.GeneratedBy,
+                GenerationNote = request.GenerationNote
+            };
+            
+            var (isValid, errorMessage, baseReport) = GenerateReport(baseRequest);
+            if (!isValid || baseReport == null)
+            {
+                return (false, errorMessage ?? "Failed to generate base report.", null);
+            }
+            
+            // Apply variant rules
+            var excludedSections = new List<string>();
+            var redactedFields = new List<string>();
+            var excludedAttachmentCount = 0;
+            
+            // Process section inclusion/exclusion rules
+            var filteredSections = new List<GeneratedReportSection>();
+            var sectionRules = variant.Rules
+                .Where(r => r.RuleType == "include-section" || r.RuleType == "exclude-section")
+                .OrderBy(r => r.Order)
+                .ToList();
+            
+            // Default is to include all sections unless we have include rules
+            var hasIncludeRules = sectionRules.Any(r => r.RuleType == "include-section");
+            
+            foreach (var section in baseReport.Sections)
+            {
+                var shouldInclude = !hasIncludeRules; // If no include rules, default to true
+                
+                foreach (var rule in sectionRules)
+                {
+                    if (rule.RuleType == "include-section" && rule.Target == section.Section.Id)
+                    {
+                        shouldInclude = true;
+                    }
+                    else if (rule.RuleType == "exclude-section" && rule.Target == section.Section.Id)
+                    {
+                        shouldInclude = false;
+                    }
+                }
+                
+                if (shouldInclude)
+                {
+                    // Clone the section to avoid modifying the original
+                    var sectionCopy = new GeneratedReportSection
+                    {
+                        Section = section.Section,
+                        Owner = section.Owner,
+                        DataPoints = new List<DataPointSnapshot>(section.DataPoints),
+                        Evidence = new List<EvidenceMetadata>(section.Evidence),
+                        Assumptions = new List<AssumptionRecord>(section.Assumptions),
+                        Gaps = new List<GapRecord>(section.Gaps)
+                    };
+                    
+                    // Apply field-level rules and redaction
+                    ApplyFieldRulesAndRedaction(sectionCopy, variant, redactedFields);
+                    
+                    // Apply attachment exclusion rules
+                    var excludeAttachments = variant.Rules.Any(r => 
+                        r.RuleType == "exclude-attachments" && r.Target == section.Section.Id);
+                    
+                    if (excludeAttachments)
+                    {
+                        excludedAttachmentCount += sectionCopy.Evidence.Count;
+                        sectionCopy.Evidence.Clear();
+                    }
+                    
+                    filteredSections.Add(sectionCopy);
+                }
+                else
+                {
+                    excludedSections.Add(section.Section.Id);
+                }
+            }
+            
+            // Create the variant report
+            baseReport.Sections = filteredSections;
+            
+            var variantReport = new GeneratedReportVariant
+            {
+                Report = baseReport,
+                Variant = variant,
+                ExcludedSections = excludedSections,
+                RedactedFields = redactedFields,
+                ExcludedAttachmentCount = excludedAttachmentCount
+            };
+            
+            // Add audit log entry
+            var user = GetUser(request.GeneratedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "VariantId", NewValue = variant.Id },
+                new FieldChange { Field = "PeriodId", NewValue = request.PeriodId },
+                new FieldChange { Field = "ExcludedSectionCount", NewValue = excludedSections.Count.ToString() }
+            };
+            CreateAuditLogEntry(request.GeneratedBy, user?.Name ?? request.GeneratedBy, "generate", "GeneratedReportVariant", baseReport.Id, changes, 
+                $"Generated variant report '{variant.Name}' for period '{request.PeriodId}'");
+            
+            return (true, null, variantReport);
+        }
+    }
+    
+    /// <summary>
+    /// Apply field-level rules and redaction to a section.
+    /// </summary>
+    private void ApplyFieldRulesAndRedaction(GeneratedReportSection section, ReportVariant variant, List<string> redactedFields)
+    {
+        // Apply redaction rules
+        foreach (var redactionRule in variant.RedactionRules)
+        {
+            // Find matching data points
+            var matchingDataPoints = section.DataPoints
+                .Where(dp => dp.Id == redactionRule.FieldIdentifier || dp.Title.Contains(redactionRule.FieldIdentifier))
+                .ToList();
+            
+            foreach (var dataPoint in matchingDataPoints)
+            {
+                redactedFields.Add(dataPoint.Id);
+                
+                switch (redactionRule.RedactionType.ToLowerInvariant())
+                {
+                    case "mask":
+                        dataPoint.Value = "***REDACTED***";
+                        break;
+                    case "remove":
+                        section.DataPoints.Remove(dataPoint);
+                        break;
+                    case "replace":
+                        dataPoint.Value = redactionRule.ReplacementValue ?? "[REDACTED]";
+                        break;
+                }
+            }
+        }
+        
+        // Apply field group exclusion rules
+        var fieldGroupExclusionRules = variant.Rules
+            .Where(r => r.RuleType == "exclude-field-group")
+            .ToList();
+        
+        foreach (var rule in fieldGroupExclusionRules)
+        {
+            // Remove data points matching the field group
+            var toRemove = section.DataPoints
+                .Where(dp => dp.InformationType == rule.Target)
+                .ToList();
+            
+            foreach (var dp in toRemove)
+            {
+                redactedFields.Add(dp.Id);
+                section.DataPoints.Remove(dp);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Compare multiple report variants to show differences.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, VariantComparison? Comparison) CompareVariants(CompareVariantsRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate request
+            if (request.VariantIds.Count < 2)
+            {
+                return (false, "At least 2 variants are required for comparison.", null);
+            }
+            
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.", null);
+            }
+            
+            // Get all variants
+            var variants = new List<ReportVariant>();
+            foreach (var variantId in request.VariantIds)
+            {
+                var variant = _reportVariants.FirstOrDefault(v => v.Id == variantId);
+                if (variant == null)
+                {
+                    return (false, $"Variant '{variantId}' not found.", null);
+                }
+                variants.Add(variant);
+            }
+            
+            // Generate reports for each variant
+            var variantReports = new Dictionary<string, GeneratedReportVariant>();
+            foreach (var variant in variants)
+            {
+                var generateRequest = new GenerateVariantRequest
+                {
+                    PeriodId = request.PeriodId,
+                    VariantId = variant.Id,
+                    GeneratedBy = request.RequestedBy
+                };
+                
+                var (isValid, errorMessage, variantReport) = GenerateReportVariant(generateRequest);
+                if (!isValid || variantReport == null)
+                {
+                    return (false, errorMessage ?? "Failed to generate variant report.", null);
+                }
+                
+                variantReports[variant.Id] = variantReport;
+            }
+            
+            // Compare sections
+            var sectionDifferences = new List<SectionDifference>();
+            var allSectionIds = variantReports.Values
+                .SelectMany(vr => vr.Report.Sections.Select(s => s.Section.Id))
+                .Concat(variantReports.Values.SelectMany(vr => vr.ExcludedSections))
+                .Distinct()
+                .ToList();
+            
+            foreach (var sectionId in allSectionIds)
+            {
+                var includedIn = new List<string>();
+                var excludedFrom = new List<string>();
+                string? sectionName = null;
+                
+                foreach (var variant in variants)
+                {
+                    var variantReport = variantReports[variant.Id];
+                    var isIncluded = variantReport.Report.Sections.Any(s => s.Section.Id == sectionId);
+                    
+                    if (isIncluded)
+                    {
+                        includedIn.Add(variant.Id);
+                        if (sectionName == null)
+                        {
+                            sectionName = variantReport.Report.Sections.First(s => s.Section.Id == sectionId).Section.Title;
+                        }
+                    }
+                    else
+                    {
+                        excludedFrom.Add(variant.Id);
+                    }
+                }
+                
+                if (excludedFrom.Count > 0)
+                {
+                    sectionDifferences.Add(new SectionDifference
+                    {
+                        SectionId = sectionId,
+                        SectionName = sectionName ?? sectionId,
+                        IncludedInVariants = includedIn,
+                        ExcludedFromVariants = excludedFrom,
+                        ExclusionReason = "Excluded by variant rules"
+                    });
+                }
+            }
+            
+            // Compare fields (redacted vs visible)
+            var fieldDifferences = new List<FieldDifference>();
+            var allFieldIds = variantReports.Values
+                .SelectMany(vr => vr.Report.Sections.SelectMany(s => s.DataPoints.Select(dp => dp.Id)))
+                .Concat(variantReports.Values.SelectMany(vr => vr.RedactedFields))
+                .Distinct()
+                .ToList();
+            
+            foreach (var fieldId in allFieldIds)
+            {
+                var visibleIn = new List<string>();
+                var redactedIn = new List<string>();
+                string? fieldName = null;
+                string? sectionId = null;
+                string? redactionType = null;
+                string? redactionReason = null;
+                
+                foreach (var variant in variants)
+                {
+                    var variantReport = variantReports[variant.Id];
+                    var isRedacted = variantReport.RedactedFields.Contains(fieldId);
+                    
+                    if (isRedacted)
+                    {
+                        redactedIn.Add(variant.Id);
+                        var redactionRule = variant.RedactionRules.FirstOrDefault(r => r.FieldIdentifier == fieldId);
+                        if (redactionRule != null)
+                        {
+                            redactionType = redactionRule.RedactionType;
+                            redactionReason = redactionRule.Reason;
+                        }
+                    }
+                    else
+                    {
+                        visibleIn.Add(variant.Id);
+                        if (fieldName == null)
+                        {
+                            var dataPoint = variantReport.Report.Sections
+                                .SelectMany(s => s.DataPoints)
+                                .FirstOrDefault(dp => dp.Id == fieldId);
+                            if (dataPoint != null)
+                            {
+                                fieldName = dataPoint.Title;
+                                var section = variantReport.Report.Sections
+                                    .FirstOrDefault(s => s.DataPoints.Any(dp => dp.Id == fieldId));
+                                sectionId = section?.Section.Id;
+                            }
+                        }
+                    }
+                }
+                
+                if (redactedIn.Count > 0)
+                {
+                    fieldDifferences.Add(new FieldDifference
+                    {
+                        FieldId = fieldId,
+                        FieldName = fieldName ?? fieldId,
+                        SectionId = sectionId ?? "",
+                        VisibleInVariants = visibleIn,
+                        RedactedInVariants = redactedIn,
+                        RedactionType = redactionType,
+                        RedactionReason = redactionReason
+                    });
+                }
+            }
+            
+            var comparison = new VariantComparison
+            {
+                Period = period,
+                Variants = variants,
+                SectionDifferences = sectionDifferences,
+                FieldDifferences = fieldDifferences,
+                ComparedAt = DateTime.UtcNow.ToString("o"),
+                ComparedBy = request.RequestedBy
+            };
+            
+            // Add audit log entry
+            var user = GetUser(request.RequestedBy);
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "VariantCount", NewValue = variants.Count.ToString() },
+                new FieldChange { Field = "PeriodId", NewValue = period.Id }
+            };
+            CreateAuditLogEntry(request.RequestedBy, user?.Name ?? request.RequestedBy, "compare", "VariantComparison", 
+                string.Join(",", request.VariantIds), changes, $"Compared {variants.Count} variants for period '{period.Name}'");
+            
+            return (true, null, comparison);
+        }
     }
     
     #endregion
