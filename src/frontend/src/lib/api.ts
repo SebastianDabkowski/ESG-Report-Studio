@@ -29,7 +29,12 @@ import type {
   YoYAnnexExportRecord,
   GeneratedReport,
   BrandingProfile,
-  DocumentTemplate
+  DocumentTemplate,
+  GenerationHistoryEntry,
+  ExportHistoryEntry,
+  MarkGenerationFinalRequest,
+  CompareGenerationsRequest,
+  GenerationComparison
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1609,4 +1614,37 @@ export async function getTemplateUsageHistory(templateId: string): Promise<impor
 export async function getPeriodTemplateUsage(periodId: string): Promise<import('@/lib/types').TemplateUsageRecord[]> {
   return requestJson<import('@/lib/types').TemplateUsageRecord[]>(`/document-templates/usage/period/${periodId}`)
 }
+
+// Generation and Export History API
+export async function getGenerationHistory(periodId: string): Promise<import('@/lib/types').GenerationHistoryEntry[]> {
+  return requestJson<import('@/lib/types').GenerationHistoryEntry[]>(`/periods/${periodId}/generation-history`)
+}
+
+export async function getGeneration(generationId: string): Promise<import('@/lib/types').GenerationHistoryEntry> {
+  return requestJson<import('@/lib/types').GenerationHistoryEntry>(`/generation-history/${generationId}`)
+}
+
+export async function markGenerationFinal(
+  generationId: string,
+  payload: import('@/lib/types').MarkGenerationFinalRequest
+): Promise<import('@/lib/types').GenerationHistoryEntry> {
+  return requestJson<import('@/lib/types').GenerationHistoryEntry>(`/generation-history/${generationId}/mark-final`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function compareGenerations(
+  payload: import('@/lib/types').CompareGenerationsRequest
+): Promise<import('@/lib/types').GenerationComparison> {
+  return requestJson<import('@/lib/types').GenerationComparison>(`/generation-history/compare`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getExportHistory(periodId: string): Promise<import('@/lib/types').ExportHistoryEntry[]> {
+  return requestJson<import('@/lib/types').ExportHistoryEntry[]>(`/periods/${periodId}/export-history`)
+}
+
 
