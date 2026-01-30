@@ -5,6 +5,14 @@ using System.Text.Json;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+/// <summary>
+/// Controller for audit log access with role-based permissions.
+/// Access permissions by role:
+/// - admin: Full access to all audit data
+/// - auditor: Read-only access to all audit data
+/// - report-owner: Access to audit data for their own periods
+/// - contributor: Access to audit data for entities they own or have modified
+/// </summary>
 [ApiController]
 [Route("api/audit-log")]
 public sealed class AuditLogController : ControllerBase
@@ -18,7 +26,9 @@ public sealed class AuditLogController : ControllerBase
 
     /// <summary>
     /// Get audit log entries with optional filtering by entity type, entity ID, user ID, action, date range, section, and owner.
+    /// Access is controlled by user role.
     /// </summary>
+    /// <param name="requestingUserId">ID of the user requesting the audit log</param>
     /// <param name="entityType">Filter by entity type (e.g., "DataPoint", "Gap", "Assumption")</param>
     /// <param name="entityId">Filter by specific entity ID</param>
     /// <param name="userId">Filter by user who made the change</param>
@@ -30,6 +40,7 @@ public sealed class AuditLogController : ControllerBase
     /// <returns>List of audit log entries in reverse chronological order</returns>
     [HttpGet]
     public ActionResult<IReadOnlyList<AuditLogEntry>> GetAuditLog(
+        [FromHeader(Name = "X-User-Id")] string requestingUserId,
         [FromQuery] string? entityType = null,
         [FromQuery] string? entityId = null,
         [FromQuery] string? userId = null,
@@ -39,14 +50,32 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? sectionId = null,
         [FromQuery] string? ownerId = null)
     {
-        return Ok(_store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId));
+        // Check access permission
+        var accessResult = CheckAuditLogAccess(requestingUserId);
+        if (!accessResult.HasAccess)
+        {
+            return StatusCode(403, new { error = accessResult.ErrorMessage });
+        }
+
+        // Apply role-based filtering
+        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
+        
+        // Contributors only see their own actions
+        if (accessResult.UserRole == "contributor")
+        {
+            entries = entries.Where(e => e.UserId == requestingUserId).ToList();
+        }
+        
+        return Ok(entries);
     }
 
     /// <summary>
     /// Export audit log entries as CSV with optional filtering.
+    /// Requires admin or auditor role.
     /// </summary>
     [HttpGet("export/csv")]
     public IActionResult ExportAuditLogCsv(
+        [FromHeader(Name = "X-User-Id")] string requestingUserId,
         [FromQuery] string? entityType = null,
         [FromQuery] string? entityId = null,
         [FromQuery] string? userId = null,
@@ -56,6 +85,13 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? sectionId = null,
         [FromQuery] string? ownerId = null)
     {
+        // Check access permission - export requires admin or auditor role
+        var accessResult = CheckAuditLogAccess(requestingUserId, requireExportRole: true);
+        if (!accessResult.HasAccess)
+        {
+            return StatusCode(403, new { error = accessResult.ErrorMessage });
+        }
+
         var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
         
         var csv = new StringBuilder();
@@ -86,9 +122,11 @@ public sealed class AuditLogController : ControllerBase
 
     /// <summary>
     /// Export audit log entries as JSON with optional filtering.
+    /// Requires admin or auditor role.
     /// </summary>
     [HttpGet("export/json")]
     public IActionResult ExportAuditLogJson(
+        [FromHeader(Name = "X-User-Id")] string requestingUserId,
         [FromQuery] string? entityType = null,
         [FromQuery] string? entityId = null,
         [FromQuery] string? userId = null,
@@ -98,6 +136,13 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? sectionId = null,
         [FromQuery] string? ownerId = null)
     {
+        // Check access permission - export requires admin or auditor role
+        var accessResult = CheckAuditLogAccess(requestingUserId, requireExportRole: true);
+        if (!accessResult.HasAccess)
+        {
+            return StatusCode(403, new { error = accessResult.ErrorMessage });
+        }
+
         var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
         
         var json = JsonSerializer.Serialize(entries, new JsonSerializerOptions 
@@ -375,5 +420,46 @@ public sealed class AuditLogController : ControllerBase
         
         // Always wrap in quotes for consistency and to handle special characters
         return $"\"{escaped}\"";
+    }
+
+    /// <summary>
+    /// Checks if a user has permission to access audit log data.
+    /// Returns access status and user role for additional filtering.
+    /// </summary>
+    private (bool HasAccess, string? UserRole, string? ErrorMessage) CheckAuditLogAccess(
+        string userId, 
+        bool requireExportRole = false)
+    {
+        var user = _store.GetUser(userId);
+        if (user == null)
+        {
+            return (false, null, "User not found.");
+        }
+
+        // Admin and auditor have full access
+        if (user.Role == "admin" || user.Role == "auditor")
+        {
+            return (true, user.Role, null);
+        }
+
+        // For export, only admin and auditor allowed
+        if (requireExportRole)
+        {
+            return (false, user.Role, "Export access requires admin or auditor role.");
+        }
+
+        // Report-owner has read access to all audit data
+        if (user.Role == "report-owner")
+        {
+            return (true, user.Role, null);
+        }
+
+        // Contributors have limited access (filtered to their own actions)
+        if (user.Role == "contributor")
+        {
+            return (true, user.Role, null);
+        }
+
+        return (false, user.Role, "Insufficient permissions to access audit log.");
     }
 }
