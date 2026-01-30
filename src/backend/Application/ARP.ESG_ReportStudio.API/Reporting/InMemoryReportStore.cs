@@ -1801,6 +1801,9 @@ public sealed class InMemoryReportStore
             // Capture changes for audit log
             var changes = new List<FieldChange>();
             
+            // Check if value or unit changed - needed for flagging dependent calculations
+            bool valueOrUnitChanged = (dataPoint.Value != request.Value) || (dataPoint.Unit != request.Unit);
+            
             if (dataPoint.Type != request.Type)
                 changes.Add(new FieldChange { Field = "Type", OldValue = dataPoint.Type, NewValue = request.Type });
             
@@ -2012,7 +2015,8 @@ public sealed class InMemoryReportStore
             }
             
             // Detect changes to input data points and flag calculated points for recalculation
-            if (dataPoint.Value != request.Value || dataPoint.Unit != request.Unit)
+            // Must be done BEFORE the dataPoint value is updated, so we use the flag captured earlier
+            if (valueOrUnitChanged)
             {
                 FlagDependentCalculationsForRecalculation(dataPoint.Id, request.UpdatedBy ?? "system");
             }
