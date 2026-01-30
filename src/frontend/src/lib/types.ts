@@ -28,6 +28,7 @@ export interface User {
   email: string
   role: UserRole
   avatarUrl?: string
+  isActive?: boolean
 }
 
 export interface Organization {
@@ -827,6 +828,7 @@ export interface RolloverOptions {
   copyDisclosures: boolean
   copyDataValues: boolean
   copyAttachments: boolean
+  dueDateAdjustmentDays?: number
 }
 
 export interface RolloverRequest {
@@ -866,6 +868,15 @@ export interface RolloverResult {
   targetPeriod?: ReportingPeriod
   auditLog?: RolloverAuditLog
   reconciliation?: RolloverReconciliation
+  inactiveOwnerWarnings?: InactiveOwnerWarning[]
+}
+
+export interface InactiveOwnerWarning {
+  userId: string
+  userName: string
+  entityType: string
+  entityId: string
+  entityTitle: string
 }
 
 export interface RolloverReconciliation {
