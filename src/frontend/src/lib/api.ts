@@ -1209,3 +1209,27 @@ export async function deleteMaturityModel(id: string): Promise<void> {
     method: 'DELETE'
   })
 }
+
+// Maturity Assessment API
+import type { MaturityAssessment, CalculateMaturityAssessmentPayload } from '@/lib/types'
+
+export async function calculateMaturityAssessment(
+  payload: CalculateMaturityAssessmentPayload
+): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>('maturity-assessments', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getCurrentMaturityAssessment(periodId: string): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>(`maturity-assessments/period/${periodId}/current`)
+}
+
+export async function getMaturityAssessmentHistory(periodId: string): Promise<MaturityAssessment[]> {
+  return requestJson<MaturityAssessment[]>(`maturity-assessments/period/${periodId}/history`)
+}
+
+export async function getMaturityAssessment(id: string): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>(`maturity-assessments/${id}`)
+}

@@ -1140,3 +1140,58 @@ export interface UpdateMaturityModelPayload {
     }[]
   }[]
 }
+
+// ==================== Maturity Assessment Types ====================
+
+export interface MaturityAssessment {
+  id: string
+  periodId: string
+  maturityModelId: string
+  modelVersion: number
+  calculatedAt: string
+  calculatedBy: string
+  calculatedByName: string
+  isCurrent: boolean
+  achievedLevelId?: string
+  achievedLevelName?: string
+  achievedLevelOrder?: number
+  overallScore: number
+  criterionResults: MaturityCriterionResult[]
+  stats: MaturityAssessmentStats
+}
+
+export interface MaturityCriterionResult {
+  levelId: string
+  levelName: string
+  levelOrder: number
+  criterionId: string
+  criterionName: string
+  criterionType: string
+  targetValue: string
+  actualValue: string
+  unit: string
+  passed: boolean
+  isMandatory: boolean
+  status: 'passed' | 'failed' | 'incomplete-data'
+  failureReason?: string
+  evidenceIds: string[]
+}
+
+export interface MaturityAssessmentStats {
+  totalCriteria: number
+  passedCriteria: number
+  failedCriteria: number
+  incompleteCriteria: number
+  dataCompletenessPercentage: number
+  evidenceQualityPercentage: number
+  totalDataPoints: number
+  completeDataPoints: number
+  dataPointsWithEvidence: number
+}
+
+export interface CalculateMaturityAssessmentPayload {
+  periodId: string
+  maturityModelId?: string
+  calculatedBy: string
+  calculatedByName: string
+}
