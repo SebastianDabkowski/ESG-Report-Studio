@@ -51,26 +51,12 @@ export default function Dashboard({ currentUser }: DashboardProps) {
 
     setIsExportingPdf(true)
     try {
-      const blob = await exportReportPdf(activePeriod.id, {
+      await exportReportPdf(activePeriod.id, {
         generatedBy: currentUser.id,
         includeTitlePage: true,
         includeTableOfContents: true,
         includePageNumbers: true
       })
-
-      // Create download link
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      
-      // Generate filename similar to backend
-      const date = new Date().toISOString().split('T')[0]
-      link.download = `ESG_Report_${activePeriod.name.replace(/ /g, '_')}_${date}.pdf`
-      
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
     } catch (error) {
       console.error('Failed to export PDF:', error)
       alert('Failed to export PDF. Please try again.')

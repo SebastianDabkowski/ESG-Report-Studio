@@ -410,6 +410,13 @@ public sealed class ReportingController : ControllerBase
             return BadRequest(new { error = "GeneratedBy is required." });
         }
         
+        // Check if period exists
+        var period = _store.GetPeriods().FirstOrDefault(p => p.Id == periodId);
+        if (period == null)
+        {
+            return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
         // Generate the report first
         var generateRequest = new GenerateReportRequest
         {

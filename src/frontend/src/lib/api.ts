@@ -1433,8 +1433,8 @@ export interface ExportPdfPayload {
 export async function exportReportPdf(
   periodId: string,
   payload: ExportPdfPayload
-): Promise<Blob> {
-  const response = await fetch(`${API_BASE_URL}/periods/${periodId}/export-pdf`, {
+): Promise<void> {
+  const response = await fetch(buildUrl(`periods/${periodId}/export-pdf`), {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
@@ -1447,6 +1447,26 @@ export async function exportReportPdf(
     throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
   }
 
-  return response.blob()
+  // Extract filename from Content-Disposition header or use a default
+  const contentDisposition = response.headers.get('Content-Disposition')
+  let filename = 'ESG-Report.pdf'
+  
+  if (contentDisposition) {
+    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition)
+    if (matches != null && matches[1]) {
+      filename = matches[1].replace(/['"]/g, '')
+    }
+  }
+
+  // Download the file
+  const blob = await response.blob()
+  const blobUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(blobUrl)
 }
 
