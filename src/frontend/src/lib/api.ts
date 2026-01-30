@@ -1404,3 +1404,20 @@ export async function generateReport(
   })
 }
 
+export interface PreviewReportParams {
+  userId: string
+  sectionIds?: string[]
+}
+
+export async function previewReport(
+  periodId: string,
+  params: PreviewReportParams
+): Promise<GeneratedReport> {
+  const queryParams = new URLSearchParams({ userId: params.userId })
+  if (params.sectionIds && params.sectionIds.length > 0) {
+    queryParams.append('sectionIds', params.sectionIds.join(','))
+  }
+  
+  return requestJson<GeneratedReport>(`periods/${periodId}/preview-report?${queryParams.toString()}`)
+}
+

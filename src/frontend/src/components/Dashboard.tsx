@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle } from '@phosphor-icons/react'
+import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate } from '@/lib/helpers'
 import { getCompletenessStats } from '@/lib/api'
+import ReportPreviewDialog from './ReportPreviewDialog'
 
 interface DashboardProps {
   currentUser: User
@@ -23,6 +25,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [selectedOrgUnit, setSelectedOrgUnit] = useState<string>('all')
   const [isLoadingStats, setIsLoadingStats] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
 
   const activePeriod = (periods || []).find(p => p.status === 'active')
   const activeSections = (sections || []).filter(s => activePeriod && s.periodId === activePeriod.id)
@@ -84,10 +87,23 @@ export default function Dashboard({ currentUser }: DashboardProps) {
         <>
           <Card className="border-l-4 border-l-accent">
             <CardHeader>
-              <CardTitle className="text-lg">Active Reporting Period</CardTitle>
-              <CardDescription>
-                {activePeriod.name} • {formatDate(activePeriod.startDate)} - {formatDate(activePeriod.endDate)}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Active Reporting Period</CardTitle>
+                  <CardDescription>
+                    {activePeriod.name} • {formatDate(activePeriod.startDate)} - {formatDate(activePeriod.endDate)}
+                  </CardDescription>
+                </div>
+                <Button 
+                  onClick={() => setShowPreview(true)}
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                >
+                  <Eye weight="regular" className="h-4 w-4" />
+                  Preview Report
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -453,6 +469,15 @@ export default function Dashboard({ currentUser }: DashboardProps) {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Report Preview Dialog */}
+      {showPreview && activePeriod && (
+        <ReportPreviewDialog
+          period={activePeriod}
+          currentUser={currentUser}
+          onClose={() => setShowPreview(false)}
+        />
       )}
     </div>
   )

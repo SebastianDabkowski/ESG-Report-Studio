@@ -341,4 +341,56 @@ public sealed class ReportingController : ControllerBase
         
         return Ok(report);
     }
+
+    /// <summary>
+    /// Preview the report for a given period with permission-based filtering.
+    /// Sections without view permission are excluded from the preview.
+    /// </summary>
+    [HttpGet("periods/{periodId}/preview-report")]
+    public ActionResult<GeneratedReport> PreviewReport(
+        string periodId, 
+        [FromQuery] string? userId,
+        [FromQuery] string? sectionIds)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "userId query parameter is required." });
+        }
+
+        // Parse section IDs if provided
+        List<string>? sectionIdList = null;
+        if (!string.IsNullOrWhiteSpace(sectionIds))
+        {
+            sectionIdList = sectionIds.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList();
+        }
+
+        // Create a request for report generation
+        var request = new GenerateReportRequest
+        {
+            PeriodId = periodId,
+            GeneratedBy = userId,
+            SectionIds = sectionIdList,
+            GenerationNote = "Preview"
+        };
+
+        var (isValid, errorMessage, report) = _store.GenerateReport(request);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        // Apply permission filtering - filter sections based on user permissions
+        // For now, we'll use a simple rule: users can see sections they own or sections without an owner
+        // In a production system, this would use a proper authorization service
+        var filteredSections = report!.Sections.Where(s => 
+            string.IsNullOrEmpty(s.Section.OwnerId) || 
+            s.Section.OwnerId == userId ||
+            s.Owner == null
+        ).ToList();
+
+        report.Sections = filteredSections;
+        
+        return Ok(report);
+    }
 }
