@@ -19,7 +19,9 @@ import type {
   SaveDataTypeRolloverRuleRequest,
   RolloverRuleHistory,
   MetricComparisonResponse,
-  TextDisclosureComparisonResponse
+  TextDisclosureComparisonResponse,
+  MaturityAssessment,
+  CalculateMaturityAssessmentPayload
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1211,7 +1213,6 @@ export async function deleteMaturityModel(id: string): Promise<void> {
 }
 
 // Maturity Assessment API
-import type { MaturityAssessment, CalculateMaturityAssessmentPayload } from '@/lib/types'
 
 export async function calculateMaturityAssessment(
   payload: CalculateMaturityAssessmentPayload

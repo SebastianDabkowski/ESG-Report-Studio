@@ -11829,16 +11829,24 @@ public sealed class InMemoryReportStore
             }
             
             // Determine achieved level (highest level where all mandatory criteria pass)
+            // A level is achieved only if all mandatory criteria at that level AND all lower levels pass
             MaturityLevel? achievedLevel = null;
-            foreach (var level in model.Levels.OrderByDescending(l => l.Order))
+            foreach (var level in model.Levels.OrderBy(l => l.Order))
             {
-                var levelResults = criterionResults.Where(r => r.LevelId == level.Id).ToList();
-                var mandatoryCriteria = levelResults.Where(r => r.IsMandatory).ToList();
+                // Get all criteria up to and including this level
+                var criteriaUpToLevel = criterionResults
+                    .Where(r => r.LevelOrder <= level.Order && r.IsMandatory)
+                    .ToList();
                 
-                // Check if all mandatory criteria passed
-                if (mandatoryCriteria.All(r => r.Passed))
+                // Check if all mandatory criteria up to this level passed
+                if (criteriaUpToLevel.All(r => r.Passed))
                 {
                     achievedLevel = level;
+                    // Continue to check higher levels
+                }
+                else
+                {
+                    // If any mandatory criterion failed, we can't achieve this or higher levels
                     break;
                 }
             }
@@ -11930,21 +11938,21 @@ public sealed class InMemoryReportStore
         
         if (dataPoints.Count == 0)
         {
+            stats.DataCompletenessPercentage = 0;
+            stats.EvidenceQualityPercentage = 0;
             return stats;
         }
         
         // Count complete data points (those with content/value and not marked as missing)
-        var completeDataPoints = dataPoints.Where(dp => 
+        stats.CompleteDataPoints = dataPoints.Count(dp => 
             !dp.IsMissing && 
             dp.CompletenessStatus == "complete"
-        ).ToList();
+        );
         
-        stats.CompleteDataPoints = completeDataPoints.Count;
         stats.DataCompletenessPercentage = (decimal)stats.CompleteDataPoints / stats.TotalDataPoints * 100;
         
         // Count data points with evidence
-        var dataPointsWithEvidence = dataPoints.Where(dp => dp.EvidenceIds.Count > 0).ToList();
-        stats.DataPointsWithEvidence = dataPointsWithEvidence.Count;
+        stats.DataPointsWithEvidence = dataPoints.Count(dp => dp.EvidenceIds.Count > 0);
         stats.EvidenceQualityPercentage = (decimal)stats.DataPointsWithEvidence / stats.TotalDataPoints * 100;
         
         return stats;
