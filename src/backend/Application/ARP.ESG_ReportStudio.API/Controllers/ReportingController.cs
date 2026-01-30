@@ -10,11 +10,16 @@ public sealed class ReportingController : ControllerBase
 {
     private readonly InMemoryReportStore _store;
     private readonly INotificationService _notificationService;
+    private readonly IPdfExportService _pdfExportService;
 
-    public ReportingController(InMemoryReportStore store, INotificationService notificationService)
+    public ReportingController(
+        InMemoryReportStore store, 
+        INotificationService notificationService,
+        IPdfExportService pdfExportService)
     {
         _store = store;
         _notificationService = notificationService;
+        _pdfExportService = pdfExportService;
     }
 
     [HttpGet("periods")]
@@ -393,4 +398,94 @@ public sealed class ReportingController : ControllerBase
         
         return Ok(report);
     }
+    
+    /// <summary>
+    /// Export a generated report to PDF format with title page, table of contents, and page numbering.
+    /// </summary>
+    [HttpPost("periods/{periodId}/export-pdf")]
+    public ActionResult ExportPdf(string periodId, [FromBody] ExportPdfRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.GeneratedBy))
+        {
+            return BadRequest(new { error = "GeneratedBy is required." });
+        }
+        
+        // Generate the report first
+        var generateRequest = new GenerateReportRequest
+        {
+            PeriodId = periodId,
+            GeneratedBy = request.GeneratedBy,
+            SectionIds = request.SectionIds,
+            GenerationNote = "PDF Export"
+        };
+        
+        var (isValid, errorMessage, report) = _store.GenerateReport(generateRequest);
+        
+        if (!isValid || report == null)
+        {
+            return BadRequest(new { error = errorMessage ?? "Failed to generate report." });
+        }
+        
+        // Create PDF export options
+        var options = new PdfExportOptions
+        {
+            IncludeTitlePage = request.IncludeTitlePage ?? true,
+            IncludeTableOfContents = request.IncludeTableOfContents ?? true,
+            IncludePageNumbers = request.IncludePageNumbers ?? true,
+            VariantName = request.VariantName
+        };
+        
+        // Generate PDF
+        byte[] pdfBytes;
+        try
+        {
+            pdfBytes = _pdfExportService.GeneratePdf(report, options);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { error = $"Failed to generate PDF: {ex.Message}" });
+        }
+        
+        // Generate filename
+        var filename = _pdfExportService.GenerateFilename(report, request.VariantName);
+        
+        // Return PDF file
+        return File(pdfBytes, "application/pdf", filename);
+    }
+}
+
+/// <summary>
+/// Request to export a report to PDF.
+/// </summary>
+public sealed class ExportPdfRequest
+{
+    /// <summary>
+    /// User ID generating the export.
+    /// </summary>
+    public string GeneratedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional list of section IDs to include. If null, all enabled sections are included.
+    /// </summary>
+    public List<string>? SectionIds { get; set; }
+    
+    /// <summary>
+    /// Optional variant name to include in the filename and title page.
+    /// </summary>
+    public string? VariantName { get; set; }
+    
+    /// <summary>
+    /// Whether to include a title page. Default: true.
+    /// </summary>
+    public bool? IncludeTitlePage { get; set; }
+    
+    /// <summary>
+    /// Whether to include a table of contents. Default: true.
+    /// </summary>
+    public bool? IncludeTableOfContents { get; set; }
+    
+    /// <summary>
+    /// Whether to include page numbers. Default: true.
+    /// </summary>
+    public bool? IncludePageNumbers { get; set; }
 }
