@@ -7,8 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, CheckCircle, Clock, FileText, Database, Paperclip } from '@phosphor-icons/react'
-import type { ReportingPeriod, User, RolloverOptions, ReportingMode, ReportScope } from '@/lib/types'
+import type { ReportingPeriod, User, RolloverOptions, ReportingMode, ReportScope, RolloverReconciliation } from '@/lib/types'
 import { rolloverPeriod } from '@/lib/api'
+import RolloverReconciliationReport from './RolloverReconciliationReport'
 
 interface RolloverWizardProps {
   isOpen: boolean
@@ -18,7 +19,7 @@ interface RolloverWizardProps {
   onSuccess: () => void
 }
 
-type WizardStep = 'select-source' | 'configure-target' | 'select-options' | 'review'
+type WizardStep = 'select-source' | 'configure-target' | 'select-options' | 'review' | 'complete'
 
 export default function RolloverWizard({ isOpen, onClose, periods, currentUser, onSuccess }: RolloverWizardProps) {
   const [step, setStep] = useState<WizardStep>('select-source')
@@ -34,6 +35,7 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
   const [copyAttachments, setCopyAttachments] = useState<boolean>(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reconciliation, setReconciliation] = useState<RolloverReconciliation | null>(null)
 
   const sourcePeriod = periods.find(p => p.id === sourcePeriodId)
   
@@ -53,6 +55,7 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
     setCopyDataValues(false)
     setCopyAttachments(false)
     setError(null)
+    setReconciliation(null)
     onClose()
   }
 
@@ -116,7 +119,7 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         copyAttachments
       }
 
-      await rolloverPeriod({
+      const result = await rolloverPeriod({
         sourcePeriodId,
         targetPeriodName,
         targetPeriodStartDate,
@@ -127,8 +130,15 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         performedBy: currentUser.id
       })
 
-      handleClose()
-      onSuccess()
+      // Store reconciliation if available
+      if (result.reconciliation) {
+        setReconciliation(result.reconciliation)
+        setStep('complete')
+      } else {
+        // Fallback: close and refresh if no reconciliation
+        handleClose()
+        onSuccess()
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to perform rollover')
     } finally {
@@ -457,6 +467,26 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
       )
     }
 
+    if (step === 'complete') {
+      return (
+        <div className="space-y-4">
+          <div className="rounded-md border border-green-200 bg-green-50 p-4 mb-4">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="text-green-600" weight="fill" size={24} />
+              <div>
+                <h4 className="font-medium text-green-900">Rollover Completed Successfully</h4>
+                <p className="text-sm text-green-700">
+                  The new period "{targetPeriodName}" has been created.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {reconciliation && <RolloverReconciliationReport reconciliation={reconciliation} />}
+        </div>
+      )
+    }
+
     return null
   }
 
@@ -483,13 +513,17 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         </div>
 
         <DialogFooter>
-          {step !== 'select-source' && (
+          {step !== 'select-source' && step !== 'complete' && (
             <Button variant="outline" onClick={handleBack} disabled={isSubmitting}>
               Back
             </Button>
           )}
           
-          {step !== 'review' ? (
+          {step === 'complete' ? (
+            <Button onClick={() => { handleClose(); onSuccess(); }}>
+              Close
+            </Button>
+          ) : step !== 'review' ? (
             <Button onClick={handleNext}>
               Next
             </Button>

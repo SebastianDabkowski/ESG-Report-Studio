@@ -794,6 +794,7 @@ export interface RolloverRequest {
   options: RolloverOptions
   performedBy: string
   ruleOverrides?: RolloverRuleOverride[]
+  manualMappings?: ManualSectionMapping[]
 }
 
 export interface RolloverAuditLog {
@@ -819,6 +820,38 @@ export interface RolloverResult {
   errorMessage?: string
   targetPeriod?: ReportingPeriod
   auditLog?: RolloverAuditLog
+  reconciliation?: RolloverReconciliation
+}
+
+export interface RolloverReconciliation {
+  totalSourceSections: number
+  mappedSections: number
+  unmappedSections: number
+  mappedItems: MappedSection[]
+  unmappedItems: UnmappedSection[]
+}
+
+export interface MappedSection {
+  sourceCatalogCode: string
+  sourceTitle: string
+  targetCatalogCode: string
+  targetTitle: string
+  mappingType: 'automatic' | 'manual'
+  dataPointsCopied: number
+}
+
+export interface UnmappedSection {
+  sourceCatalogCode?: string
+  sourceTitle: string
+  sourceSectionId: string
+  reason: string
+  suggestedActions: string[]
+  affectedDataPoints: number
+}
+
+export interface ManualSectionMapping {
+  sourceCatalogCode: string
+  targetCatalogCode: string
 }
 
 // Rollover Rules Types
