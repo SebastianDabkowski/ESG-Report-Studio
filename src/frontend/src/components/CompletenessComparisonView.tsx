@@ -156,7 +156,7 @@ export default function CompletenessComparisonView({ onBack }: CompletenessCompa
         <div>
           <div className="flex items-center gap-2">
             {onBack && (
-              <Button variant="ghost" size="sm" onClick={onBack}>
+              <Button variant="ghost" size="sm" onClick={onBack} aria-label="Go back">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
@@ -179,9 +179,9 @@ export default function CompletenessComparisonView({ onBack }: CompletenessCompa
         <CardContent>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-sm font-medium mb-2 block">Current Period</label>
+              <label htmlFor="current-period-select" className="text-sm font-medium mb-2 block">Current Period</label>
               <Select value={currentPeriodId} onValueChange={setCurrentPeriodId}>
-                <SelectTrigger>
+                <SelectTrigger id="current-period-select">
                   <SelectValue placeholder="Select current period" />
                 </SelectTrigger>
                 <SelectContent>
@@ -194,9 +194,9 @@ export default function CompletenessComparisonView({ onBack }: CompletenessCompa
               </Select>
             </div>
             <div>
-              <label className="text-sm font-medium mb-2 block">Prior Period</label>
+              <label htmlFor="prior-period-select" className="text-sm font-medium mb-2 block">Prior Period</label>
               <Select value={priorPeriodId} onValueChange={setPriorPeriodId}>
-                <SelectTrigger>
+                <SelectTrigger id="prior-period-select">
                   <SelectValue placeholder="Select prior period" />
                 </SelectTrigger>
                 <SelectContent>

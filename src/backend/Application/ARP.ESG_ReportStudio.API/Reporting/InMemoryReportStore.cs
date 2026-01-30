@@ -5583,9 +5583,17 @@ public sealed class InMemoryReportStore
             var currentPeriod = _periods.FirstOrDefault(p => p.Id == currentPeriodId);
             var priorPeriod = _periods.FirstOrDefault(p => p.Id == priorPeriodId);
 
-            if (currentPeriod == null || priorPeriod == null)
+            if (currentPeriod == null && priorPeriod == null)
             {
-                throw new ArgumentException("Invalid period IDs provided.");
+                throw new ArgumentException("Both currentPeriodId and priorPeriodId are invalid.");
+            }
+            if (currentPeriod == null)
+            {
+                throw new ArgumentException($"Invalid currentPeriodId: '{currentPeriodId}' not found.");
+            }
+            if (priorPeriod == null)
+            {
+                throw new ArgumentException($"Invalid priorPeriodId: '{priorPeriodId}' not found.");
             }
 
             // Get completeness stats for both periods

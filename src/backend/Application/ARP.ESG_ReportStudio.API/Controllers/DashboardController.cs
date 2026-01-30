@@ -55,6 +55,11 @@ public sealed class DashboardController : ControllerBase
             return BadRequest("priorPeriodId is required.");
         }
 
+        if (currentPeriodId == priorPeriodId)
+        {
+            return BadRequest("currentPeriodId and priorPeriodId must be different.");
+        }
+
         try
         {
             var comparison = _store.CompareCompletenessStats(currentPeriodId, priorPeriodId);
