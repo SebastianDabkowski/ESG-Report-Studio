@@ -21,7 +21,9 @@ import type {
   MetricComparisonResponse,
   TextDisclosureComparisonResponse,
   MaturityAssessment,
-  CalculateMaturityAssessmentPayload
+  CalculateMaturityAssessmentPayload,
+  ProgressTrendsResponse,
+  OutstandingActionsResponse
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -120,6 +122,11 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
 
 export function getReportingData(): Promise<ReportingDataSnapshot> {
   return requestJson<ReportingDataSnapshot>('reporting-data')
+}
+
+export async function getPeriods(): Promise<ReportingPeriod[]> {
+  const data = await getReportingData()
+  return data.periods
 }
 
 export function createReportingPeriod(payload: CreateReportingPeriodPayload): Promise<ReportingDataSnapshot> {
@@ -1233,4 +1240,78 @@ export async function getMaturityAssessmentHistory(periodId: string): Promise<Ma
 
 export async function getMaturityAssessment(id: string): Promise<MaturityAssessment> {
   return requestJson<MaturityAssessment>(`maturity-assessments/${id}`)
+}
+
+// ==================== Progress Dashboard ====================
+
+export interface GetProgressTrendsParams {
+  periodIds?: string[]
+  category?: string
+  organizationalUnitId?: string
+  sectionId?: string
+  ownerId?: string
+}
+
+export async function getProgressTrends(params: GetProgressTrendsParams = {}): Promise<ProgressTrendsResponse> {
+  const searchParams = new URLSearchParams()
+  
+  if (params.periodIds && params.periodIds.length > 0) {
+    params.periodIds.forEach(id => searchParams.append('periodIds', id))
+  }
+  if (params.category) searchParams.append('category', params.category)
+  if (params.organizationalUnitId) searchParams.append('organizationalUnitId', params.organizationalUnitId)
+  if (params.sectionId) searchParams.append('sectionId', params.sectionId)
+  if (params.ownerId) searchParams.append('ownerId', params.ownerId)
+  
+  const queryString = searchParams.toString()
+  const url = queryString ? `progress-dashboard/trends?${queryString}` : 'progress-dashboard/trends'
+  
+  return requestJson<ProgressTrendsResponse>(url)
+}
+
+export interface GetOutstandingActionsParams {
+  periodIds?: string[]
+  category?: string
+  organizationalUnitId?: string
+  sectionId?: string
+  ownerId?: string
+  priority?: string
+}
+
+export async function getOutstandingActions(params: GetOutstandingActionsParams = {}): Promise<OutstandingActionsResponse> {
+  const searchParams = new URLSearchParams()
+  
+  if (params.periodIds && params.periodIds.length > 0) {
+    params.periodIds.forEach(id => searchParams.append('periodIds', id))
+  }
+  if (params.category) searchParams.append('category', params.category)
+  if (params.organizationalUnitId) searchParams.append('organizationalUnitId', params.organizationalUnitId)
+  if (params.sectionId) searchParams.append('sectionId', params.sectionId)
+  if (params.ownerId) searchParams.append('ownerId', params.ownerId)
+  if (params.priority) searchParams.append('priority', params.priority)
+  
+  const queryString = searchParams.toString()
+  const url = queryString ? `progress-dashboard/outstanding-actions?${queryString}` : 'progress-dashboard/outstanding-actions'
+  
+  return requestJson<OutstandingActionsResponse>(url)
+}
+
+export interface ExportProgressDashboardParams extends GetProgressTrendsParams {
+  format: 'csv' | 'pdf'
+}
+
+export function getProgressDashboardExportUrl(params: ExportProgressDashboardParams): string {
+  const searchParams = new URLSearchParams()
+  
+  searchParams.append('format', params.format)
+  
+  if (params.periodIds && params.periodIds.length > 0) {
+    params.periodIds.forEach(id => searchParams.append('periodIds', id))
+  }
+  if (params.category) searchParams.append('category', params.category)
+  if (params.organizationalUnitId) searchParams.append('organizationalUnitId', params.organizationalUnitId)
+  if (params.sectionId) searchParams.append('sectionId', params.sectionId)
+  if (params.ownerId) searchParams.append('ownerId', params.ownerId)
+  
+  return buildUrl(`progress-dashboard/export?${searchParams.toString()}`)
 }
