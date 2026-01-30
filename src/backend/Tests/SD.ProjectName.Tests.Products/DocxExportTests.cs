@@ -4,10 +4,10 @@ using ARP.ESG_ReportStudio.API.Services;
 
 namespace SD.ProjectName.Tests.Products;
 
-public sealed class PdfExportTests
+public sealed class DocxExportTests
 {
     [Fact]
-    public void GeneratePdf_WithValidReport_ReturnsPdfBytes()
+    public void GenerateDocx_WithValidReport_ReturnsDocxBytes()
     {
         // Arrange
         var store = new InMemoryReportStore();
@@ -34,30 +34,30 @@ public sealed class PdfExportTests
         {
             PeriodId = period.Id,
             GeneratedBy = "user1",
-            GenerationNote = "Test PDF export"
+            GenerationNote = "Test DOCX export"
         };
         
         var (resultIsValid, errorMessage, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         Assert.NotNull(report);
         
-        var pdfService = new PdfExportService();
+        var docxService = new DocxExportService();
         
         // Act
-        var pdfBytes = pdfService.GeneratePdf(report!);
+        var docxBytes = docxService.GenerateDocx(report!);
         
         // Assert
-        Assert.NotNull(pdfBytes);
-        Assert.NotEmpty(pdfBytes);
-        Assert.True(pdfBytes.Length > 0);
+        Assert.NotNull(docxBytes);
+        Assert.NotEmpty(docxBytes);
+        Assert.True(docxBytes.Length > 0);
         
-        // PDF files start with %PDF
-        var header = System.Text.Encoding.ASCII.GetString(pdfBytes.Take(4).ToArray());
-        Assert.Equal("%PDF", header);
+        // DOCX files start with PK (ZIP archive signature)
+        var header = System.Text.Encoding.ASCII.GetString(docxBytes.Take(2).ToArray());
+        Assert.Equal("PK", header);
     }
 
     [Fact]
-    public void GeneratePdf_WithOptions_IncludesTitlePageAndToc()
+    public void GenerateDocx_WithOptions_IncludesTitlePageAndToc()
     {
         // Arrange
         var store = new InMemoryReportStore();
@@ -88,8 +88,8 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
-        var options = new PdfExportOptions
+        var docxService = new DocxExportService();
+        var options = new DocxExportOptions
         {
             IncludeTitlePage = true,
             IncludeTableOfContents = true,
@@ -98,12 +98,12 @@ public sealed class PdfExportTests
         };
         
         // Act
-        var pdfBytes = pdfService.GeneratePdf(report!, options);
+        var docxBytes = docxService.GenerateDocx(report!, options);
         
         // Assert
-        Assert.NotNull(pdfBytes);
-        Assert.NotEmpty(pdfBytes);
-        Assert.True(pdfBytes.Length > 0);
+        Assert.NotNull(docxBytes);
+        Assert.NotEmpty(docxBytes);
+        Assert.True(docxBytes.Length > 0);
     }
 
     [Fact]
@@ -138,16 +138,16 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
+        var docxService = new DocxExportService();
         
         // Act
-        var filename = pdfService.GenerateFilename(report!);
+        var filename = docxService.GenerateFilename(report!);
         
         // Assert
         Assert.NotNull(filename);
         Assert.Contains("Test_Corporation", filename);
         Assert.Contains("2024_Annual_Report", filename);
-        Assert.EndsWith(".pdf", filename);
+        Assert.EndsWith(".docx", filename);
     }
 
     [Fact]
@@ -182,14 +182,14 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
+        var docxService = new DocxExportService();
         
         // Act
-        var filename = pdfService.GenerateFilename(report!, "Executive Summary");
+        var filename = docxService.GenerateFilename(report!, "Executive Summary");
         
         // Assert
         Assert.NotNull(filename);
         Assert.Contains("Executive_Summary", filename);
-        Assert.EndsWith(".pdf", filename);
+        Assert.EndsWith(".docx", filename);
     }
 }

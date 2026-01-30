@@ -70,22 +70,7 @@ public sealed class PdfExportService : IPdfExportService
 
     public string GenerateFilename(GeneratedReport report, string? variantName = null)
     {
-        var companyName = SanitizeFilename(report.Organization?.Name ?? "ESG-Report");
-        var periodName = SanitizeFilename(report.Period.Name);
-        var generatedDate = DateTime.TryParse(report.GeneratedAt, out var dt) 
-            ? dt.ToString("yyyy-MM-dd") 
-            : DateTime.UtcNow.ToString("yyyy-MM-dd");
-        
-        var parts = new List<string> { companyName, periodName };
-        
-        if (!string.IsNullOrWhiteSpace(variantName))
-        {
-            parts.Add(SanitizeFilename(variantName));
-        }
-        
-        parts.Add(generatedDate);
-        
-        return $"{string.Join("_", parts)}.pdf";
+        return ExportUtilities.GenerateFilename(report, variantName, ".pdf");
     }
 
     private void ComposeTitlePage(IContainer container, GeneratedReport report, PdfExportOptions options)
@@ -303,23 +288,11 @@ public sealed class PdfExportService : IPdfExportService
 
     private string FormatDateTime(string? isoDateTime)
     {
-        if (string.IsNullOrWhiteSpace(isoDateTime))
-        {
-            return DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC");
-        }
-        
-        if (DateTime.TryParse(isoDateTime, out var dt))
-        {
-            return dt.ToString("yyyy-MM-dd HH:mm:ss UTC");
-        }
-        
-        return isoDateTime;
+        return ExportUtilities.FormatDateTime(isoDateTime);
     }
 
     private string SanitizeFilename(string filename)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var sanitized = string.Join("_", filename.Split(invalid, StringSplitOptions.RemoveEmptyEntries));
-        return sanitized.Trim().Replace(" ", "_");
+        return ExportUtilities.SanitizeFilename(filename);
     }
 }

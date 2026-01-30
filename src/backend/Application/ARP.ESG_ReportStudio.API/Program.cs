@@ -18,6 +18,9 @@ builder.Services.AddHostedService<ARP.ESG_ReportStudio.API.Services.ReminderBack
 // Add PDF export service
 builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IPdfExportService, ARP.ESG_ReportStudio.API.Services.PdfExportService>();
 
+// Add DOCX export service
+builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IDocxExportService, ARP.ESG_ReportStudio.API.Services.DocxExportService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>

@@ -5,10 +5,10 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useKV } from '@github/spark/hooks'
-import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye, FilePdf } from '@phosphor-icons/react'
+import { CheckCircle, WarningCircle, FileText, PaperclipHorizontal, Lightbulb, Target, ChartBar, Circle, Eye, FilePdf, FileDoc } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, Gap, CompletenessStats, OrganizationalUnit } from '@/lib/types'
 import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, formatDate } from '@/lib/helpers'
-import { getCompletenessStats, exportReportPdf } from '@/lib/api'
+import { getCompletenessStats, exportReportPdf, exportReportDocx } from '@/lib/api'
 import ReportPreviewDialog from './ReportPreviewDialog'
 
 interface DashboardProps {
@@ -27,6 +27,7 @@ export default function Dashboard({ currentUser }: DashboardProps) {
   const [isLoadingStats, setIsLoadingStats] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [isExportingPdf, setIsExportingPdf] = useState(false)
+  const [isExportingDocx, setIsExportingDocx] = useState(false)
 
   const activePeriod = (periods || []).find(p => p.status === 'active')
   const activeSections = (sections || []).filter(s => activePeriod && s.periodId === activePeriod.id)
@@ -62,6 +63,26 @@ export default function Dashboard({ currentUser }: DashboardProps) {
       alert('Failed to export PDF. Please try again.')
     } finally {
       setIsExportingPdf(false)
+    }
+  }
+
+  // Export DOCX handler
+  const handleExportDocx = async () => {
+    if (!activePeriod) return
+
+    setIsExportingDocx(true)
+    try {
+      await exportReportDocx(activePeriod.id, {
+        generatedBy: currentUser.id,
+        includeTitlePage: true,
+        includeTableOfContents: true,
+        includePageNumbers: true
+      })
+    } catch (error) {
+      console.error('Failed to export DOCX:', error)
+      alert('Failed to export DOCX. Please try again.')
+    } finally {
+      setIsExportingDocx(false)
     }
   }
 
@@ -134,6 +155,16 @@ export default function Dashboard({ currentUser }: DashboardProps) {
                   >
                     <FilePdf weight="regular" className="h-4 w-4" />
                     {isExportingPdf ? 'Exporting...' : 'Export PDF'}
+                  </Button>
+                  <Button 
+                    onClick={handleExportDocx}
+                    disabled={isExportingDocx}
+                    variant="default"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <FileDoc weight="regular" className="h-4 w-4" />
+                    {isExportingDocx ? 'Exporting...' : 'Export DOCX'}
                   </Button>
                 </div>
               </div>

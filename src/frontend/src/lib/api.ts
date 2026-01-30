@@ -1470,3 +1470,52 @@ export async function exportReportPdf(
   window.URL.revokeObjectURL(blobUrl)
 }
 
+export interface ExportDocxPayload {
+  generatedBy: string
+  sectionIds?: string[]
+  variantName?: string
+  includeTitlePage?: boolean
+  includeTableOfContents?: boolean
+  includePageNumbers?: boolean
+}
+
+export async function exportReportDocx(
+  periodId: string,
+  payload: ExportDocxPayload
+): Promise<void> {
+  const response = await fetch(buildUrl(`periods/${periodId}/export-docx`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Failed to export DOCX' }))
+    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+  }
+
+  // Extract filename from Content-Disposition header or use a default
+  const contentDisposition = response.headers.get('Content-Disposition')
+  let filename = 'ESG-Report.docx'
+  
+  if (contentDisposition) {
+    const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(contentDisposition)
+    if (matches != null && matches[1]) {
+      filename = matches[1].replace(/['"]/g, '')
+    }
+  }
+
+  // Download the file
+  const blob = await response.blob()
+  const blobUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = blobUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(blobUrl)
+}
+
