@@ -13859,6 +13859,7 @@ public sealed class InMemoryReportStore
                 Rules = request.Rules,
                 RedactionRules = request.RedactionRules,
                 IsActive = true,
+                Language = request.Language,
                 CreatedBy = request.CreatedBy,
                 CreatedByName = user?.Name ?? request.CreatedBy,
                 CreatedAt = DateTime.UtcNow.ToString("o")
@@ -13935,6 +13936,7 @@ public sealed class InMemoryReportStore
             variant.Rules = request.Rules;
             variant.RedactionRules = request.RedactionRules;
             variant.IsActive = request.IsActive;
+            variant.Language = request.Language;
             variant.LastModifiedBy = request.UpdatedBy;
             variant.LastModifiedByName = user?.Name ?? request.UpdatedBy;
             variant.LastModifiedAt = DateTime.UtcNow.ToString("o");

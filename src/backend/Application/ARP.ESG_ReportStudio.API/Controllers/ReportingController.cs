@@ -467,7 +467,8 @@ public sealed class ReportingController : ControllerBase
             VariantName = request.VariantName,
             IncludeAttachments = request.IncludeAttachments ?? false,
             UserId = request.GeneratedBy,
-            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50
+            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50,
+            Language = request.Language
         };
         
         // Generate PDF
@@ -591,7 +592,8 @@ public sealed class ReportingController : ControllerBase
             VariantName = request.VariantName,
             IncludeAttachments = request.IncludeAttachments ?? false,
             UserId = request.GeneratedBy,
-            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50
+            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50,
+            Language = request.Language
         };
         
         // Generate DOCX
@@ -785,6 +787,13 @@ public sealed class ExportPdfRequest
     /// Maximum total size of attachments to include (in MB). Default: 50.
     /// </summary>
     public int? MaxAttachmentSizeMB { get; set; }
+    
+    /// <summary>
+    /// Output language for labels and formatting (e.g., "en-US", "de-DE").
+    /// When set, uses this language for section titles, labels, and locale-specific formatting.
+    /// User-entered content remains in the original language.
+    /// </summary>
+    public string? Language { get; set; }
 }
 
 /// <summary>
@@ -831,4 +840,11 @@ public sealed class ExportDocxRequest
     /// Maximum total size of attachments to include (in MB). Default: 50.
     /// </summary>
     public int? MaxAttachmentSizeMB { get; set; }
+    
+    /// <summary>
+    /// Output language for labels and formatting (e.g., "en-US", "de-DE").
+    /// When set, uses this language for section titles, labels, and locale-specific formatting.
+    /// User-entered content remains in the original language.
+    /// </summary>
+    public string? Language { get; set; }
 }

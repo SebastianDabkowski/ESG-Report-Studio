@@ -10,6 +10,13 @@ namespace ARP.ESG_ReportStudio.API.Services;
 /// </summary>
 public sealed class DocxExportService : IDocxExportService
 {
+    private readonly ILocalizationService _localizationService;
+    
+    public DocxExportService(ILocalizationService localizationService)
+    {
+        _localizationService = localizationService;
+    }
+    
     public byte[] GenerateDocx(GeneratedReport report, DocxExportOptions? options = null)
     {
         options ??= new DocxExportOptions();
@@ -31,14 +38,14 @@ public sealed class DocxExportService : IDocxExportService
             // Table of contents
             if (options.IncludeTableOfContents && report.Sections.Count > 0)
             {
-                AddTableOfContents(body, report);
+                AddTableOfContents(body, report, options.Language);
                 AddPageBreak(body);
             }
             
             // Report sections
             if (report.Sections.Count > 0)
             {
-                AddReportSections(body, report);
+                AddReportSections(body, report, options.Language);
             }
             
             // Attachments appendix
@@ -82,8 +89,18 @@ public sealed class DocxExportService : IDocxExportService
         // Variant name if provided
         if (!string.IsNullOrWhiteSpace(options.VariantName))
         {
-            var variantPara = AddParagraph(body, $"Variant: {options.VariantName}", null, true);
+            var variantLabel = _localizationService.GetLabel("label.variant", options.Language);
+            var variantPara = AddParagraph(body, $"{variantLabel} {options.VariantName}", null, true);
             MakeParagraphItalic(variantPara);
+            AddEmptyParagraph(body);
+        }
+        
+        // Language indicator if non-English
+        if (!string.IsNullOrWhiteSpace(options.Language) && options.Language != "en-US")
+        {
+            var languageLabel = _localizationService.GetLabel("label.language", options.Language);
+            var langPara = AddParagraph(body, $"{languageLabel} {options.Language}", null, true);
+            MakeParagraphItalic(langPara);
             AddEmptyParagraph(body);
         }
         
@@ -91,14 +108,15 @@ public sealed class DocxExportService : IDocxExportService
         AddEmptyParagraph(body);
         
         // Metadata table
-        var table = CreateMetadataTable(report);
+        var table = CreateMetadataTable(report, options.Language);
         body.AppendChild(table);
     }
 
-    private void AddTableOfContents(Body body, GeneratedReport report)
+    private void AddTableOfContents(Body body, GeneratedReport report, string? language = null)
     {
         // TOC Title - Heading 1
-        AddParagraph(body, "Table of Contents", "Heading1");
+        var tocLabel = _localizationService.GetLabel("label.table-of-contents", language);
+        AddParagraph(body, tocLabel, "Heading1");
         AddEmptyParagraph(body);
         
         // List sections
@@ -110,17 +128,17 @@ public sealed class DocxExportService : IDocxExportService
         }
     }
 
-    private void AddReportSections(Body body, GeneratedReport report)
+    private void AddReportSections(Body body, GeneratedReport report, string? language = null)
     {
         foreach (var section in report.Sections.OrderBy(s => s.Section.Order))
         {
-            AddSection(body, section);
+            AddSection(body, section, language);
             AddEmptyParagraph(body);
             AddEmptyParagraph(body);
         }
     }
 
-    private void AddSection(Body body, GeneratedReportSection section)
+    private void AddSection(Body body, GeneratedReportSection section, string? language = null)
     {
         // Section title - Heading 2
         AddParagraph(body, section.Section.Title, "Heading2");
@@ -134,10 +152,14 @@ public sealed class DocxExportService : IDocxExportService
         }
         
         // Section metadata - Heading 3
+        var categoryLabel = _localizationService.GetLabel("label.category", language);
+        var ownerLabel = _localizationService.GetLabel("label.owner", language);
+        var statusLabel = _localizationService.GetLabel("label.status", language);
+        
         var metaPara = body.AppendChild(new Paragraph());
         var metaRun = metaPara.AppendChild(new Run());
         metaRun.AppendChild(new Text(
-            $"Category: {section.Section.Category} | Owner: {section.Owner?.Name ?? "Unassigned"} | Status: {section.Section.Status}"
+            $"{categoryLabel} {section.Section.Category} | {ownerLabel} {section.Owner?.Name ?? "Unassigned"} | {statusLabel} {section.Section.Status}"
         ));
         metaPara.AppendChild(new ParagraphProperties(
             new ParagraphStyleId { Val = "Heading3" }
@@ -147,7 +169,7 @@ public sealed class DocxExportService : IDocxExportService
         // Data points table
         if (section.DataPoints.Count > 0)
         {
-            var dataPointsTable = CreateDataPointsTable(section.DataPoints);
+            var dataPointsTable = CreateDataPointsTable(section.DataPoints, language);
             body.AppendChild(dataPointsTable);
             AddEmptyParagraph(body);
         }
@@ -155,19 +177,19 @@ public sealed class DocxExportService : IDocxExportService
         // Assumptions
         if (section.Assumptions.Count > 0)
         {
-            AddAssumptions(body, section.Assumptions);
+            AddAssumptions(body, section.Assumptions, language);
             AddEmptyParagraph(body);
         }
         
         // Gaps
         if (section.Gaps.Count > 0)
         {
-            AddGaps(body, section.Gaps);
+            AddGaps(body, section.Gaps, language);
             AddEmptyParagraph(body);
         }
     }
 
-    private Table CreateMetadataTable(GeneratedReport report)
+    private Table CreateMetadataTable(GeneratedReport report, string? language = null)
     {
         var table = new Table();
         
@@ -185,17 +207,23 @@ public sealed class DocxExportService : IDocxExportService
         );
         table.AppendChild(tblProp);
         
-        // Add rows
-        AddTableRow(table, "Report Mode:", report.Period.ReportingMode);
-        AddTableRow(table, "Report Scope:", report.Period.ReportScope);
-        AddTableRow(table, "Generated By:", report.GeneratedByName);
-        AddTableRow(table, "Generated At:", FormatDateTime(report.GeneratedAt));
-        AddTableRow(table, "Total Sections:", report.Sections.Count.ToString());
+        // Add rows with localized labels
+        var reportModeLabel = _localizationService.GetLabel("label.report-mode", language);
+        var reportScopeLabel = _localizationService.GetLabel("label.report-scope", language);
+        var generatedByLabel = _localizationService.GetLabel("label.generated-by", language);
+        var generatedAtLabel = _localizationService.GetLabel("label.generated-at", language);
+        var totalSectionsLabel = _localizationService.GetLabel("label.total-sections", language);
+        
+        AddTableRow(table, reportModeLabel, report.Period.ReportingMode);
+        AddTableRow(table, reportScopeLabel, report.Period.ReportScope);
+        AddTableRow(table, generatedByLabel, report.GeneratedByName);
+        AddTableRow(table, generatedAtLabel, _localizationService.FormatDate(report.GeneratedAt, language));
+        AddTableRow(table, totalSectionsLabel, report.Sections.Count.ToString());
         
         return table;
     }
 
-    private Table CreateDataPointsTable(List<DataPointSnapshot> dataPoints)
+    private Table CreateDataPointsTable(List<DataPointSnapshot> dataPoints, string? language = null)
     {
         var table = new Table();
         
@@ -213,12 +241,17 @@ public sealed class DocxExportService : IDocxExportService
         );
         table.AppendChild(tblProp);
         
-        // Header row
+        // Header row with localized labels
+        var fieldLabel = _localizationService.GetLabel("label.field", language);
+        var valueLabel = _localizationService.GetLabel("label.value", language);
+        var unitLabel = _localizationService.GetLabel("label.unit", language);
+        var statusLabel = _localizationService.GetLabel("label.point-status", language);
+        
         var headerRow = new TableRow();
-        AddTableCell(headerRow, "Title", true);
-        AddTableCell(headerRow, "Value", true);
-        AddTableCell(headerRow, "Unit", true);
-        AddTableCell(headerRow, "Status", true);
+        AddTableCell(headerRow, fieldLabel, true);
+        AddTableCell(headerRow, valueLabel, true);
+        AddTableCell(headerRow, unitLabel, true);
+        AddTableCell(headerRow, statusLabel, true);
         table.AppendChild(headerRow);
         
         // Data rows
@@ -274,16 +307,19 @@ public sealed class DocxExportService : IDocxExportService
         row.Append(cell);
     }
 
-    private void AddAssumptions(Body body, List<AssumptionRecord> assumptions)
+    private void AddAssumptions(Body body, List<AssumptionRecord> assumptions, string? language = null)
     {
-        AddParagraph(body, "Assumptions", "Heading3");
+        var assumptionsLabel = _localizationService.GetLabel("label.assumptions", language);
+        var confidenceLabel = _localizationService.GetLabel("label.confidence-level", language);
+        
+        AddParagraph(body, assumptionsLabel, "Heading3");
         
         foreach (var assumption in assumptions)
         {
             var text = $"• {assumption.Description ?? "No description"}";
             if (!string.IsNullOrWhiteSpace(assumption.ConfidenceLevel))
             {
-                text += $" (Confidence: {assumption.ConfidenceLevel})";
+                text += $" ({confidenceLabel} {assumption.ConfidenceLevel})";
             }
             
             var para = AddParagraph(body, text, null);
@@ -302,16 +338,19 @@ public sealed class DocxExportService : IDocxExportService
         }
     }
 
-    private void AddGaps(Body body, List<GapRecord> gaps)
+    private void AddGaps(Body body, List<GapRecord> gaps, string? language = null)
     {
-        AddParagraph(body, "Data Gaps", "Heading3");
+        var gapsLabel = _localizationService.GetLabel("label.data-gaps", language);
+        var reasonLabel = _localizationService.GetLabel("label.reason", language);
+        
+        AddParagraph(body, gapsLabel, "Heading3");
         
         foreach (var gap in gaps)
         {
             var text = $"• {gap.Description ?? "No description"}";
             if (!string.IsNullOrWhiteSpace(gap.MissingReason))
             {
-                text += $" (Reason: {gap.MissingReason})";
+                text += $" ({reasonLabel} {gap.MissingReason})";
             }
             
             var para = AddParagraph(body, text, null);
