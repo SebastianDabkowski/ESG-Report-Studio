@@ -261,4 +261,35 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    /// <summary>
+    /// Retrieves cross-period lineage for a data point showing its history across reporting periods.
+    /// This includes previous period values, rollover information, and audit trail within the current period.
+    /// </summary>
+    /// <param name="id">Data point ID</param>
+    /// <param name="maxHistoryDepth">Maximum number of previous periods to include (default: 10, max: 50)</param>
+    /// <returns>Cross-period lineage response with historical snapshots</returns>
+    [HttpGet("{id}/cross-period-lineage")]
+    public ActionResult<CrossPeriodLineageResponse> GetCrossPeriodLineage(string id, [FromQuery] int maxHistoryDepth = 10)
+    {
+        // Validate max history depth
+        if (maxHistoryDepth < 1)
+        {
+            return BadRequest(new { error = "maxHistoryDepth must be at least 1." });
+        }
+        
+        if (maxHistoryDepth > 50)
+        {
+            return BadRequest(new { error = "maxHistoryDepth cannot exceed 50." });
+        }
+        
+        var lineage = _store.GetCrossPeriodLineage(id, maxHistoryDepth);
+        
+        if (lineage == null)
+        {
+            return NotFound(new { error = $"DataPoint with ID '{id}' not found or has no accessible lineage." });
+        }
+        
+        return Ok(lineage);
+    }
 }

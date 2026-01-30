@@ -1364,6 +1364,138 @@ public sealed class InMemoryReportStore
     }
 
     /// <summary>
+    /// Retrieves cross-period lineage information for a data point.
+    /// Shows the history of the data point across multiple reporting periods.
+    /// </summary>
+    /// <param name="dataPointId">ID of the data point to trace.</param>
+    /// <param name="maxHistoryDepth">Maximum number of previous periods to include (default: 10).</param>
+    /// <returns>Cross-period lineage response with historical snapshots.</returns>
+    public CrossPeriodLineageResponse? GetCrossPeriodLineage(string dataPointId, int maxHistoryDepth = 10)
+    {
+        lock (_lock)
+        {
+            var currentDataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
+            if (currentDataPoint == null)
+            {
+                return null;
+            }
+            
+            // Get current period info
+            var currentSection = _sections.FirstOrDefault(s => s.Id == currentDataPoint.SectionId);
+            if (currentSection == null)
+            {
+                return null;
+            }
+            
+            var currentPeriod = _periods.FirstOrDefault(p => p.Id == currentSection.PeriodId);
+            if (currentPeriod == null)
+            {
+                return null;
+            }
+            
+            // Get owner info
+            var currentOwner = _users.FirstOrDefault(u => u.Id == currentDataPoint.OwnerId);
+            
+            // Build current version snapshot
+            var currentVersion = new DataPointVersionSnapshot
+            {
+                DataPointId = currentDataPoint.Id,
+                PeriodId = currentPeriod.Id,
+                PeriodName = currentPeriod.Name,
+                PeriodStartDate = currentPeriod.StartDate,
+                PeriodEndDate = currentPeriod.EndDate,
+                Value = currentDataPoint.Value,
+                Content = currentDataPoint.Content,
+                Unit = currentDataPoint.Unit,
+                Source = currentDataPoint.Source,
+                InformationType = currentDataPoint.InformationType,
+                CreatedAt = currentDataPoint.CreatedAt,
+                UpdatedAt = currentDataPoint.UpdatedAt,
+                OwnerId = currentDataPoint.OwnerId,
+                OwnerName = currentOwner?.Name ?? "Unknown",
+                EvidenceCount = currentDataPoint.EvidenceIds?.Count ?? 0,
+                IsRolledOver = !string.IsNullOrEmpty(currentDataPoint.SourcePeriodId),
+                RolloverTimestamp = currentDataPoint.RolloverTimestamp
+            };
+            
+            // Trace lineage back through previous periods
+            var previousVersions = new List<DataPointVersionSnapshot>();
+            var currentSourceDataPointId = currentDataPoint.SourceDataPointId;
+            var visitedDataPoints = new HashSet<string> { dataPointId }; // Prevent circular references
+            
+            while (!string.IsNullOrEmpty(currentSourceDataPointId) && 
+                   previousVersions.Count < maxHistoryDepth &&
+                   !visitedDataPoints.Contains(currentSourceDataPointId))
+            {
+                visitedDataPoints.Add(currentSourceDataPointId);
+                
+                var sourceDataPoint = _dataPoints.FirstOrDefault(d => d.Id == currentSourceDataPointId);
+                if (sourceDataPoint == null)
+                {
+                    break; // Source data point not found, end of chain
+                }
+                
+                var sourceSection = _sections.FirstOrDefault(s => s.Id == sourceDataPoint.SectionId);
+                if (sourceSection == null)
+                {
+                    break;
+                }
+                
+                var sourcePeriod = _periods.FirstOrDefault(p => p.Id == sourceSection.PeriodId);
+                if (sourcePeriod == null)
+                {
+                    break;
+                }
+                
+                var sourceOwner = _users.FirstOrDefault(u => u.Id == sourceDataPoint.OwnerId);
+                
+                var sourceVersion = new DataPointVersionSnapshot
+                {
+                    DataPointId = sourceDataPoint.Id,
+                    PeriodId = sourcePeriod.Id,
+                    PeriodName = sourcePeriod.Name,
+                    PeriodStartDate = sourcePeriod.StartDate,
+                    PeriodEndDate = sourcePeriod.EndDate,
+                    Value = sourceDataPoint.Value,
+                    Content = sourceDataPoint.Content,
+                    Unit = sourceDataPoint.Unit,
+                    Source = sourceDataPoint.Source,
+                    InformationType = sourceDataPoint.InformationType,
+                    CreatedAt = sourceDataPoint.CreatedAt,
+                    UpdatedAt = sourceDataPoint.UpdatedAt,
+                    OwnerId = sourceDataPoint.OwnerId,
+                    OwnerName = sourceOwner?.Name ?? "Unknown",
+                    EvidenceCount = sourceDataPoint.EvidenceIds?.Count ?? 0,
+                    IsRolledOver = !string.IsNullOrEmpty(sourceDataPoint.SourcePeriodId),
+                    RolloverTimestamp = sourceDataPoint.RolloverTimestamp
+                };
+                
+                previousVersions.Add(sourceVersion);
+                
+                // Continue tracing back
+                currentSourceDataPointId = sourceDataPoint.SourceDataPointId;
+            }
+            
+            // Get audit log entries for changes within the current period
+            var currentPeriodChanges = _auditLog
+                .Where(a => a.EntityType == "DataPoint" && a.EntityId == dataPointId)
+                .OrderBy(a => a.Timestamp)
+                .ToList();
+            
+            return new CrossPeriodLineageResponse
+            {
+                DataPointId = dataPointId,
+                Title = currentDataPoint.Title,
+                CurrentVersion = currentVersion,
+                PreviousVersions = previousVersions,
+                CurrentPeriodChanges = currentPeriodChanges,
+                TotalPeriods = previousVersions.Count + 1,
+                HasMoreHistory = !string.IsNullOrEmpty(currentSourceDataPointId) && previousVersions.Count >= maxHistoryDepth
+            };
+        }
+    }
+
+    /// <summary>
     /// Calculates the completeness status based on data point fields and evidence.
     /// </summary>
     /// <param name="dataPoint">The data point to evaluate.</param>
@@ -9717,6 +9849,14 @@ public sealed class InMemoryReportStore
                         Deadline = sourceDataPoint.Deadline,
                         IsBlocked = false, // Reset blocking status
                         IsMissing = false, // Reset missing status
+                        
+                        // Cross-Period Lineage Tracking
+                        SourcePeriodId = request.SourcePeriodId,
+                        SourcePeriodName = sourcePeriod.Name,
+                        SourceDataPointId = sourceDataPoint.Id,
+                        RolloverTimestamp = now,
+                        RolloverPerformedBy = request.PerformedBy,
+                        RolloverPerformedByName = _users.FirstOrDefault(u => u.Id == request.PerformedBy)?.Name
                     };
                     
                     // Apply rollover rule
