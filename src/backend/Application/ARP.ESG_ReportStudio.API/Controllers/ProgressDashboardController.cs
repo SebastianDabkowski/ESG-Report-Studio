@@ -115,10 +115,10 @@ public class ProgressDashboardController : ControllerBase
         }
         else if (format.ToLower() == "pdf")
         {
-            // For now, return a simple text representation
-            // In a real implementation, this would use a PDF library
+            // For now, return a simple text representation with .txt extension
+            // TODO: In a real implementation, use a PDF library like QuestPDF or PdfSharp
             var content = GeneratePdfContent(trends, actions);
-            return File(System.Text.Encoding.UTF8.GetBytes(content), "application/pdf", "progress-dashboard.pdf");
+            return File(System.Text.Encoding.UTF8.GetBytes(content), "text/plain", "progress-dashboard.txt");
         }
 
         return BadRequest(new { error = "Invalid format. Use 'csv' or 'pdf'." });
@@ -137,10 +137,10 @@ public class ProgressDashboardController : ControllerBase
         csv.AppendLine("Summary");
         csv.AppendLine($"Total Periods,{trends.Summary.TotalPeriods}");
         csv.AppendLine($"Locked Periods,{trends.Summary.LockedPeriods}");
-        csv.AppendLine($"Latest Completeness %,{trends.Summary.LatestCompletenessPercentage:F2}");
-        csv.AppendLine($"Latest Maturity Score,{trends.Summary.LatestMaturityScore:F2}");
-        csv.AppendLine($"Completeness Change,{trends.Summary.CompletenessChange:F2}");
-        csv.AppendLine($"Maturity Change,{trends.Summary.MaturityChange:F2}");
+        csv.AppendLine($"Latest Completeness %,{trends.Summary.LatestCompletenessPercentage?.ToString("F2") ?? "N/A"}");
+        csv.AppendLine($"Latest Maturity Score,{trends.Summary.LatestMaturityScore?.ToString("F2") ?? "N/A"}");
+        csv.AppendLine($"Completeness Change,{trends.Summary.CompletenessChange?.ToString("F2") ?? "N/A"}");
+        csv.AppendLine($"Maturity Change,{trends.Summary.MaturityChange?.ToString("F2") ?? "N/A"}");
         csv.AppendLine();
         
         // Period Trends
@@ -149,7 +149,7 @@ public class ProgressDashboardController : ControllerBase
         
         foreach (var period in trends.Periods)
         {
-            csv.AppendLine($"{period.PeriodName},{period.StartDate},{period.EndDate},{period.Status},{period.IsLocked},{period.CompletenessPercentage:F2},{period.CompleteDataPoints},{period.TotalDataPoints},{period.MaturityScore:F2},{period.MaturityLevel},{period.OpenGaps},{period.HighRiskGaps},{period.BlockedDataPoints}");
+            csv.AppendLine($"{period.PeriodName},{period.StartDate},{period.EndDate},{period.Status},{period.IsLocked},{period.CompletenessPercentage:F2},{period.CompleteDataPoints},{period.TotalDataPoints},{period.MaturityScore?.ToString("F2") ?? "N/A"},{period.MaturityLevel ?? "N/A"},{period.OpenGaps},{period.HighRiskGaps},{period.BlockedDataPoints}");
         }
         
         csv.AppendLine();
@@ -192,10 +192,10 @@ public class ProgressDashboardController : ControllerBase
         content.AppendLine("-------");
         content.AppendLine($"Total Periods: {trends.Summary.TotalPeriods}");
         content.AppendLine($"Locked Periods: {trends.Summary.LockedPeriods}");
-        content.AppendLine($"Latest Completeness: {trends.Summary.LatestCompletenessPercentage:F2}%");
-        content.AppendLine($"Latest Maturity Score: {trends.Summary.LatestMaturityScore:F2}");
-        content.AppendLine($"Completeness Change: {trends.Summary.CompletenessChange:F2}%");
-        content.AppendLine($"Maturity Change: {trends.Summary.MaturityChange:F2}");
+        content.AppendLine($"Latest Completeness: {trends.Summary.LatestCompletenessPercentage?.ToString("F2") ?? "N/A"}%");
+        content.AppendLine($"Latest Maturity Score: {trends.Summary.LatestMaturityScore?.ToString("F2") ?? "N/A"}");
+        content.AppendLine($"Completeness Change: {trends.Summary.CompletenessChange?.ToString("F2") ?? "N/A"}%");
+        content.AppendLine($"Maturity Change: {trends.Summary.MaturityChange?.ToString("F2") ?? "N/A"}");
         content.AppendLine();
         
         content.AppendLine("PERIOD TRENDS");
@@ -205,7 +205,7 @@ public class ProgressDashboardController : ControllerBase
             content.AppendLine($"{period.PeriodName} ({period.StartDate} - {period.EndDate})");
             content.AppendLine($"  Status: {period.Status} {(period.IsLocked ? "[LOCKED]" : "")}");
             content.AppendLine($"  Completeness: {period.CompletenessPercentage:F2}% ({period.CompleteDataPoints}/{period.TotalDataPoints})");
-            content.AppendLine($"  Maturity: {period.MaturityScore:F2} - {period.MaturityLevel}");
+            content.AppendLine($"  Maturity: {period.MaturityScore?.ToString("F2") ?? "N/A"} - {period.MaturityLevel ?? "N/A"}");
             content.AppendLine($"  Issues: {period.OpenGaps} gaps ({period.HighRiskGaps} high-risk), {period.BlockedDataPoints} blocked");
             content.AppendLine();
         }

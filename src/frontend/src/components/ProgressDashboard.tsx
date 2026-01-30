@@ -24,7 +24,7 @@ import type {
   ProgressTrendsResponse,
   OutstandingActionsResponse
 } from '@/lib/types'
-import { getProgressTrends, getOutstandingActions, getProgressDashboardExportUrl } from '@/lib/api'
+import { getProgressTrends, getOutstandingActions, getProgressDashboardExportUrl, type GetProgressTrendsParams, type GetOutstandingActionsParams, type ExportProgressDashboardParams } from '@/lib/api'
 
 interface ProgressDashboardProps {
   currentUser: User
@@ -57,7 +57,7 @@ export default function ProgressDashboard({ currentUser }: ProgressDashboardProp
     const fetchTrends = async () => {
       setIsLoadingTrends(true)
       try {
-        const params: any = {}
+        const params: GetProgressTrendsParams = {}
         if (selectedPeriods.length > 0) params.periodIds = selectedPeriods
         if (selectedCategory !== 'all') params.category = selectedCategory
         if (selectedOrgUnit !== 'all') params.organizationalUnitId = selectedOrgUnit
@@ -81,7 +81,7 @@ export default function ProgressDashboard({ currentUser }: ProgressDashboardProp
     const fetchActions = async () => {
       setIsLoadingActions(true)
       try {
-        const params: any = {}
+        const params: GetOutstandingActionsParams = {}
         if (selectedPeriods.length > 0) params.periodIds = selectedPeriods
         if (selectedCategory !== 'all') params.category = selectedCategory
         if (selectedOrgUnit !== 'all') params.organizationalUnitId = selectedOrgUnit
@@ -102,7 +102,7 @@ export default function ProgressDashboard({ currentUser }: ProgressDashboardProp
   }, [selectedPeriods, selectedCategory, selectedOrgUnit, selectedSection, selectedOwner, selectedPriority])
 
   const handleExport = (format: 'csv' | 'pdf') => {
-    const params: any = { format }
+    const params: ExportProgressDashboardParams = { format }
     if (selectedPeriods.length > 0) params.periodIds = selectedPeriods
     if (selectedCategory !== 'all') params.category = selectedCategory
     if (selectedOrgUnit !== 'all') params.organizationalUnitId = selectedOrgUnit

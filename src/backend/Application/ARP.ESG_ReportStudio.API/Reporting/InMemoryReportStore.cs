@@ -12117,7 +12117,14 @@ public sealed class InMemoryReportStore
     
     /// <summary>
     /// Gets progress trends across multiple periods.
+    /// Shows completeness percentages, maturity scores, and outstanding issues for each period.
     /// </summary>
+    /// <param name="periodIds">Optional list of specific period IDs to include. If null or empty, all periods are included.</param>
+    /// <param name="category">Optional category filter (environmental, social, governance).</param>
+    /// <param name="organizationalUnitId">Optional organizational unit filter (not fully implemented in current schema).</param>
+    /// <param name="sectionId">Optional section ID to filter to a specific section.</param>
+    /// <param name="ownerId">Optional owner ID to filter by data owner.</param>
+    /// <returns>Progress trends response with period data and summary statistics.</returns>
     public ProgressTrendsResponse GetProgressTrends(
         List<string>? periodIds = null,
         string? category = null,
@@ -12227,8 +12234,16 @@ public sealed class InMemoryReportStore
     }
     
     /// <summary>
-    /// Gets outstanding actions across periods.
+    /// Gets outstanding actions across periods that require attention.
+    /// Includes gaps, blocked data points, and pending approvals.
     /// </summary>
+    /// <param name="periodIds">Optional list of specific period IDs to include. If null or empty, all periods are included.</param>
+    /// <param name="category">Optional category filter (environmental, social, governance).</param>
+    /// <param name="organizationalUnitId">Optional organizational unit filter (not fully implemented in current schema).</param>
+    /// <param name="sectionId">Optional section ID to filter to a specific section.</param>
+    /// <param name="ownerId">Optional owner ID to filter by data owner.</param>
+    /// <param name="priority">Optional priority filter (high, medium, low).</param>
+    /// <returns>Outstanding actions response with actions list and summary statistics.</returns>
     public OutstandingActionsResponse GetOutstandingActions(
         List<string>? periodIds = null,
         string? category = null,
