@@ -54,6 +54,7 @@ public sealed class InMemoryReportStore
     private readonly List<TemplateUsageRecord> _templateUsageRecords = new(); // Template usage audit trail
     private readonly List<GenerationHistoryEntry> _generationHistory = new(); // Report generation history
     private readonly List<ExportHistoryEntry> _exportHistory = new(); // Export history (PDF/DOCX)
+    private readonly List<SystemRole> _roles = new(); // System roles catalog
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -143,6 +144,9 @@ public sealed class InMemoryReportStore
         
         // Initialize sample users
         InitializeSampleUsers();
+        
+        // Initialize predefined roles
+        InitializePredefinedRoles();
     }
 
     private void InitializeSampleUsers()
@@ -15214,6 +15218,307 @@ public sealed class InMemoryReportStore
             };
             
             _auditLog.Add(entry);
+        }
+    }
+    
+    #endregion
+    
+    #region Role Management
+    
+    /// <summary>
+    /// Initialize predefined system roles that cannot be deleted.
+    /// </summary>
+    private void InitializePredefinedRoles()
+    {
+        var now = DateTime.UtcNow.ToString("O");
+        var systemUser = "system";
+        
+        _roles.AddRange(new[]
+        {
+            new SystemRole
+            {
+                Id = "role-admin",
+                Name = "Admin",
+                Description = "Full system access including user management, configuration, and all data operations",
+                Permissions = new List<string> { "all" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-management",
+                Name = "Management",
+                Description = "Strategic oversight, report approval, and high-level access to all ESG data",
+                Permissions = new List<string> { "view-all-reports", "approve-reports", "export-reports", "view-dashboards" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-compliance-officer",
+                Name = "Compliance Officer",
+                Description = "Ensure regulatory compliance, audit data quality, and manage validation rules",
+                Permissions = new List<string> { "view-all-reports", "manage-validation-rules", "run-audits", "export-audit-packages", "view-compliance-reports" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-reviewer",
+                Name = "Reviewer",
+                Description = "Review and provide feedback on submitted ESG data and reports",
+                Permissions = new List<string> { "view-assigned-sections", "add-comments", "request-changes" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-contributor",
+                Name = "Contributor",
+                Description = "Input ESG data, upload evidence, and manage assigned sections",
+                Permissions = new List<string> { "edit-assigned-sections", "upload-evidence", "add-assumptions", "add-gaps" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-data-owner",
+                Name = "Data Owner",
+                Description = "Responsible for data quality and completeness in assigned areas",
+                Permissions = new List<string> { "edit-assigned-sections", "assign-contributors", "upload-evidence", "approve-section-data" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-approver",
+                Name = "Approver",
+                Description = "Approve or reject section submissions and sign off on completed work",
+                Permissions = new List<string> { "view-assigned-sections", "approve-sections", "reject-sections", "add-approval-comments" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-external-advisor-read",
+                Name = "External Advisor (Read)",
+                Description = "Read-only access to ESG reports for advisory purposes",
+                Permissions = new List<string> { "view-reports", "view-public-sections" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-external-advisor-edit",
+                Name = "External Advisor (Edit - Limited)",
+                Description = "Limited editing rights to provide guidance and recommendations",
+                Permissions = new List<string> { "view-reports", "add-comments", "add-recommendations" },
+                IsPredefined = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
+            }
+        });
+    }
+    
+    /// <summary>
+    /// Get all system roles.
+    /// </summary>
+    public IReadOnlyList<SystemRole> GetRoles()
+    {
+        lock (_lock)
+        {
+            return _roles.OrderBy(r => r.Name).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get a specific role by ID.
+    /// </summary>
+    public SystemRole? GetRole(string roleId)
+    {
+        lock (_lock)
+        {
+            return _roles.FirstOrDefault(r => r.Id == roleId);
+        }
+    }
+    
+    /// <summary>
+    /// Update a role's description. Permissions cannot be updated for consistency.
+    /// Creates an audit log entry and increments version.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) UpdateRoleDescription(string roleId, UpdateRoleRequest request, string userId, string userName)
+    {
+        lock (_lock)
+        {
+            var role = _roles.FirstOrDefault(r => r.Id == roleId);
+            if (role == null)
+            {
+                return (false, "Role not found.");
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.Description))
+            {
+                return (false, "Description cannot be empty.");
+            }
+            
+            var oldDescription = role.Description;
+            role.Description = request.Description;
+            role.UpdatedAt = DateTime.UtcNow.ToString("O");
+            role.UpdatedBy = userId;
+            role.Version++;
+            
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange
+                {
+                    Field = "Description",
+                    OldValue = oldDescription,
+                    NewValue = request.Description
+                },
+                new FieldChange
+                {
+                    Field = "Version",
+                    OldValue = (role.Version - 1).ToString(),
+                    NewValue = role.Version.ToString()
+                }
+            };
+            
+            CreateAuditLogEntry(
+                userId,
+                userName,
+                "update-role-description",
+                "SystemRole",
+                roleId,
+                changes,
+                $"Updated description for role '{role.Name}'");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Attempt to delete a role. Predefined roles cannot be deleted.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) DeleteRole(string roleId, string userId, string userName)
+    {
+        lock (_lock)
+        {
+            var role = _roles.FirstOrDefault(r => r.Id == roleId);
+            if (role == null)
+            {
+                return (false, "Role not found.");
+            }
+            
+            if (role.IsPredefined)
+            {
+                return (false, $"Cannot delete predefined role '{role.Name}'. Predefined roles are essential for system access control and cannot be removed.");
+            }
+            
+            // Remove the role
+            _roles.Remove(role);
+            
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange
+                {
+                    Field = "Status",
+                    OldValue = "active",
+                    NewValue = "deleted"
+                }
+            };
+            
+            CreateAuditLogEntry(
+                userId,
+                userName,
+                "delete-role",
+                "SystemRole",
+                roleId,
+                changes,
+                $"Deleted custom role '{role.Name}'");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Create a new custom role.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, SystemRole? Role) CreateRole(CreateRoleRequest request, string userId, string userName)
+    {
+        lock (_lock)
+        {
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return (false, "Role name is required.", null);
+            }
+            
+            if (string.IsNullOrWhiteSpace(request.Description))
+            {
+                return (false, "Role description is required.", null);
+            }
+            
+            if (request.Permissions == null || request.Permissions.Count == 0)
+            {
+                return (false, "At least one permission is required.", null);
+            }
+            
+            // Check for duplicate name
+            if (_roles.Any(r => r.Name.Equals(request.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, $"A role with the name '{request.Name}' already exists.", null);
+            }
+            
+            var role = new SystemRole
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                Description = request.Description,
+                Permissions = new List<string>(request.Permissions),
+                IsPredefined = false,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                CreatedBy = userId,
+                Version = 1
+            };
+            
+            _roles.Add(role);
+            
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange { Field = "Name", OldValue = null, NewValue = role.Name },
+                new FieldChange { Field = "Description", OldValue = null, NewValue = role.Description },
+                new FieldChange { Field = "Permissions", OldValue = null, NewValue = string.Join(", ", role.Permissions) }
+            };
+            
+            CreateAuditLogEntry(
+                userId,
+                userName,
+                "create-role",
+                "SystemRole",
+                role.Id,
+                changes,
+                $"Created custom role '{role.Name}'");
+            
+            return (true, null, role);
         }
     }
     
