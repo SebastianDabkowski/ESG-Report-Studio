@@ -1485,3 +1485,98 @@ export interface GapRecord {
   status: string
   createdAt: string
 }
+
+// Branding and Template Types
+export interface BrandingProfile {
+  id: string
+  name: string
+  description?: string
+  organizationId?: string
+  subsidiaryName?: string
+  logoData?: string
+  logoContentType?: string
+  primaryColor?: string
+  secondaryColor?: string
+  accentColor?: string
+  footerText?: string
+  isDefault: boolean
+  isActive: boolean
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
+export interface CreateBrandingProfileRequest {
+  name: string
+  description?: string
+  organizationId?: string
+  subsidiaryName?: string
+  logoData?: string
+  logoContentType?: string
+  primaryColor?: string
+  secondaryColor?: string
+  accentColor?: string
+  footerText?: string
+  isDefault: boolean
+  createdBy: string
+}
+
+export interface UpdateBrandingProfileRequest {
+  name: string
+  description?: string
+  subsidiaryName?: string
+  logoData?: string
+  logoContentType?: string
+  primaryColor?: string
+  secondaryColor?: string
+  accentColor?: string
+  footerText?: string
+  isDefault: boolean
+  isActive: boolean
+  updatedBy: string
+}
+
+export interface DocumentTemplate {
+  id: string
+  name: string
+  description?: string
+  templateType: 'pdf' | 'docx' | 'excel'
+  version: number
+  configuration: string
+  isDefault: boolean
+  isActive: boolean
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+}
+
+export interface CreateDocumentTemplateRequest {
+  name: string
+  description?: string
+  templateType: 'pdf' | 'docx' | 'excel'
+  configuration: string
+  isDefault: boolean
+  createdBy: string
+}
+
+export interface UpdateDocumentTemplateRequest {
+  name: string
+  description?: string
+  configuration: string
+  isDefault: boolean
+  isActive: boolean
+  updatedBy: string
+}
+
+export interface TemplateUsageRecord {
+  id: string
+  templateId: string
+  templateVersion: number
+  periodId: string
+  brandingProfileId?: string
+  exportType: string
+  generatedBy: string
+  generatedAt: string
+}
