@@ -38,6 +38,8 @@ public sealed class InMemoryReportStore
     private readonly List<LegalHold> _legalHolds = new();
     private readonly List<DeletionReport> _deletionReports = new();
     private readonly List<RolloverAuditLog> _rolloverAuditLogs = new();
+    private readonly List<DataTypeRolloverRule> _rolloverRules = new();
+    private readonly List<RolloverRuleHistory> _rolloverRuleHistory = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -9576,6 +9578,9 @@ public sealed class InMemoryReportStore
                     var targetDataPointId = Guid.NewGuid().ToString();
                     dataPointIdMapping[sourceDataPoint.Id] = targetDataPointId;
                     
+                    // Get effective rollover rule for this data type
+                    var ruleType = GetEffectiveRolloverRule(sourceDataPoint.Type, request.RuleOverrides);
+                    
                     var targetDataPoint = new DataPoint
                     {
                         Id = targetDataPointId,
@@ -9583,30 +9588,72 @@ public sealed class InMemoryReportStore
                         Type = sourceDataPoint.Type,
                         Classification = sourceDataPoint.Classification,
                         Title = sourceDataPoint.Title,
-                        Content = sourceDataPoint.Content,
-                        Value = sourceDataPoint.Value,
-                        Unit = sourceDataPoint.Unit,
                         OwnerId = sourceDataPoint.OwnerId,
                         ContributorIds = new List<string>(sourceDataPoint.ContributorIds),
                         Source = sourceDataPoint.Source,
                         InformationType = sourceDataPoint.InformationType,
-                        Assumptions = sourceDataPoint.Assumptions,
-                        CompletenessStatus = "empty", // Reset completeness for new period
-                        ReviewStatus = "draft", // Reset review status
                         CreatedAt = now,
                         UpdatedAt = now,
                         EvidenceIds = new List<string>(), // Will be populated if CopyAttachments is true
                         Deadline = sourceDataPoint.Deadline,
                         IsBlocked = false, // Reset blocking status
                         IsMissing = false, // Reset missing status
-                        // Copy estimate metadata if present
-                        EstimateType = sourceDataPoint.EstimateType,
-                        EstimateMethod = sourceDataPoint.EstimateMethod,
-                        ConfidenceLevel = sourceDataPoint.ConfidenceLevel,
-                        EstimateInputSources = new List<EstimateInputSource>(sourceDataPoint.EstimateInputSources),
-                        EstimateInputs = sourceDataPoint.EstimateInputs,
-                        SourceReferences = new List<NarrativeSourceReference>(sourceDataPoint.SourceReferences)
                     };
+                    
+                    // Apply rollover rule
+                    switch (ruleType)
+                    {
+                        case DataTypeRolloverRuleType.Copy:
+                            // Copy all data values
+                            targetDataPoint.Content = sourceDataPoint.Content;
+                            targetDataPoint.Value = sourceDataPoint.Value;
+                            targetDataPoint.Unit = sourceDataPoint.Unit;
+                            targetDataPoint.Assumptions = sourceDataPoint.Assumptions;
+                            targetDataPoint.CompletenessStatus = "empty"; // Reset completeness for new period
+                            targetDataPoint.ReviewStatus = "draft"; // Reset review status
+                            // Copy estimate metadata if present
+                            targetDataPoint.EstimateType = sourceDataPoint.EstimateType;
+                            targetDataPoint.EstimateMethod = sourceDataPoint.EstimateMethod;
+                            targetDataPoint.ConfidenceLevel = sourceDataPoint.ConfidenceLevel;
+                            targetDataPoint.EstimateInputSources = new List<EstimateInputSource>(sourceDataPoint.EstimateInputSources);
+                            targetDataPoint.EstimateInputs = sourceDataPoint.EstimateInputs;
+                            targetDataPoint.SourceReferences = new List<NarrativeSourceReference>(sourceDataPoint.SourceReferences);
+                            break;
+                            
+                        case DataTypeRolloverRuleType.Reset:
+                            // Don't copy data values - create empty placeholder
+                            targetDataPoint.Content = string.Empty;
+                            targetDataPoint.Value = null;
+                            targetDataPoint.Unit = sourceDataPoint.Unit; // Keep unit for consistency
+                            targetDataPoint.Assumptions = null;
+                            targetDataPoint.CompletenessStatus = "missing";
+                            targetDataPoint.ReviewStatus = "draft";
+                            // Don't copy estimate metadata
+                            targetDataPoint.EstimateType = null;
+                            targetDataPoint.EstimateMethod = null;
+                            targetDataPoint.ConfidenceLevel = null;
+                            targetDataPoint.EstimateInputSources = new List<EstimateInputSource>();
+                            targetDataPoint.EstimateInputs = null;
+                            targetDataPoint.SourceReferences = new List<NarrativeSourceReference>();
+                            break;
+                            
+                        case DataTypeRolloverRuleType.CopyAsDraft:
+                            // Copy data values but mark as requiring review
+                            targetDataPoint.Content = $"[Carried forward - Requires Review] {sourceDataPoint.Content}";
+                            targetDataPoint.Value = sourceDataPoint.Value;
+                            targetDataPoint.Unit = sourceDataPoint.Unit;
+                            targetDataPoint.Assumptions = sourceDataPoint.Assumptions;
+                            targetDataPoint.CompletenessStatus = "incomplete"; // Mark as incomplete
+                            targetDataPoint.ReviewStatus = "draft"; // Explicitly draft
+                            // Copy estimate metadata
+                            targetDataPoint.EstimateType = sourceDataPoint.EstimateType;
+                            targetDataPoint.EstimateMethod = sourceDataPoint.EstimateMethod;
+                            targetDataPoint.ConfidenceLevel = sourceDataPoint.ConfidenceLevel;
+                            targetDataPoint.EstimateInputSources = new List<EstimateInputSource>(sourceDataPoint.EstimateInputSources);
+                            targetDataPoint.EstimateInputs = sourceDataPoint.EstimateInputs;
+                            targetDataPoint.SourceReferences = new List<NarrativeSourceReference>(sourceDataPoint.SourceReferences);
+                            break;
+                    }
                     
                     _dataPoints.Add(targetDataPoint);
                     dataPointsCopied++;
@@ -9873,6 +9920,246 @@ public sealed class InMemoryReportStore
             }
             
             return logs.OrderByDescending(l => l.PerformedAt).ToList();
+        }
+    }
+    
+    #endregion
+    
+    #region Rollover Rules Management
+    
+    /// <summary>
+    /// Gets all rollover rules, optionally filtered by data type.
+    /// </summary>
+    public IReadOnlyList<DataTypeRolloverRule> GetRolloverRules(string? dataType = null)
+    {
+        lock (_lock)
+        {
+            var rules = _rolloverRules.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(dataType))
+            {
+                rules = rules.Where(r => r.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            return rules.OrderBy(r => r.DataType).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Gets the rollover rule for a specific data type.
+    /// Returns null if no rule is configured for the data type.
+    /// </summary>
+    public DataTypeRolloverRule? GetRolloverRuleForDataType(string dataType)
+    {
+        lock (_lock)
+        {
+            return _rolloverRules.FirstOrDefault(r => 
+                r.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+    
+    /// <summary>
+    /// Gets the effective rollover rule for a data type, considering overrides.
+    /// If an override is provided, returns that; otherwise returns configured rule or default.
+    /// </summary>
+    private DataTypeRolloverRuleType GetEffectiveRolloverRule(
+        string dataType, 
+        List<RolloverRuleOverride> overrides)
+    {
+        // Check for override first
+        var override_ = overrides.FirstOrDefault(o => 
+            o.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
+        
+        if (override_ != null)
+        {
+            return override_.RuleType;
+        }
+        
+        // Check for configured rule
+        var rule = GetRolloverRuleForDataType(dataType);
+        if (rule != null)
+        {
+            return rule.RuleType;
+        }
+        
+        // Default to Copy
+        return DataTypeRolloverRuleType.Copy;
+    }
+    
+    /// <summary>
+    /// Saves (creates or updates) a rollover rule for a data type.
+    /// </summary>
+    public DataTypeRolloverRule SaveRolloverRule(SaveDataTypeRolloverRuleRequest request)
+    {
+        lock (_lock)
+        {
+            var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            
+            // Validate data type
+            if (string.IsNullOrWhiteSpace(request.DataType))
+            {
+                throw new ArgumentException("DataType is required");
+            }
+            
+            // Parse rule type
+            if (!Enum.TryParse<DataTypeRolloverRuleType>(request.RuleType, true, out var ruleType))
+            {
+                throw new ArgumentException($"Invalid RuleType: {request.RuleType}. Valid values are: Copy, Reset, CopyAsDraft");
+            }
+            
+            // Get user for audit trail
+            var user = _users.FirstOrDefault(u => u.Id == request.SavedBy);
+            var userName = user?.Name ?? "Unknown User";
+            
+            // Check if rule already exists
+            var existingRule = _rolloverRules.FirstOrDefault(r => 
+                r.DataType.Equals(request.DataType, StringComparison.OrdinalIgnoreCase));
+            
+            DataTypeRolloverRule rule;
+            string changeType;
+            
+            if (existingRule != null)
+            {
+                // Update existing rule
+                var oldVersion = existingRule.Version;
+                
+                existingRule.RuleType = ruleType;
+                existingRule.Description = request.Description;
+                existingRule.UpdatedAt = now;
+                existingRule.UpdatedBy = request.SavedBy;
+                existingRule.Version++;
+                
+                rule = existingRule;
+                changeType = "updated";
+                
+                // Create history entry
+                _rolloverRuleHistory.Add(new RolloverRuleHistory
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleId = rule.Id,
+                    DataType = rule.DataType,
+                    RuleType = ruleType,
+                    Description = request.Description,
+                    Version = rule.Version,
+                    ChangedAt = now,
+                    ChangedBy = request.SavedBy,
+                    ChangedByName = userName,
+                    ChangeType = changeType
+                });
+            }
+            else
+            {
+                // Create new rule
+                rule = new DataTypeRolloverRule
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    DataType = request.DataType,
+                    RuleType = ruleType,
+                    Description = request.Description,
+                    CreatedAt = now,
+                    CreatedBy = request.SavedBy,
+                    Version = 1
+                };
+                
+                _rolloverRules.Add(rule);
+                changeType = "created";
+                
+                // Create history entry
+                _rolloverRuleHistory.Add(new RolloverRuleHistory
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleId = rule.Id,
+                    DataType = rule.DataType,
+                    RuleType = ruleType,
+                    Description = request.Description,
+                    Version = 1,
+                    ChangedAt = now,
+                    ChangedBy = request.SavedBy,
+                    ChangedByName = userName,
+                    ChangeType = changeType
+                });
+            }
+            
+            // Create audit log entry
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = now,
+                UserId = request.SavedBy,
+                UserName = userName,
+                Action = $"RolloverRule{char.ToUpper(changeType[0])}{changeType.Substring(1)}",
+                EntityType = "RolloverRule",
+                EntityId = rule.Id,
+                ChangeNote = $"Rollover rule for data type '{rule.DataType}' {changeType}: {ruleType}"
+            });
+            
+            return rule;
+        }
+    }
+    
+    /// <summary>
+    /// Deletes a rollover rule for a data type (resets to default behavior).
+    /// </summary>
+    public bool DeleteRolloverRule(string dataType, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var rule = _rolloverRules.FirstOrDefault(r => 
+                r.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
+            
+            if (rule == null)
+            {
+                return false;
+            }
+            
+            var now = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ");
+            var user = _users.FirstOrDefault(u => u.Id == deletedBy);
+            var userName = user?.Name ?? "Unknown User";
+            
+            // Create history entry
+            _rolloverRuleHistory.Add(new RolloverRuleHistory
+            {
+                Id = Guid.NewGuid().ToString(),
+                RuleId = rule.Id,
+                DataType = rule.DataType,
+                RuleType = rule.RuleType,
+                Description = rule.Description,
+                Version = rule.Version,
+                ChangedAt = now,
+                ChangedBy = deletedBy,
+                ChangedByName = userName,
+                ChangeType = "deleted"
+            });
+            
+            // Create audit log entry
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = now,
+                UserId = deletedBy,
+                UserName = userName,
+                Action = "RolloverRuleDeleted",
+                EntityType = "RolloverRule",
+                EntityId = rule.Id,
+                ChangeNote = $"Rollover rule for data type '{rule.DataType}' deleted (reset to default)"
+            });
+            
+            _rolloverRules.Remove(rule);
+            return true;
+        }
+    }
+    
+    /// <summary>
+    /// Gets the history of changes for a rollover rule.
+    /// </summary>
+    public IReadOnlyList<RolloverRuleHistory> GetRolloverRuleHistory(string dataType)
+    {
+        lock (_lock)
+        {
+            return _rolloverRuleHistory
+                .Where(h => h.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(h => h.ChangedAt)
+                .ToList();
         }
     }
     
