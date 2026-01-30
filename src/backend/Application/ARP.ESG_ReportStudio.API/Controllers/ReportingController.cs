@@ -621,7 +621,9 @@ public sealed class ReportingController : ControllerBase
             return BadRequest(new { error = "UserId and UserName are required." });
         }
         
+        // Ensure the request has the correct generation ID from the path
         request.GenerationId = generationId;
+        
         var (isSuccess, errorMessage, entry) = _store.MarkGenerationAsFinal(request);
         
         if (!isSuccess)

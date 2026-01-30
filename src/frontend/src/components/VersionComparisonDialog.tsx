@@ -35,11 +35,14 @@ export default function VersionComparisonDialog({
   const compare = useCompareGenerations()
 
   useEffect(() => {
+    // Trigger comparison when component mounts or IDs change
     compare.mutate({
       generation1Id,
       generation2Id,
       userId: currentUser.id
     })
+    // We intentionally don't include compare.mutate in dependencies to avoid re-running on every mutation state change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generation1Id, generation2Id, currentUser.id])
 
   const comparison = compare.data
