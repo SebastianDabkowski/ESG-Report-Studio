@@ -639,6 +639,40 @@ public sealed class DataPoint
     /// ISO 8601 timestamp when the need for recalculation was detected.
     /// </summary>
     public string? RecalculationFlaggedAt { get; set; }
+    
+    // Cross-Period Lineage Tracking
+    /// <summary>
+    /// ID of the reporting period from which this data point was copied/rolled over.
+    /// Null if this is an original data point (not copied from a previous period).
+    /// </summary>
+    public string? SourcePeriodId { get; set; }
+    
+    /// <summary>
+    /// Name of the reporting period from which this data point was copied.
+    /// Stored for quick reference without additional lookups.
+    /// </summary>
+    public string? SourcePeriodName { get; set; }
+    
+    /// <summary>
+    /// ID of the original data point from the previous period that was copied.
+    /// Used to trace lineage back through reporting periods.
+    /// </summary>
+    public string? SourceDataPointId { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this data point was rolled over from a previous period.
+    /// </summary>
+    public string? RolloverTimestamp { get; set; }
+    
+    /// <summary>
+    /// User ID who performed the rollover operation.
+    /// </summary>
+    public string? RolloverPerformedBy { get; set; }
+    
+    /// <summary>
+    /// Name of user who performed the rollover operation.
+    /// </summary>
+    public string? RolloverPerformedByName { get; set; }
 }
 
 /// <summary>
@@ -4199,4 +4233,138 @@ public sealed class RolloverRuleOverride
     /// Rule type to use for this specific rollover.
     /// </summary>
     public DataTypeRolloverRuleType RuleType { get; set; }
+}
+
+/// <summary>
+/// Represents a snapshot of a data point's value at a specific point in time.
+/// Used to track value changes across periods.
+/// </summary>
+public sealed class DataPointVersionSnapshot
+{
+    /// <summary>
+    /// ID of the data point.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the reporting period.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the reporting period.
+    /// </summary>
+    public string PeriodName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Start date of the reporting period.
+    /// </summary>
+    public string PeriodStartDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// End date of the reporting period.
+    /// </summary>
+    public string PeriodEndDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Value of the data point.
+    /// </summary>
+    public string? Value { get; set; }
+    
+    /// <summary>
+    /// Content/description of the data point.
+    /// </summary>
+    public string Content { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Unit of measurement.
+    /// </summary>
+    public string? Unit { get; set; }
+    
+    /// <summary>
+    /// Source of the data.
+    /// </summary>
+    public string Source { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Information type (fact, estimate, declaration, plan).
+    /// </summary>
+    public string InformationType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this version was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this version was last updated.
+    /// </summary>
+    public string UpdatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner ID at this point in time.
+    /// </summary>
+    public string OwnerId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Owner name at this point in time.
+    /// </summary>
+    public string OwnerName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Number of evidence attachments.
+    /// </summary>
+    public int EvidenceCount { get; set; }
+    
+    /// <summary>
+    /// Indicates if this value was copied from a previous period.
+    /// </summary>
+    public bool IsRolledOver { get; set; }
+    
+    /// <summary>
+    /// Timestamp when rolled over, if applicable.
+    /// </summary>
+    public string? RolloverTimestamp { get; set; }
+}
+
+/// <summary>
+/// Response containing cross-period lineage information for a data point.
+/// Shows the history of a data point across multiple reporting periods.
+/// </summary>
+public sealed class CrossPeriodLineageResponse
+{
+    /// <summary>
+    /// ID of the current data point.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title of the data point.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current reporting period information.
+    /// </summary>
+    public DataPointVersionSnapshot CurrentVersion { get; set; } = new();
+    
+    /// <summary>
+    /// Historical versions from previous periods, ordered from most recent to oldest.
+    /// </summary>
+    public List<DataPointVersionSnapshot> PreviousVersions { get; set; } = new();
+    
+    /// <summary>
+    /// Audit log entries showing all changes within the current period.
+    /// </summary>
+    public List<AuditLogEntry> CurrentPeriodChanges { get; set; } = new();
+    
+    /// <summary>
+    /// Total number of periods this data point has existed in.
+    /// </summary>
+    public int TotalPeriods { get; set; }
+    
+    /// <summary>
+    /// Indicates if there are more historical versions beyond those returned.
+    /// </summary>
+    public bool HasMoreHistory { get; set; }
 }
