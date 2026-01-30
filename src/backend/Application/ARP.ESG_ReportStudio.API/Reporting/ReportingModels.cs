@@ -8,7 +8,13 @@ public sealed class User
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
-    public string Role { get; set; } = string.Empty; // admin, report-owner, contributor, auditor
+    public string Role { get; set; } = string.Empty; // admin, report-owner, contributor, auditor (DEPRECATED - use RoleIds)
+    
+    /// <summary>
+    /// List of role IDs assigned to this user.
+    /// Supports multiple roles per user with deterministic permission merging.
+    /// </summary>
+    public List<string> RoleIds { get; set; } = new();
     
     /// <summary>
     /// Indicates whether the user is active in the system.
@@ -7200,4 +7206,51 @@ public sealed class CreateRoleRequest
 public sealed class UpdateRoleRequest
 {
     public string Description { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to assign roles to a user.
+/// </summary>
+public sealed class AssignUserRolesRequest
+{
+    /// <summary>
+    /// List of role IDs to assign to the user.
+    /// </summary>
+    public List<string> RoleIds { get; set; } = new();
+}
+
+/// <summary>
+/// Response containing effective permissions for a user.
+/// </summary>
+public sealed class EffectivePermissionsResponse
+{
+    /// <summary>
+    /// User ID.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Assigned role IDs.
+    /// </summary>
+    public List<string> RoleIds { get; set; } = new();
+    
+    /// <summary>
+    /// Effective permissions calculated from all assigned roles (union).
+    /// </summary>
+    public List<string> EffectivePermissions { get; set; } = new();
+    
+    /// <summary>
+    /// Details about which role contributes which permissions.
+    /// </summary>
+    public List<RolePermissionDetail> RoleDetails { get; set; } = new();
+}
+
+/// <summary>
+/// Details about permissions from a specific role.
+/// </summary>
+public sealed class RolePermissionDetail
+{
+    public string RoleId { get; set; } = string.Empty;
+    public string RoleName { get; set; } = string.Empty;
+    public List<string> Permissions { get; set; } = new();
 }

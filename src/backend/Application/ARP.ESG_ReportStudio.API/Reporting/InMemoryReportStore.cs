@@ -15524,5 +15524,171 @@ public sealed class InMemoryReportStore
     
     #endregion
     
+    #region User Role Assignment
+    
+    /// <summary>
+    /// Assign roles to a user. Replaces existing role assignments.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) AssignUserRoles(
+        string userId, 
+        AssignUserRolesRequest request, 
+        string assignedBy, 
+        string assignedByName)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return (false, $"User with ID '{userId}' not found.");
+            }
+            
+            // Validate all role IDs exist
+            foreach (var roleId in request.RoleIds)
+            {
+                var role = _roles.FirstOrDefault(r => r.Id == roleId);
+                if (role == null)
+                {
+                    return (false, $"Role with ID '{roleId}' not found.");
+                }
+            }
+            
+            // Track changes for audit
+            var oldRoleIds = user.RoleIds.ToList();
+            var changes = new List<FieldChange>
+            {
+                new()
+                {
+                    Field = "RoleIds",
+                    OldValue = string.Join(", ", oldRoleIds),
+                    NewValue = string.Join(", ", request.RoleIds)
+                }
+            };
+            
+            // Update user roles
+            user.RoleIds = request.RoleIds.ToList();
+            
+            // Create audit log entry
+            CreateAuditLogEntry(
+                assignedBy,
+                assignedByName,
+                "assign-user-roles",
+                "User",
+                userId,
+                changes,
+                $"Assigned {request.RoleIds.Count} role(s) to user '{user.Name}'");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Remove a specific role from a user.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) RemoveUserRole(
+        string userId, 
+        string roleId, 
+        string removedBy, 
+        string removedByName)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return (false, $"User with ID '{userId}' not found.");
+            }
+            
+            if (!user.RoleIds.Contains(roleId))
+            {
+                return (false, $"User does not have role '{roleId}' assigned.");
+            }
+            
+            var role = _roles.FirstOrDefault(r => r.Id == roleId);
+            var roleName = role?.Name ?? roleId;
+            
+            // Track changes for audit
+            var oldRoleIds = user.RoleIds.ToList();
+            user.RoleIds.Remove(roleId);
+            
+            var changes = new List<FieldChange>
+            {
+                new()
+                {
+                    Field = "RoleIds",
+                    OldValue = string.Join(", ", oldRoleIds),
+                    NewValue = string.Join(", ", user.RoleIds)
+                }
+            };
+            
+            // Create audit log entry
+            CreateAuditLogEntry(
+                removedBy,
+                removedByName,
+                "remove-user-role",
+                "User",
+                userId,
+                changes,
+                $"Removed role '{roleName}' from user '{user.Name}'");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Calculate effective permissions for a user based on all assigned roles.
+    /// Uses union strategy - user has a permission if ANY role grants it.
+    /// </summary>
+    public EffectivePermissionsResponse GetEffectivePermissions(string userId)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return new EffectivePermissionsResponse
+                {
+                    UserId = userId,
+                    RoleIds = new List<string>(),
+                    EffectivePermissions = new List<string>(),
+                    RoleDetails = new List<RolePermissionDetail>()
+                };
+            }
+            
+            var effectivePermissions = new HashSet<string>();
+            var roleDetails = new List<RolePermissionDetail>();
+            
+            foreach (var roleId in user.RoleIds)
+            {
+                var role = _roles.FirstOrDefault(r => r.Id == roleId);
+                if (role != null)
+                {
+                    // Add all permissions from this role to effective set
+                    foreach (var permission in role.Permissions)
+                    {
+                        effectivePermissions.Add(permission);
+                    }
+                    
+                    roleDetails.Add(new RolePermissionDetail
+                    {
+                        RoleId = role.Id,
+                        RoleName = role.Name,
+                        Permissions = role.Permissions.ToList()
+                    });
+                }
+            }
+            
+            return new EffectivePermissionsResponse
+            {
+                UserId = userId,
+                RoleIds = user.RoleIds.ToList(),
+                EffectivePermissions = effectivePermissions.OrderBy(p => p).ToList(),
+                RoleDetails = roleDetails
+            };
+        }
+    }
+    
+    #endregion
+    
     #endregion
 }

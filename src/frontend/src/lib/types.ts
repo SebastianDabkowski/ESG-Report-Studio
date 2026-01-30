@@ -26,7 +26,8 @@ export interface User {
   id: string
   name: string
   email: string
-  role: UserRole
+  role: UserRole // DEPRECATED - use roleIds instead
+  roleIds?: string[] // List of assigned role IDs (supports multiple roles)
   avatarUrl?: string
   isActive?: boolean
   canExport?: boolean // Permission to export reports
@@ -1695,5 +1696,22 @@ export interface CreateRoleRequest {
 
 export interface UpdateRoleRequest {
   description: string
+}
+
+export interface AssignUserRolesRequest {
+  roleIds: string[]
+}
+
+export interface RolePermissionDetail {
+  roleId: string
+  roleName: string
+  permissions: string[]
+}
+
+export interface EffectivePermissionsResponse {
+  userId: string
+  roleIds: string[]
+  effectivePermissions: string[]
+  roleDetails: RolePermissionDetail[]
 }
 
