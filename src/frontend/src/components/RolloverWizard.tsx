@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, CheckCircle, Clock, FileText, Database, Paperclip } from '@phosphor-icons/react'
-import type { ReportingPeriod, User, RolloverOptions, ReportingMode, ReportScope, RolloverReconciliation } from '@/lib/types'
+import type { ReportingPeriod, User, RolloverOptions, ReportingMode, ReportScope, RolloverReconciliation, InactiveOwnerWarning } from '@/lib/types'
 import { rolloverPeriod } from '@/lib/api'
 import RolloverReconciliationReport from './RolloverReconciliationReport'
 
@@ -33,9 +33,11 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
   const [copyDisclosures, setCopyDisclosures] = useState<boolean>(true)
   const [copyDataValues, setCopyDataValues] = useState<boolean>(false)
   const [copyAttachments, setCopyAttachments] = useState<boolean>(false)
+  const [dueDateAdjustmentDays, setDueDateAdjustmentDays] = useState<number>(0)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reconciliation, setReconciliation] = useState<RolloverReconciliation | null>(null)
+  const [inactiveOwnerWarnings, setInactiveOwnerWarnings] = useState<InactiveOwnerWarning[] | null>(null)
 
   const sourcePeriod = periods.find(p => p.id === sourcePeriodId)
   
@@ -54,8 +56,10 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
     setCopyDisclosures(true)
     setCopyDataValues(false)
     setCopyAttachments(false)
+    setDueDateAdjustmentDays(0)
     setError(null)
     setReconciliation(null)
+    setInactiveOwnerWarnings(null)
     onClose()
   }
 
@@ -116,7 +120,8 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         copyStructure,
         copyDisclosures,
         copyDataValues,
-        copyAttachments
+        copyAttachments,
+        dueDateAdjustmentDays: dueDateAdjustmentDays !== 0 ? dueDateAdjustmentDays : undefined
       }
 
       const result = await rolloverPeriod({
@@ -130,15 +135,16 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         performedBy: currentUser.id
       })
 
-      // Store reconciliation if available
+      // Store reconciliation and warnings if available
       if (result.reconciliation) {
         setReconciliation(result.reconciliation)
-        setStep('complete')
-      } else {
-        // Fallback: close and refresh if no reconciliation
-        handleClose()
-        onSuccess()
       }
+      
+      if (result.inactiveOwnerWarnings && result.inactiveOwnerWarnings.length > 0) {
+        setInactiveOwnerWarnings(result.inactiveOwnerWarnings)
+      }
+      
+      setStep('complete')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to perform rollover')
     } finally {
@@ -398,6 +404,24 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
             </div>
           </div>
 
+          {copyDisclosures && (
+            <div className="rounded-md border p-4 bg-blue-50">
+              <Label htmlFor="due-date-adjustment" className="text-sm font-medium">
+                Due Date Adjustment (Days)
+              </Label>
+              <p className="text-xs text-muted-foreground mt-1 mb-2">
+                Automatically adjust task due dates when carrying forward remediation actions. Enter the number of days to add (positive) or subtract (negative) from existing due dates (e.g., 365 for one year forward, -30 for one month backward).
+              </p>
+              <Input
+                id="due-date-adjustment"
+                type="number"
+                value={dueDateAdjustmentDays}
+                onChange={(e) => setDueDateAdjustmentDays(parseInt(e.target.value) || 0)}
+                placeholder="0 (no adjustment)"
+              />
+            </div>
+          )}
+
           {!copyStructure && (
             <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded p-2">
               Structure copy is required. Other options depend on it.
@@ -481,6 +505,32 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
               </div>
             </div>
           </div>
+
+          {inactiveOwnerWarnings && inactiveOwnerWarnings.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 mb-4">
+              <div className="flex items-start gap-2">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-amber-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-medium text-amber-900 mb-2">Inactive Owner Warnings</h4>
+                  <p className="text-sm text-amber-700 mb-3">
+                    The following items have been assigned to inactive users. Please reassign these items before proceeding:
+                  </p>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {inactiveOwnerWarnings.map((warning, index) => (
+                      <div key={index} className="text-sm bg-white rounded p-2 border border-amber-200">
+                        <div className="font-medium text-amber-900">{warning.entityType}: {warning.entityTitle}</div>
+                        <div className="text-amber-700">Owner: {warning.userName} (inactive)</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {reconciliation && <RolloverReconciliationReport reconciliation={reconciliation} />}
         </div>

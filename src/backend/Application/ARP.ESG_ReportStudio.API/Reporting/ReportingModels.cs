@@ -9,6 +9,12 @@ public sealed class User
     public string Name { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string Role { get; set; } = string.Empty; // admin, report-owner, contributor, auditor
+    
+    /// <summary>
+    /// Indicates whether the user is active in the system.
+    /// Inactive users cannot be assigned as owners during rollover.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
 }
 
 public sealed class ReportingPeriod
@@ -4042,6 +4048,13 @@ public sealed class RolloverOptions
     /// Requires CopyDataValues to be true.
     /// </summary>
     public bool CopyAttachments { get; set; }
+    
+    /// <summary>
+    /// Number of days to add to remediation action due dates when carrying forward tasks.
+    /// If null or 0, due dates are not adjusted. If positive, shifts dates forward by that many days.
+    /// This enables re-baselining task due dates to align with the new reporting period.
+    /// </summary>
+    public int? DueDateAdjustmentDays { get; set; }
 }
 
 /// <summary>
@@ -4142,6 +4155,44 @@ public sealed class RolloverResult
     /// Reconciliation report showing mapping results and any unmapped items.
     /// </summary>
     public RolloverReconciliation? Reconciliation { get; set; }
+    
+    /// <summary>
+    /// Warnings about inactive users found in ownership assignments during rollover.
+    /// These users need to be reassigned before finalizing the new period.
+    /// </summary>
+    public List<InactiveOwnerWarning> InactiveOwnerWarnings { get; set; } = new();
+}
+
+/// <summary>
+/// Warning about an inactive user assigned as owner in carried-forward content.
+/// </summary>
+public sealed class InactiveOwnerWarning
+{
+    /// <summary>
+    /// ID of the inactive user.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the inactive user.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of entity where the inactive owner was found.
+    /// Examples: "Section", "RemediationPlan", "RemediationAction", "DataPoint"
+    /// </summary>
+    public string EntityType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the entity with the inactive owner.
+    /// </summary>
+    public string EntityId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title or description of the entity for display purposes.
+    /// </summary>
+    public string EntityTitle { get; set; } = string.Empty;
 }
 
 /// <summary>

@@ -750,5 +750,280 @@ namespace SD.ProjectName.Tests.Products
             Assert.Single(targetDataPoints);
             Assert.Equal("Test Metric", targetDataPoints.First().Title);
         }
+
+        [Fact]
+        public void Rollover_WithDueDateAdjustment_ShouldAdjustTaskDueDates()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Get or create a section
+            var sections = store.GetSections(sourcePeriodId);
+            var section = sections.FirstOrDefault();
+            
+            // If no sections exist, the test period should have created them
+            Assert.NotNull(section);
+            
+            // Create a remediation plan with an action
+            var (planValid, planError, plan) = store.CreateRemediationPlan(
+                section.Id,
+                "Test Plan",
+                "Test Description",
+                "Q1 2025",
+                "user1",
+                "Test User",
+                "medium",
+                null,
+                null,
+                null,
+                "user1"
+            );
+            
+            Assert.True(planValid, planError);
+            Assert.NotNull(plan);
+            
+            var (actionValid, actionError, action) = store.CreateRemediationAction(
+                plan.Id,
+                "Test Action",
+                "Test action description",
+                "user1",
+                "Test User",
+                "2024-06-01T00:00:00.000Z",
+                "user1"
+            );
+            
+            Assert.True(actionValid, actionError);
+            Assert.NotNull(action);
+
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions
+                {
+                    CopyStructure = true,
+                    CopyDisclosures = true,
+                    CopyDataValues = false,
+                    CopyAttachments = false,
+                    DueDateAdjustmentDays = 365 // Shift forward by one year
+                },
+                PerformedBy = "user1"
+            };
+
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result);
+            Assert.NotNull(result.TargetPeriod);
+            
+            // Verify remediation action was copied with adjusted due date
+            var allPlans = store.GetRemediationPlans();
+            var targetSections = store.GetSections(result.TargetPeriod.Id);
+            var targetPlansList = allPlans.Where(p => 
+                targetSections.Any(s => s.Id == p.SectionId)).ToList();
+            Assert.NotEmpty(targetPlansList);
+            
+            var targetPlan = targetPlansList.First(p => p.Title == "Test Plan");
+            var targetActions = store.GetRemediationActions(targetPlan.Id);
+            Assert.NotEmpty(targetActions);
+            
+            var targetAction = targetActions.First();
+            Assert.Equal("Test Action", targetAction.Title);
+            
+            // Verify due date was adjusted
+            var originalDueDate = DateTime.Parse("2024-06-01T00:00:00.000Z");
+            var expectedDueDate = originalDueDate.AddDays(365);
+            var actualDueDate = DateTime.Parse(targetAction.DueDate);
+            
+            // Compare dates (allowing for minor time zone differences)
+            Assert.Equal(expectedDueDate.Date, actualDueDate.Date);
+        }
+
+        [Fact]
+        public void Rollover_WithInactiveOwner_ShouldFlagWarning()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Get a section and an existing user
+            var sections = store.GetSections(sourcePeriodId);
+            var section = sections.FirstOrDefault();
+            Assert.NotNull(section);
+            
+            var users = store.GetUsers();
+            var inactiveUser = users.First();
+            
+            // Mark user as inactive (simulating a user who left the organization)
+            inactiveUser.IsActive = false;
+            
+            // Update section owner to inactive user
+            var updateRequest = new UpdateSectionOwnerRequest
+            {
+                OwnerId = inactiveUser.Id,
+                UpdatedBy = "admin"
+            };
+            store.UpdateSectionOwner(section.Id, updateRequest);
+            
+            // Create a remediation plan with an action owned by inactive user
+            var (planValid, planError, plan) = store.CreateRemediationPlan(
+                section.Id,
+                "Test Plan",
+                "Test Description",
+                "Q1 2025",
+                inactiveUser.Id,
+                inactiveUser.Name,
+                "medium",
+                null,
+                null,
+                null,
+                "user1"
+            );
+            
+            Assert.True(planValid, planError);
+            Assert.NotNull(plan);
+            
+            var (actionValid, actionError, action) = store.CreateRemediationAction(
+                plan.Id,
+                "Test Action",
+                "Test action description",
+                inactiveUser.Id,
+                inactiveUser.Name,
+                "2024-06-01T00:00:00.000Z",
+                "user1"
+            );
+            
+            Assert.True(actionValid, actionError);
+            Assert.NotNull(action);
+
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions
+                {
+                    CopyStructure = true,
+                    CopyDisclosures = true,
+                    CopyDataValues = false,
+                    CopyAttachments = false
+                },
+                PerformedBy = "user1"
+            };
+
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result);
+            Assert.NotNull(result.InactiveOwnerWarnings);
+            
+            // Should have warnings for section, remediation plan, and remediation action
+            Assert.NotEmpty(result.InactiveOwnerWarnings);
+            
+            // Debug: Print all warnings
+            var warningTypes = string.Join(", ", result.InactiveOwnerWarnings.Select(w => w.EntityType));
+            
+            // We expect at least remediation plan and action warnings
+            Assert.True(result.InactiveOwnerWarnings.Count >= 2, $"Expected at least 2 warnings, got {result.InactiveOwnerWarnings.Count}. Types: {warningTypes}");
+            
+            // Verify warnings contain the inactive user
+            var userWarnings = result.InactiveOwnerWarnings.Where(w => w.UserId == inactiveUser.Id).ToList();
+            Assert.NotEmpty(userWarnings);
+            
+            // Verify warnings include different entity types
+            // Note: Section warnings are expected if the section ownership is copied
+            var entityTypes = result.InactiveOwnerWarnings.Select(w => w.EntityType).Distinct().ToList();
+            Assert.Contains("RemediationPlan", entityTypes);
+            Assert.Contains("RemediationAction", entityTypes);
+            // Section warning is optional depending on if sections copy ownership
+        }
+
+        [Fact]
+        public void Rollover_WithActiveOwner_ShouldNotFlagWarning()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Get a section
+            var sections = store.GetSections(sourcePeriodId);
+            var section = sections.FirstOrDefault();
+            Assert.NotNull(section);
+            
+            // Create a remediation plan with an action
+            var (planValid, planError, plan) = store.CreateRemediationPlan(
+                section.Id,
+                "Test Plan",
+                "Test Description",
+                "Q1 2025",
+                "user1",
+                "Test User",
+                "medium",
+                null,
+                null,
+                null,
+                "user1"
+            );
+            
+            Assert.True(planValid, planError);
+            Assert.NotNull(plan);
+            
+            var (actionValid, actionError, action) = store.CreateRemediationAction(
+                plan.Id,
+                "Test Action",
+                "Test action description",
+                "user1",
+                "Test User",
+                "2024-06-01T00:00:00.000Z",
+                "user1"
+            );
+            
+            Assert.True(actionValid, actionError);
+            Assert.NotNull(action);
+
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions
+                {
+                    CopyStructure = true,
+                    CopyDisclosures = true,
+                    CopyDataValues = false,
+                    CopyAttachments = false
+                },
+                PerformedBy = "user1"
+            };
+
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result);
+            Assert.NotNull(result.InactiveOwnerWarnings);
+            
+            // Should have no warnings for active users
+            Assert.Empty(result.InactiveOwnerWarnings);
+        }
     }
 }
