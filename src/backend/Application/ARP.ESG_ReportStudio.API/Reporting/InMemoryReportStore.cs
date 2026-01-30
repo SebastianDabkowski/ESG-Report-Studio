@@ -47,6 +47,7 @@ public sealed class InMemoryReportStore
     private readonly List<VarianceExplanation> _varianceExplanations = new();
     private readonly List<MaturityModel> _maturityModels = new();
     private readonly Dictionary<string, List<AuditLogEntry>> _periodAuditTrails = new(); // Key: periodId
+    private readonly List<ValidationResult> _validationResults = new(); // Audit trail for validation runs
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -603,6 +604,39 @@ public sealed class InMemoryReportStore
         lock (_lock)
         {
             return _periods.ToList();
+        }
+    }
+
+    /// <summary>
+    /// Retrieves validation history for a specific reporting period.
+    /// Returns all validation runs with timestamp and user for audit trail.
+    /// </summary>
+    /// <param name="periodId">The ID of the reporting period.</param>
+    /// <returns>List of validation results ordered by timestamp (most recent first).</returns>
+    public IReadOnlyList<ValidationResult> GetValidationHistory(string periodId)
+    {
+        lock (_lock)
+        {
+            return _validationResults
+                .Where(v => v.PeriodId == periodId)
+                .OrderByDescending(v => v.ValidatedAt)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Retrieves the most recent validation result for a reporting period.
+    /// </summary>
+    /// <param name="periodId">The ID of the reporting period.</param>
+    /// <returns>The most recent validation result, or null if no validation has been run.</returns>
+    public ValidationResult? GetLatestValidationResult(string periodId)
+    {
+        lock (_lock)
+        {
+            return _validationResults
+                .Where(v => v.PeriodId == periodId)
+                .OrderByDescending(v => v.ValidatedAt)
+                .FirstOrDefault();
         }
     }
 
@@ -8607,6 +8641,18 @@ public sealed class InMemoryReportStore
                 issues.AddRange(ValidateMissingRequiredFields(period, sections));
             }
 
+            // New: Validate evidence and provenance for sections marked as 'Ready'
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("ready-section-metadata"))
+            {
+                issues.AddRange(ValidateReadySectionMetadata(period, sections));
+            }
+
+            // New: Validate based on reporting mode (SME vs CSRD/ESRS)
+            if (request.RuleTypes.Count == 0 || request.RuleTypes.Contains("reporting-mode-compliance"))
+            {
+                issues.AddRange(ValidateReportingModeCompliance(period, sections));
+            }
+
             // Calculate counts by severity
             var errorCount = issues.Count(i => i.Severity == "error");
             var warningCount = issues.Count(i => i.Severity == "warning");
@@ -8619,7 +8665,7 @@ public sealed class InMemoryReportStore
                 ? $"Validation passed. {warningCount} warnings, {infoCount} informational messages."
                 : $"Validation failed with {errorCount} errors, {warningCount} warnings.";
 
-            return new ValidationResult
+            var result = new ValidationResult
             {
                 Status = status,
                 PeriodId = request.PeriodId,
@@ -8633,6 +8679,11 @@ public sealed class InMemoryReportStore
                 CanPublish = canPublish,
                 Summary = summary
             };
+
+            // Store validation result for audit trail
+            _validationResults.Add(result);
+
+            return result;
         }
     }
 
@@ -8931,6 +8982,218 @@ public sealed class InMemoryReportStore
                         });
                     }
                 }
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Validates that sections marked as 'Ready' have required evidence and provenance metadata.
+    /// </summary>
+    private List<ValidationIssue> ValidateReadySectionMetadata(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        foreach (var section in sections.Where(s => s.Status == "ready-for-review" || s.Status == "approved"))
+        {
+            var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            foreach (var dataPoint in dataPoints)
+            {
+                // Skip validation for not-applicable or missing data points
+                if (dataPoint.CompletenessStatus == "not-applicable" || dataPoint.CompletenessStatus == "missing")
+                {
+                    continue;
+                }
+
+                // Check for missing evidence (required for ready/approved sections)
+                if (dataPoint.EvidenceIds.Count == 0 && dataPoint.InformationType != "estimate")
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "missing-required-field",
+                        Severity = "error",
+                        Message = $"Section '{section.Title}' is marked as '{section.Status}', but data point '{dataPoint.Title}' has no supporting evidence.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = new List<string> { dataPoint.Id },
+                        FieldName = "EvidenceIds",
+                        ExpectedValue = "At least one evidence document",
+                        ActualValue = "empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                // Check for missing provenance metadata
+                if (string.IsNullOrWhiteSpace(dataPoint.Source))
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "missing-required-field",
+                        Severity = "error",
+                        Message = $"Section '{section.Title}' is marked as '{section.Status}', but data point '{dataPoint.Title}' has no source information.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = new List<string> { dataPoint.Id },
+                        FieldName = "Source",
+                        ExpectedValue = "Source description",
+                        ActualValue = "null or empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                // Check for missing calculation formula when data is calculated
+                if (dataPoint.IsCalculated && string.IsNullOrWhiteSpace(dataPoint.CalculationFormula))
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "missing-required-field",
+                        Severity = "error",
+                        Message = $"Section '{section.Title}' is marked as '{section.Status}', but calculated data point '{dataPoint.Title}' has no calculation formula.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AffectedDataPointIds = new List<string> { dataPoint.Id },
+                        FieldName = "CalculationFormula",
+                        ExpectedValue = "Calculation method and source data",
+                        ActualValue = "null or empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                // Verify evidence integrity
+                foreach (var evidenceId in dataPoint.EvidenceIds)
+                {
+                    var evidence = _evidence.FirstOrDefault(e => e.Id == evidenceId);
+                    if (evidence != null && evidence.IntegrityStatus == "failed")
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "evidence-integrity-failed",
+                            Severity = "error",
+                            Message = $"Section '{section.Title}' is marked as '{section.Status}', but evidence '{evidence.Title}' linked to data point '{dataPoint.Title}' has failed integrity check.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            AffectedEvidenceIds = new List<string> { evidenceId },
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+                }
+            }
+        }
+
+        return issues;
+    }
+
+    /// <summary>
+    /// Validates compliance with reporting mode requirements (SME simplified vs CSRD/ESRS-aligned).
+    /// </summary>
+    private List<ValidationIssue> ValidateReportingModeCompliance(ReportingPeriod period, List<ReportSection> sections)
+    {
+        var issues = new List<ValidationIssue>();
+
+        // CSRD/ESRS-aligned mode requires additional metadata
+        if (period.ReportingMode == "extended" || period.ReportingMode == "csrd" || period.ReportingMode == "esrs")
+        {
+            // Validate catalog codes are present for all sections
+            foreach (var section in sections.Where(s => s.IsEnabled))
+            {
+                if (string.IsNullOrWhiteSpace(section.CatalogCode))
+                {
+                    issues.Add(new ValidationIssue
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        RuleType = "reporting-mode-compliance",
+                        Severity = "error",
+                        Message = $"Section '{section.Title}' must have a CatalogCode for {period.ReportingMode} reporting mode.",
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        FieldName = "CatalogCode",
+                        ExpectedValue = "Valid ESRS disclosure topic code",
+                        ActualValue = "null or empty",
+                        DetectedAt = DateTime.UtcNow.ToString("O")
+                    });
+                }
+
+                var dataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+                
+                // In CSRD/ESRS mode, all data points must have classification
+                foreach (var dataPoint in dataPoints.Where(dp => dp.CompletenessStatus != "not-applicable"))
+                {
+                    if (string.IsNullOrWhiteSpace(dataPoint.Classification))
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "reporting-mode-compliance",
+                            Severity = "error",
+                            Message = $"Data point '{dataPoint.Title}' in section '{section.Title}' must have a Classification for {period.ReportingMode} reporting mode.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "Classification",
+                            ExpectedValue = "Valid ESRS data point classification",
+                            ActualValue = "null or empty",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+
+                    // Estimates in CSRD mode need higher confidence documentation
+                    if (dataPoint.InformationType == "estimate" && dataPoint.ConfidenceLevel == "low")
+                    {
+                        issues.Add(new ValidationIssue
+                        {
+                            Id = Guid.NewGuid().ToString(),
+                            RuleType = "reporting-mode-compliance",
+                            Severity = "warning",
+                            Message = $"Data point '{dataPoint.Title}' in section '{section.Title}' is an estimate with low confidence. {period.ReportingMode} mode recommends medium or high confidence.",
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AffectedDataPointIds = new List<string> { dataPoint.Id },
+                            FieldName = "ConfidenceLevel",
+                            ExpectedValue = "medium or high",
+                            ActualValue = "low",
+                            DetectedAt = DateTime.UtcNow.ToString("O")
+                        });
+                    }
+                }
+            }
+
+            // Check for organizational scope requirements
+            if (period.ReportScope == "single-company")
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "reporting-mode-compliance",
+                    Severity = "info",
+                    Message = $"Reporting period uses single-company scope. {period.ReportingMode} mode typically requires group-level reporting for larger organizations.",
+                    FieldName = "ReportScope",
+                    ExpectedValue = "group (for larger organizations)",
+                    ActualValue = "single-company",
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+        }
+        else // Simplified mode (SME)
+        {
+            // In simplified mode, warn about overly complex configurations
+            var sectionsWithCatalogCodes = sections.Count(s => !string.IsNullOrWhiteSpace(s.CatalogCode));
+            if (sectionsWithCatalogCodes > 0)
+            {
+                issues.Add(new ValidationIssue
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    RuleType = "reporting-mode-compliance",
+                    Severity = "info",
+                    Message = $"{sectionsWithCatalogCodes} sections have catalog codes, which are not required for simplified reporting mode. Consider switching to 'extended' mode if detailed ESRS mapping is needed.",
+                    DetectedAt = DateTime.UtcNow.ToString("O")
+                });
             }
         }
 
