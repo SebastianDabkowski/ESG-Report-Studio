@@ -6725,3 +6725,377 @@ public sealed class FieldDifference
     /// </summary>
     public string? RedactionReason { get; set; }
 }
+
+// ============================================================================
+// Generation and Export History - Track report generations and exports
+// ============================================================================
+
+/// <summary>
+/// Represents a single report generation event with snapshot metadata.
+/// Tracks who generated what, when, which variant, and data snapshot used.
+/// </summary>
+public sealed class GenerationHistoryEntry
+{
+    /// <summary>
+    /// Unique identifier for this generation.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting period this generation belongs to.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when generated (ISO 8601 format).
+    /// </summary>
+    public string GeneratedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who generated the report.
+    /// </summary>
+    public string GeneratedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who generated the report.
+    /// </summary>
+    public string GeneratedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about this generation.
+    /// </summary>
+    public string? GenerationNote { get; set; }
+    
+    /// <summary>
+    /// SHA-256 checksum of the generated content for integrity verification.
+    /// </summary>
+    public string Checksum { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Variant used for generation (if any).
+    /// </summary>
+    public string? VariantId { get; set; }
+    
+    /// <summary>
+    /// Variant name for display.
+    /// </summary>
+    public string? VariantName { get; set; }
+    
+    /// <summary>
+    /// Status of this generation: 'draft', 'final', 'archived'.
+    /// </summary>
+    public string Status { get; set; } = "draft";
+    
+    /// <summary>
+    /// Number of sections included.
+    /// </summary>
+    public int SectionCount { get; set; }
+    
+    /// <summary>
+    /// Number of data points included.
+    /// </summary>
+    public int DataPointCount { get; set; }
+    
+    /// <summary>
+    /// Number of evidence items included.
+    /// </summary>
+    public int EvidenceCount { get; set; }
+    
+    /// <summary>
+    /// Snapshot of section IDs and their catalog codes included in generation.
+    /// Allows tracking which structure version was used.
+    /// </summary>
+    public List<SectionSnapshot> SectionSnapshots { get; set; } = new();
+    
+    /// <summary>
+    /// When marked as final - timestamp (ISO 8601 format).
+    /// </summary>
+    public string? MarkedFinalAt { get; set; }
+    
+    /// <summary>
+    /// When marked as final - user ID.
+    /// </summary>
+    public string? MarkedFinalBy { get; set; }
+    
+    /// <summary>
+    /// When marked as final - user name.
+    /// </summary>
+    public string? MarkedFinalByName { get; set; }
+    
+    /// <summary>
+    /// Reference to the full GeneratedReport object (when retrieved).
+    /// </summary>
+    public GeneratedReport? Report { get; set; }
+}
+
+/// <summary>
+/// Snapshot of a section at generation time.
+/// </summary>
+public sealed class SectionSnapshot
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string SectionTitle { get; set; } = string.Empty;
+    public string? CatalogCode { get; set; }
+    public int DataPointCount { get; set; }
+}
+
+/// <summary>
+/// Represents an export event (PDF or DOCX).
+/// </summary>
+public sealed class ExportHistoryEntry
+{
+    /// <summary>
+    /// Unique identifier for this export.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Generation history entry this export is based on.
+    /// </summary>
+    public string GenerationId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting period this export belongs to.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Export format: 'pdf' or 'docx'.
+    /// </summary>
+    public string Format { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// File name of the exported file.
+    /// </summary>
+    public string FileName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// File size in bytes.
+    /// </summary>
+    public long FileSize { get; set; }
+    
+    /// <summary>
+    /// SHA-256 checksum of the exported file for integrity verification.
+    /// </summary>
+    public string FileChecksum { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when exported (ISO 8601 format).
+    /// </summary>
+    public string ExportedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who exported the report.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who exported the report.
+    /// </summary>
+    public string ExportedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Variant used for export (if any).
+    /// </summary>
+    public string? VariantName { get; set; }
+    
+    /// <summary>
+    /// Whether title page was included.
+    /// </summary>
+    public bool IncludedTitlePage { get; set; }
+    
+    /// <summary>
+    /// Whether table of contents was included.
+    /// </summary>
+    public bool IncludedTableOfContents { get; set; }
+    
+    /// <summary>
+    /// Whether attachments were included.
+    /// </summary>
+    public bool IncludedAttachments { get; set; }
+    
+    /// <summary>
+    /// Download count for audit purposes.
+    /// </summary>
+    public int DownloadCount { get; set; }
+    
+    /// <summary>
+    /// Last download timestamp (ISO 8601 format).
+    /// </summary>
+    public string? LastDownloadedAt { get; set; }
+}
+
+/// <summary>
+/// Request to mark a generation as final.
+/// </summary>
+public sealed class MarkGenerationFinalRequest
+{
+    /// <summary>
+    /// Generation ID to mark as final.
+    /// </summary>
+    public string GenerationId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID marking as final.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name marking as final.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about marking as final.
+    /// </summary>
+    public string? Note { get; set; }
+}
+
+/// <summary>
+/// Request to compare two report generations.
+/// </summary>
+public sealed class CompareGenerationsRequest
+{
+    /// <summary>
+    /// First generation ID to compare.
+    /// </summary>
+    public string Generation1Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Second generation ID to compare.
+    /// </summary>
+    public string Generation2Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID requesting the comparison.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of comparing two report generations.
+/// </summary>
+public sealed class GenerationComparison
+{
+    /// <summary>
+    /// First generation compared.
+    /// </summary>
+    public GenerationHistoryEntry Generation1 { get; set; } = new();
+    
+    /// <summary>
+    /// Second generation compared.
+    /// </summary>
+    public GenerationHistoryEntry Generation2 { get; set; } = new();
+    
+    /// <summary>
+    /// Reporting period for context.
+    /// </summary>
+    public ReportingPeriod Period { get; set; } = new();
+    
+    /// <summary>
+    /// Timestamp of comparison (ISO 8601 format).
+    /// </summary>
+    public string ComparedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who requested the comparison.
+    /// </summary>
+    public string ComparedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Sections that differ between generations.
+    /// </summary>
+    public List<GenerationSectionDifference> SectionDifferences { get; set; } = new();
+    
+    /// <summary>
+    /// Data sources (sections) that changed between generations.
+    /// </summary>
+    public List<string> ChangedDataSources { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics.
+    /// </summary>
+    public GenerationComparisonSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Difference in a section between two generations.
+/// </summary>
+public sealed class GenerationSectionDifference
+{
+    /// <summary>
+    /// Section ID.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section title.
+    /// </summary>
+    public string SectionTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Catalog code for stable reference.
+    /// </summary>
+    public string? CatalogCode { get; set; }
+    
+    /// <summary>
+    /// Type of difference: 'added', 'removed', 'modified', 'unchanged'.
+    /// </summary>
+    public string DifferenceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Data point count in generation 1.
+    /// </summary>
+    public int DataPointCount1 { get; set; }
+    
+    /// <summary>
+    /// Data point count in generation 2.
+    /// </summary>
+    public int DataPointCount2 { get; set; }
+    
+    /// <summary>
+    /// Specific changes detected.
+    /// </summary>
+    public List<string> Changes { get; set; } = new();
+}
+
+/// <summary>
+/// Summary statistics for generation comparison.
+/// </summary>
+public sealed class GenerationComparisonSummary
+{
+    /// <summary>
+    /// Total sections compared.
+    /// </summary>
+    public int TotalSections { get; set; }
+    
+    /// <summary>
+    /// Sections added in generation 2.
+    /// </summary>
+    public int SectionsAdded { get; set; }
+    
+    /// <summary>
+    /// Sections removed in generation 2.
+    /// </summary>
+    public int SectionsRemoved { get; set; }
+    
+    /// <summary>
+    /// Sections modified between generations.
+    /// </summary>
+    public int SectionsModified { get; set; }
+    
+    /// <summary>
+    /// Sections unchanged.
+    /// </summary>
+    public int SectionsUnchanged { get; set; }
+    
+    /// <summary>
+    /// Total data point count in generation 1.
+    /// </summary>
+    public int TotalDataPoints1 { get; set; }
+    
+    /// <summary>
+    /// Total data point count in generation 2.
+    /// </summary>
+    public int TotalDataPoints2 { get; set; }
+}
