@@ -121,7 +121,8 @@ public sealed class AuditPackageController : ControllerBase
                         DecisionCount = contents.Decisions.Count,
                         AssumptionCount = contents.Sections.Sum(s => s.Assumptions.Count),
                         GapCount = contents.Sections.Sum(s => s.Gaps.Count),
-                        EvidenceFileCount = contents.EvidenceFiles.Count
+                        EvidenceFileCount = contents.EvidenceFiles.Count,
+                        ValidationResultCount = contents.ValidationResults.Count
                     },
                     GeneratedAt = DateTime.UtcNow.ToString("O")
                 };
@@ -165,6 +166,15 @@ public sealed class AuditPackageController : ControllerBase
                 writer.Write(json);
             }
 
+            // Add validation results
+            var validationEntry = archive.CreateEntry("validation-results.json");
+            using (var entryStream = validationEntry.Open())
+            using (var writer = new StreamWriter(entryStream))
+            {
+                var json = JsonSerializer.Serialize(contents.ValidationResults, new JsonSerializerOptions { WriteIndented = true });
+                writer.Write(json);
+            }
+
             // Add README
             var readmeEntry = archive.CreateEntry("README.txt");
             using (var entryStream = readmeEntry.Open())
@@ -177,6 +187,7 @@ public sealed class AuditPackageController : ControllerBase
                 writer.WriteLine($"Exported At: {contents.Metadata.ExportedAt}");
                 writer.WriteLine($"Exported By: {contents.Metadata.ExportedByName}");
                 writer.WriteLine($"Period: {period.Name}");
+                writer.WriteLine($"Data Snapshot ID: {contents.Metadata.DataSnapshotId ?? "N/A"}");
                 writer.WriteLine();
                 writer.WriteLine("Contents:");
                 writer.WriteLine("  - manifest.json: Export metadata and summary");
@@ -184,6 +195,7 @@ public sealed class AuditPackageController : ControllerBase
                 writer.WriteLine("  - audit-trail.json: Complete audit log for the period");
                 writer.WriteLine("  - decisions.json: Decision log entries");
                 writer.WriteLine("  - evidence-references.json: Evidence file references with checksums");
+                writer.WriteLine("  - validation-results.json: Validation results for the period");
                 writer.WriteLine();
                 writer.WriteLine("Note: Evidence files themselves are not included in this package.");
                 writer.WriteLine("Use the file references and checksums to retrieve and verify evidence separately.");

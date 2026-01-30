@@ -520,4 +520,103 @@ public sealed class AuditPackageExportTests
         Assert.NotEmpty(contents!.Decisions);
         Assert.Contains(contents.Decisions, d => d.Id == decision.Id);
     }
+
+    [Fact]
+    public void BuildAuditPackageContents_IncludesValidationResults()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        CreateTestConfiguration(store);
+        
+        // Create test data
+        var user = new User
+        {
+            Id = "user1",
+            Name = "Test User",
+            Email = "test@example.com",
+            Role = "admin"
+        };
+        
+        var createPeriodRequest = new CreateReportingPeriodRequest
+        {
+            Name = "2024 Annual Report",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            OwnerId = user.Id,
+            OwnerName = user.Name
+        };
+        
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        Assert.True(isValid);
+        var period = snapshot!.Periods.First();
+        
+        // Run a validation to create validation results
+        var validationRequest = new RunValidationRequest
+        {
+            PeriodId = period.Id,
+            ValidatedBy = user.Id
+        };
+        
+        var validationResult = store.RunConsistencyValidation(validationRequest);
+        Assert.NotNull(validationResult);
+        
+        // Act
+        var exportRequest = new ExportAuditPackageRequest
+        {
+            PeriodId = period.Id,
+            ExportedBy = user.Id
+        };
+        
+        var contents = store.BuildAuditPackageContents(exportRequest);
+        
+        // Assert
+        Assert.NotNull(contents);
+        Assert.NotNull(contents!.ValidationResults);
+        Assert.NotEmpty(contents.ValidationResults);
+        Assert.Contains(contents.ValidationResults, v => v.PeriodId == period.Id);
+    }
+
+    [Fact]
+    public void BuildAuditPackageContents_IncludesDataSnapshotId()
+    {
+        // Arrange
+        var store = new InMemoryReportStore();
+        CreateTestConfiguration(store);
+        
+        // Create test data
+        var user = new User
+        {
+            Id = "user1",
+            Name = "Test User",
+            Email = "test@example.com",
+            Role = "admin"
+        };
+        
+        var createPeriodRequest = new CreateReportingPeriodRequest
+        {
+            Name = "2024 Annual Report",
+            StartDate = "2024-01-01",
+            EndDate = "2024-12-31",
+            OwnerId = user.Id,
+            OwnerName = user.Name
+        };
+        
+        var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
+        Assert.True(isValid);
+        var period = snapshot!.Periods.First();
+        
+        // Act
+        var exportRequest = new ExportAuditPackageRequest
+        {
+            PeriodId = period.Id,
+            ExportedBy = user.Id
+        };
+        
+        var contents = store.BuildAuditPackageContents(exportRequest);
+        
+        // Assert
+        Assert.NotNull(contents);
+        Assert.NotNull(contents!.Metadata.DataSnapshotId);
+        Assert.Equal(period.IntegrityHash, contents.Metadata.DataSnapshotId);
+    }
 }
