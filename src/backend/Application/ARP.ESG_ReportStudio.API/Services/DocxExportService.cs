@@ -41,6 +41,13 @@ public sealed class DocxExportService : IDocxExportService
                 AddReportSections(body, report);
             }
             
+            // Attachments appendix
+            if (options.IncludeAttachments)
+            {
+                AddPageBreak(body);
+                AddAttachmentsAppendix(body, report, options);
+            }
+            
             // Add page numbering to footer if requested
             if (options.IncludePageNumbers)
             {
@@ -421,6 +428,194 @@ public sealed class DocxExportService : IDocxExportService
         
         var footerRef = new FooterReference { Type = HeaderFooterValues.Default, Id = footerId };
         sectionProps.AppendChild(footerRef);
+    }
+
+    private void AddAttachmentsAppendix(Body body, GeneratedReport report, DocxExportOptions options)
+    {
+        // Title
+        AddParagraph(body, "Appendix: Evidence and Attachments", "Heading1");
+        AddEmptyParagraph(body);
+        
+        // Collect all evidence from all sections
+        var allEvidence = new List<(string SectionTitle, EvidenceMetadata Evidence)>();
+        long totalSize = 0;
+        int restrictedCount = 0;
+        
+        foreach (var section in report.Sections.OrderBy(s => s.Section.Order))
+        {
+            foreach (var evidence in section.Evidence)
+            {
+                allEvidence.Add((section.Section.Title, evidence));
+                totalSize += evidence.FileSize;
+                if (!evidence.IsAccessible)
+                {
+                    restrictedCount++;
+                }
+            }
+        }
+        
+        if (allEvidence.Count == 0)
+        {
+            var emptyPara = AddParagraph(body, "No evidence or attachments are associated with this report.", null);
+            MakeParagraphItalic(emptyPara);
+            return;
+        }
+        
+        // Calculate total size in MB
+        var totalSizeMB = totalSize / (1024.0 * 1024.0);
+        var maxSizeMB = options.MaxAttachmentSizeMB;
+        
+        // Show warning if size exceeds limit
+        if (totalSizeMB > maxSizeMB)
+        {
+            var warningPara = AddParagraph(body, "⚠ File Size Warning", "Heading3");
+            var warningDetailPara = AddParagraph(body, 
+                $"Total attachment size ({totalSizeMB:F2} MB) exceeds the recommended limit ({maxSizeMB} MB). " +
+                "Only attachment metadata is included in this export. " +
+                "For full attachments, consider using the audit package export (ZIP) or external file sharing.", null);
+            
+            // Add warning highlighting
+            var warningProps = warningDetailPara.GetFirstChild<ParagraphProperties>();
+            if (warningProps == null)
+            {
+                warningProps = new ParagraphProperties();
+                warningDetailPara.PrependChild(warningProps);
+            }
+            warningProps.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Fill = "FFE5CC" }); // Light orange
+            
+            AddEmptyParagraph(body);
+        }
+        
+        // Show restriction notice if applicable
+        if (restrictedCount > 0)
+        {
+            var restrictPara = AddParagraph(body, "🔒 Restricted Attachments", "Heading3");
+            var restrictDetailPara = AddParagraph(body,
+                $"{restrictedCount} attachment(s) are restricted and not accessible to the current user. " +
+                "These attachments are marked with 🔒 and excluded from this export.", null);
+            
+            // Add restriction highlighting
+            var restrictProps = restrictDetailPara.GetFirstChild<ParagraphProperties>();
+            if (restrictProps == null)
+            {
+                restrictProps = new ParagraphProperties();
+                restrictDetailPara.PrependChild(restrictProps);
+            }
+            restrictProps.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Fill = "FFCCCC" }); // Light red
+            
+            AddEmptyParagraph(body);
+        }
+        
+        // Summary
+        var summaryText = $"Total Attachments: {allEvidence.Count} | Total Size: {FormatFileSize(totalSize)}";
+        if (restrictedCount > 0)
+        {
+            summaryText += $" | Accessible: {allEvidence.Count - restrictedCount}";
+        }
+        AddParagraph(body, summaryText, null);
+        AddEmptyParagraph(body);
+        
+        // Evidence table
+        var table = new Table();
+        
+        // Table properties
+        var tblProp = new TableProperties(
+            new TableBorders(
+                new TopBorder { Val = BorderValues.Single, Size = 4 },
+                new BottomBorder { Val = BorderValues.Single, Size = 4 },
+                new LeftBorder { Val = BorderValues.Single, Size = 4 },
+                new RightBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 }
+            ),
+            new TableWidth { Width = "5000", Type = TableWidthUnitValues.Pct }
+        );
+        table.AppendChild(tblProp);
+        
+        // Header row
+        var headerRow = new TableRow();
+        AddTableCell(headerRow, "Section", true);
+        AddTableCell(headerRow, "Title", true);
+        AddTableCell(headerRow, "File Name", true);
+        AddTableCell(headerRow, "Size", true);
+        AddTableCell(headerRow, "Integrity", true);
+        AddTableCell(headerRow, "Uploaded", true);
+        table.AppendChild(headerRow);
+        
+        // Data rows
+        foreach (var (sectionTitle, evidence) in allEvidence)
+        {
+            var row = new TableRow();
+            
+            AddTableCell(row, sectionTitle);
+            
+            var titleText = evidence.IsAccessible ? evidence.Title : $"🔒 {evidence.Title}";
+            AddTableCell(row, titleText);
+            
+            AddTableCell(row, evidence.FileName ?? "-");
+            AddTableCell(row, FormatFileSize(evidence.FileSize));
+            
+            var integrityText = evidence.IntegrityStatus switch
+            {
+                "valid" => "✓ Valid",
+                "failed" => "✗ Failed",
+                _ => "? Not Checked"
+            };
+            AddTableCell(row, integrityText);
+            
+            AddTableCell(row, FormatDate(evidence.UploadedAt));
+            
+            // Apply red shading for restricted items
+            if (!evidence.IsAccessible)
+            {
+                foreach (var cell in row.Elements<TableCell>())
+                {
+                    var cellProps = cell.GetFirstChild<TableCellProperties>();
+                    if (cellProps == null)
+                    {
+                        cellProps = new TableCellProperties();
+                        cell.PrependChild(cellProps);
+                    }
+                    cellProps.AppendChild(new Shading { Val = ShadingPatternValues.Clear, Fill = "FFCCCC" });
+                }
+            }
+            
+            table.AppendChild(row);
+        }
+        
+        body.AppendChild(table);
+        AddEmptyParagraph(body);
+        
+        // Additional notes
+        AddParagraph(body, "Notes:", "Heading3");
+        AddParagraph(body, "• This appendix lists all evidence and attachments referenced in the report.", null);
+        AddParagraph(body, "• Attachment checksums and integrity status ensure file authenticity.", null);
+        AddParagraph(body, "• For access to actual files, download them from the ESG Report Studio or request an audit package.", null);
+    }
+    
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        else if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        else if (bytes < 1024 * 1024 * 1024)
+            return $"{bytes / (1024.0 * 1024.0):F1} MB";
+        else
+            return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB";
+    }
+    
+    private string FormatDate(string? isoDateTime)
+    {
+        if (string.IsNullOrWhiteSpace(isoDateTime))
+            return "-";
+        
+        if (DateTime.TryParse(isoDateTime, out var dateTime))
+        {
+            return dateTime.ToString("yyyy-MM-dd");
+        }
+        
+        return isoDateTime;
     }
 
     private string FormatDateTime(string? isoDateTime)

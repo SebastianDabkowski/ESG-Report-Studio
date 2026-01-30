@@ -50,6 +50,13 @@ public sealed class PdfExportService : IPdfExportService
                         column.Item().PageBreak();
                         column.Item().Element(c => ComposeReportContent(c, report));
                     }
+                    
+                    // Attachments appendix
+                    if (options.IncludeAttachments)
+                    {
+                        column.Item().PageBreak();
+                        column.Item().Element(c => ComposeAttachmentsAppendix(c, report, options));
+                    }
                 });
                 
                 // Footer with page numbers
@@ -284,6 +291,175 @@ public sealed class PdfExportService : IPdfExportService
                 }
             });
         });
+    }
+
+    private void ComposeAttachmentsAppendix(IContainer container, GeneratedReport report, PdfExportOptions options)
+    {
+        container.Column(column =>
+        {
+            column.Item().Text("Appendix: Evidence and Attachments").FontSize(18).Bold();
+            column.Item().PaddingTop(10);
+            
+            // Collect all evidence from all sections
+            var allEvidence = new List<(string SectionTitle, EvidenceMetadata Evidence)>();
+            long totalSize = 0;
+            int restrictedCount = 0;
+            
+            foreach (var section in report.Sections.OrderBy(s => s.Section.Order))
+            {
+                foreach (var evidence in section.Evidence)
+                {
+                    allEvidence.Add((section.Section.Title, evidence));
+                    totalSize += evidence.FileSize;
+                    if (!evidence.IsAccessible)
+                    {
+                        restrictedCount++;
+                    }
+                }
+            }
+            
+            if (allEvidence.Count == 0)
+            {
+                column.Item().Text("No evidence or attachments are associated with this report.").Italic();
+                return;
+            }
+            
+            // Calculate total size in MB
+            var totalSizeMB = totalSize / (1024.0 * 1024.0);
+            var maxSizeMB = options.MaxAttachmentSizeMB;
+            
+            // Show warning if size exceeds limit
+            if (totalSizeMB > maxSizeMB)
+            {
+                column.Item().Background(Colors.Orange.Lighten4).Padding(8).Column(warningColumn =>
+                {
+                    warningColumn.Item().Text("⚠ File Size Warning").FontSize(12).SemiBold();
+                    warningColumn.Item().PaddingTop(5).Text(text =>
+                    {
+                        text.Span($"Total attachment size ({totalSizeMB:F2} MB) exceeds the recommended limit ({maxSizeMB} MB). ");
+                        text.Span("Only attachment metadata is included in this export. ").Italic();
+                        text.Span("For full attachments, consider using the audit package export (ZIP) or external file sharing.").Italic();
+                    });
+                });
+                column.Item().PaddingBottom(10);
+            }
+            
+            // Show restriction notice if applicable
+            if (restrictedCount > 0)
+            {
+                column.Item().Background(Colors.Red.Lighten4).Padding(8).Column(restrictColumn =>
+                {
+                    restrictColumn.Item().Text("🔒 Restricted Attachments").FontSize(12).SemiBold();
+                    restrictColumn.Item().PaddingTop(5).Text(text =>
+                    {
+                        text.Span($"{restrictedCount} attachment(s) are restricted and not accessible to the current user. ");
+                        text.Span("These attachments are marked with 🔒 and excluded from this export.").Italic();
+                    });
+                });
+                column.Item().PaddingBottom(10);
+            }
+            
+            // Summary
+            column.Item().PaddingBottom(10).Text(text =>
+            {
+                text.Span($"Total Attachments: {allEvidence.Count}").SemiBold();
+                text.Span($" | Total Size: {FormatFileSize(totalSize)}");
+                if (restrictedCount > 0)
+                {
+                    text.Span($" | Accessible: {allEvidence.Count - restrictedCount}");
+                }
+            });
+            
+            // Evidence table
+            column.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2); // Section
+                    columns.RelativeColumn(2); // Title
+                    columns.RelativeColumn(2); // File Name
+                    columns.RelativeColumn(1); // Size
+                    columns.RelativeColumn(1); // Status
+                    columns.RelativeColumn(1); // Uploaded
+                });
+                
+                // Header
+                table.Header(header =>
+                {
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Section").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Title").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("File Name").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Size").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Integrity").SemiBold();
+                    header.Cell().Background(Colors.Grey.Lighten2).Padding(5).Text("Uploaded").SemiBold();
+                });
+                
+                // Data rows
+                var rowIndex = 0;
+                foreach (var (sectionTitle, evidence) in allEvidence)
+                {
+                    var bgColor = rowIndex % 2 == 0 ? Colors.White : Colors.Grey.Lighten4;
+                    
+                    // Apply red background for restricted items
+                    if (!evidence.IsAccessible)
+                    {
+                        bgColor = Colors.Red.Lighten5;
+                    }
+                    
+                    table.Cell().Background(bgColor).Padding(5).Text(sectionTitle).FontSize(9);
+                    
+                    var titleText = evidence.IsAccessible ? evidence.Title : $"🔒 {evidence.Title}";
+                    table.Cell().Background(bgColor).Padding(5).Text(titleText).FontSize(9);
+                    
+                    table.Cell().Background(bgColor).Padding(5).Text(evidence.FileName ?? "-").FontSize(9);
+                    table.Cell().Background(bgColor).Padding(5).Text(FormatFileSize(evidence.FileSize)).FontSize(9);
+                    
+                    var integrityText = evidence.IntegrityStatus switch
+                    {
+                        "valid" => "✓ Valid",
+                        "failed" => "✗ Failed",
+                        _ => "? Not Checked"
+                    };
+                    table.Cell().Background(bgColor).Padding(5).Text(integrityText).FontSize(9);
+                    
+                    table.Cell().Background(bgColor).Padding(5).Text(FormatDate(evidence.UploadedAt)).FontSize(9);
+                    
+                    rowIndex++;
+                }
+            });
+            
+            // Additional notes
+            column.Item().PaddingTop(10);
+            column.Item().Text("Notes:").FontSize(10).SemiBold();
+            column.Item().PaddingTop(5).Text("• This appendix lists all evidence and attachments referenced in the report.").FontSize(9);
+            column.Item().Text("• Attachment checksums and integrity status ensure file authenticity.").FontSize(9);
+            column.Item().Text("• For access to actual files, download them from the ESG Report Studio or request an audit package.").FontSize(9);
+        });
+    }
+    
+    private string FormatFileSize(long bytes)
+    {
+        if (bytes < 1024)
+            return $"{bytes} B";
+        else if (bytes < 1024 * 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        else if (bytes < 1024 * 1024 * 1024)
+            return $"{bytes / (1024.0 * 1024.0):F1} MB";
+        else
+            return $"{bytes / (1024.0 * 1024.0 * 1024.0):F1} GB";
+    }
+    
+    private string FormatDate(string? isoDateTime)
+    {
+        if (string.IsNullOrWhiteSpace(isoDateTime))
+            return "-";
+        
+        if (DateTime.TryParse(isoDateTime, out var dateTime))
+        {
+            return dateTime.ToString("yyyy-MM-dd");
+        }
+        
+        return isoDateTime;
     }
 
     private string FormatDateTime(string? isoDateTime)

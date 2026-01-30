@@ -46,4 +46,22 @@ public sealed class DocxExportOptions
     /// Variant name to display on the title page and in metadata.
     /// </summary>
     public string? VariantName { get; set; }
+    
+    /// <summary>
+    /// Whether to include evidence and attachments as an appendix.
+    /// Default: false
+    /// </summary>
+    public bool IncludeAttachments { get; set; } = false;
+    
+    /// <summary>
+    /// User ID requesting the export (used for permission checks on restricted attachments).
+    /// </summary>
+    public string? UserId { get; set; }
+    
+    /// <summary>
+    /// Maximum total size of attachments to include (in MB).
+    /// If exceeded, a warning is noted and only metadata is included.
+    /// Default: 50 MB
+    /// </summary>
+    public int MaxAttachmentSizeMB { get; set; } = 50;
 }

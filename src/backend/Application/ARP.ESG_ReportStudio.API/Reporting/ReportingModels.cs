@@ -6289,6 +6289,37 @@ public sealed class EvidenceMetadata
     public long FileSize { get; set; }
     public string UploadedAt { get; set; } = string.Empty;
     public string UploadedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Checksum of the evidence file for integrity verification.
+    /// </summary>
+    public string? Checksum { get; set; }
+    
+    /// <summary>
+    /// Integrity status of the evidence file.
+    /// </summary>
+    public string IntegrityStatus { get; set; } = "not-checked";
+    
+    /// <summary>
+    /// URL or path to the evidence file.
+    /// </summary>
+    public string? FileUrl { get; set; }
+    
+    /// <summary>
+    /// Description of the evidence.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// Whether the current user has permission to view this attachment.
+    /// Set based on user permissions during export generation.
+    /// </summary>
+    public bool IsAccessible { get; set; } = true;
+    
+    /// <summary>
+    /// Reason for restriction if not accessible.
+    /// </summary>
+    public string? RestrictionReason { get; set; }
 }
 
 /// <summary>

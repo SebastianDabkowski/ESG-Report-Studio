@@ -442,7 +442,10 @@ public sealed class ReportingController : ControllerBase
             IncludeTitlePage = request.IncludeTitlePage ?? true,
             IncludeTableOfContents = request.IncludeTableOfContents ?? true,
             IncludePageNumbers = request.IncludePageNumbers ?? true,
-            VariantName = request.VariantName
+            VariantName = request.VariantName,
+            IncludeAttachments = request.IncludeAttachments ?? false,
+            UserId = request.GeneratedBy,
+            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50
         };
         
         // Generate PDF
@@ -503,7 +506,10 @@ public sealed class ReportingController : ControllerBase
             IncludeTitlePage = request.IncludeTitlePage ?? true,
             IncludeTableOfContents = request.IncludeTableOfContents ?? true,
             IncludePageNumbers = request.IncludePageNumbers ?? true,
-            VariantName = request.VariantName
+            VariantName = request.VariantName,
+            IncludeAttachments = request.IncludeAttachments ?? false,
+            UserId = request.GeneratedBy,
+            MaxAttachmentSizeMB = request.MaxAttachmentSizeMB ?? 50
         };
         
         // Generate DOCX
@@ -559,6 +565,16 @@ public sealed class ExportPdfRequest
     /// Whether to include page numbers. Default: true.
     /// </summary>
     public bool? IncludePageNumbers { get; set; }
+    
+    /// <summary>
+    /// Whether to include evidence and attachments as an appendix. Default: false.
+    /// </summary>
+    public bool? IncludeAttachments { get; set; }
+    
+    /// <summary>
+    /// Maximum total size of attachments to include (in MB). Default: 50.
+    /// </summary>
+    public int? MaxAttachmentSizeMB { get; set; }
 }
 
 /// <summary>
@@ -595,4 +611,14 @@ public sealed class ExportDocxRequest
     /// Whether to include page numbers. Default: true.
     /// </summary>
     public bool? IncludePageNumbers { get; set; }
+    
+    /// <summary>
+    /// Whether to include evidence and attachments as an appendix. Default: false.
+    /// </summary>
+    public bool? IncludeAttachments { get; set; }
+    
+    /// <summary>
+    /// Maximum total size of attachments to include (in MB). Default: 50.
+    /// </summary>
+    public int? MaxAttachmentSizeMB { get; set; }
 }
