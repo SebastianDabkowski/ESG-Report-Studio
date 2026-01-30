@@ -677,5 +677,78 @@ namespace SD.ProjectName.Tests.Products
             Assert.True(reconciliation.TotalSourceSections > 0);
             Assert.True(reconciliation.MappedSections > 0);
         }
+        
+        [Fact]
+        public void Rollover_ShouldMapToExistingTargetSection()
+        {
+            // Arrange
+            var store = new InMemoryReportStore();
+            CreateTestOrganization(store);
+            CreateTestOrganizationalUnit(store);
+            
+            var sourcePeriodId = CreateTestPeriod(store, "FY 2024");
+            
+            // Get one of the automatically created sections from the source period
+            var sourceSections = store.GetSections(sourcePeriodId);
+            var firstSourceSection = sourceSections.First();
+            
+            // Add a data point to this section
+            var dataPointsField = typeof(InMemoryReportStore).GetField("_dataPoints", 
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            var dataPoints = dataPointsField!.GetValue(store) as List<DataPoint>;
+            
+            dataPoints!.Add(new DataPoint
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = firstSourceSection.Id,
+                Type = "metric",
+                Title = "Test Metric",
+                OwnerId = "user1",
+                Content = "Test content",
+                CompletenessStatus = "complete",
+                ReviewStatus = "approved",
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                UpdatedAt = DateTime.UtcNow.ToString("o")
+            });
+            
+            var rolloverRequest = new RolloverRequest
+            {
+                SourcePeriodId = sourcePeriodId,
+                TargetPeriodName = "FY 2025",
+                TargetPeriodStartDate = "2025-01-01",
+                TargetPeriodEndDate = "2025-12-31",
+                Options = new RolloverOptions 
+                { 
+                    CopyStructure = true,
+                    CopyDataValues = true
+                },
+                PerformedBy = "user1"
+            };
+            
+            // Act
+            var (success, errorMessage, result) = store.RolloverPeriod(rolloverRequest);
+            
+            // Assert
+            Assert.True(success, errorMessage);
+            Assert.NotNull(result.Reconciliation);
+            Assert.NotNull(result.TargetPeriod);
+            
+            // The catalog section should be mapped automatically
+            var mappedSection = result.Reconciliation.MappedItems.FirstOrDefault(m => 
+                m.SourceCatalogCode == firstSourceSection.CatalogCode);
+            Assert.NotNull(mappedSection);
+            Assert.Equal("automatic", mappedSection.MappingType);
+            Assert.Equal(1, mappedSection.DataPointsCopied);
+            
+            // Verify that the target period has a section with the same catalog code
+            var targetSections = store.GetSections(result.TargetPeriod.Id);
+            var matchingTargetSection = targetSections.FirstOrDefault(s => s.CatalogCode == firstSourceSection.CatalogCode);
+            Assert.NotNull(matchingTargetSection);
+            
+            // Verify data point was copied to the target section
+            var targetDataPoints = dataPoints.Where(dp => dp.SectionId == matchingTargetSection.Id).ToList();
+            Assert.Single(targetDataPoints);
+            Assert.Equal("Test Metric", targetDataPoints.First().Title);
+        }
     }
 }

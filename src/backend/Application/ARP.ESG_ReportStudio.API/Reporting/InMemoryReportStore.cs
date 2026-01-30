@@ -9517,11 +9517,13 @@ public sealed class InMemoryReportStore
                 // Get existing sections in target period (if any)
                 var existingTargetSections = _sections.Where(s => s.PeriodId == targetPeriodId).ToList();
                 
-                // Build manual mapping lookup
-                var manualMappingLookup = request.ManualMappings.ToDictionary(
-                    m => m.SourceCatalogCode,
-                    m => m.TargetCatalogCode
-                );
+                // Build manual mapping lookup - handle duplicates by taking the first occurrence
+                var manualMappingLookup = request.ManualMappings
+                    .GroupBy(m => m.SourceCatalogCode)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => g.First().TargetCatalogCode
+                    );
                 
                 foreach (var sourceSection in sourceSections)
                 {
@@ -9555,7 +9557,7 @@ public sealed class InMemoryReportStore
                     
                     if (existingTargetSection != null)
                     {
-                        // Map to existing section
+                        // Map to existing section (no new section created, so sectionsCopied not incremented)
                         targetSectionId = existingTargetSection.Id;
                         targetSection = existingTargetSection;
                         sectionIdMapping[sourceSection.Id] = targetSectionId;
