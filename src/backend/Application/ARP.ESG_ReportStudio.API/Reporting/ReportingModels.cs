@@ -40,6 +40,12 @@ public sealed class ReportingPeriod
     /// Details about the integrity warning, if any.
     /// </summary>
     public string? IntegrityWarningDetails { get; set; }
+    
+    /// <summary>
+    /// Variance explanation threshold configuration for this reporting period.
+    /// When null, variance explanations are not required.
+    /// </summary>
+    public VarianceThresholdConfig? VarianceThresholdConfig { get; set; }
 }
 
 public class ReportSection
@@ -4432,6 +4438,11 @@ public sealed class MetricComparisonResponse
     /// List of available baseline periods for comparison.
     /// </summary>
     public List<AvailableBaselinePeriod> AvailableBaselines { get; set; } = new();
+    
+    /// <summary>
+    /// Variance flag information indicating if this change requires explanation.
+    /// </summary>
+    public VarianceFlagInfo? VarianceFlag { get; set; }
 }
 
 /// <summary>
@@ -4645,4 +4656,343 @@ public sealed class DiffSummaryDto
     public int OldTextLength { get; set; }
     public int NewTextLength { get; set; }
     public bool HasChanges { get; set; }
+}
+
+/// <summary>
+/// Configuration for variance thresholds that trigger explanation requirements.
+/// </summary>
+public sealed class VarianceThresholdConfig
+{
+    /// <summary>
+    /// Unique identifier for this configuration.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Percentage change threshold that triggers explanation requirement.
+    /// Example: 10 means changes >= 10% require explanation.
+    /// Null if percentage threshold is not used.
+    /// </summary>
+    public decimal? PercentageThreshold { get; set; }
+    
+    /// <summary>
+    /// Absolute change threshold that triggers explanation requirement.
+    /// Example: 1000 means absolute changes >= 1000 require explanation.
+    /// Null if absolute threshold is not used.
+    /// </summary>
+    public decimal? AbsoluteThreshold { get; set; }
+    
+    /// <summary>
+    /// When true, both percentage AND absolute thresholds must be exceeded.
+    /// When false, either threshold being exceeded triggers requirement.
+    /// </summary>
+    public bool RequireBothThresholds { get; set; } = false;
+    
+    /// <summary>
+    /// When true, variance explanations require reviewer approval before being cleared.
+    /// When false, submitting an explanation immediately clears the flag.
+    /// </summary>
+    public bool RequireReviewerApproval { get; set; } = false;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this configuration was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who created this configuration.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents a variance explanation for a significant year-over-year change in a metric.
+/// </summary>
+public sealed class VarianceExplanation
+{
+    /// <summary>
+    /// Unique identifier for this variance explanation.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the data point in the current period that has the variance.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the prior reporting period being compared against.
+    /// </summary>
+    public string PriorPeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the data point in the prior period (for reference).
+    /// </summary>
+    public string? PriorDataPointId { get; set; }
+    
+    /// <summary>
+    /// Current period value.
+    /// </summary>
+    public string CurrentValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Prior period value.
+    /// </summary>
+    public string PriorValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Percentage change from prior to current period.
+    /// </summary>
+    public decimal? PercentageChange { get; set; }
+    
+    /// <summary>
+    /// Absolute change from prior to current period.
+    /// </summary>
+    public decimal? AbsoluteChange { get; set; }
+    
+    /// <summary>
+    /// Primary narrative explanation for the variance.
+    /// </summary>
+    public string Explanation { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Root cause or underlying reason for the change.
+    /// Examples: "Business expansion", "Process improvement", "Market conditions"
+    /// </summary>
+    public string? RootCause { get; set; }
+    
+    /// <summary>
+    /// Category of the variance explanation.
+    /// Examples: "operational-change", "methodology-change", "business-expansion", "market-conditions", "other"
+    /// </summary>
+    public string? Category { get; set; }
+    
+    /// <summary>
+    /// Status of the variance explanation.
+    /// Values: "draft", "submitted", "approved", "rejected", "revision-requested"
+    /// </summary>
+    public string Status { get; set; } = "draft";
+    
+    /// <summary>
+    /// IDs of evidence items that support this explanation.
+    /// </summary>
+    public List<string> EvidenceIds { get; set; } = new();
+    
+    /// <summary>
+    /// References to related documents, decisions, or assumptions.
+    /// </summary>
+    public List<string> References { get; set; } = new();
+    
+    /// <summary>
+    /// User ID who created this explanation.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this explanation was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who last updated this explanation.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this explanation was last updated.
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// User ID of the reviewer (if review is required and has been performed).
+    /// </summary>
+    public string? ReviewedBy { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this explanation was reviewed.
+    /// </summary>
+    public string? ReviewedAt { get; set; }
+    
+    /// <summary>
+    /// Comments from the reviewer.
+    /// </summary>
+    public string? ReviewComments { get; set; }
+    
+    /// <summary>
+    /// Indicates if this variance was flagged as requiring explanation.
+    /// </summary>
+    public bool IsFlagged { get; set; } = true;
+}
+
+/// <summary>
+/// Request to create a variance threshold configuration.
+/// </summary>
+public sealed class CreateVarianceThresholdConfigRequest
+{
+    /// <summary>
+    /// Percentage change threshold (e.g., 10 for 10%).
+    /// </summary>
+    public decimal? PercentageThreshold { get; set; }
+    
+    /// <summary>
+    /// Absolute change threshold.
+    /// </summary>
+    public decimal? AbsoluteThreshold { get; set; }
+    
+    /// <summary>
+    /// When true, both thresholds must be exceeded.
+    /// </summary>
+    public bool RequireBothThresholds { get; set; } = false;
+    
+    /// <summary>
+    /// When true, explanations require reviewer approval.
+    /// </summary>
+    public bool RequireReviewerApproval { get; set; } = false;
+    
+    /// <summary>
+    /// User ID creating this configuration.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a variance explanation.
+/// </summary>
+public sealed class CreateVarianceExplanationRequest
+{
+    /// <summary>
+    /// ID of the data point with the variance.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the prior reporting period.
+    /// </summary>
+    public string PriorPeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Explanation text.
+    /// </summary>
+    public string Explanation { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Root cause (optional).
+    /// </summary>
+    public string? RootCause { get; set; }
+    
+    /// <summary>
+    /// Category (optional).
+    /// </summary>
+    public string? Category { get; set; }
+    
+    /// <summary>
+    /// Evidence IDs (optional).
+    /// </summary>
+    public List<string> EvidenceIds { get; set; } = new();
+    
+    /// <summary>
+    /// References (optional).
+    /// </summary>
+    public List<string> References { get; set; } = new();
+    
+    /// <summary>
+    /// User creating the explanation.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update a variance explanation.
+/// </summary>
+public sealed class UpdateVarianceExplanationRequest
+{
+    /// <summary>
+    /// Updated explanation text.
+    /// </summary>
+    public string? Explanation { get; set; }
+    
+    /// <summary>
+    /// Updated root cause.
+    /// </summary>
+    public string? RootCause { get; set; }
+    
+    /// <summary>
+    /// Updated category.
+    /// </summary>
+    public string? Category { get; set; }
+    
+    /// <summary>
+    /// Updated evidence IDs.
+    /// </summary>
+    public List<string>? EvidenceIds { get; set; }
+    
+    /// <summary>
+    /// Updated references.
+    /// </summary>
+    public List<string>? References { get; set; }
+    
+    /// <summary>
+    /// User updating the explanation.
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to submit a variance explanation for review.
+/// </summary>
+public sealed class SubmitVarianceExplanationRequest
+{
+    /// <summary>
+    /// User submitting the explanation.
+    /// </summary>
+    public string SubmittedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to review (approve/reject) a variance explanation.
+/// </summary>
+public sealed class ReviewVarianceExplanationRequest
+{
+    /// <summary>
+    /// Review decision: "approve" or "reject" or "request-revision".
+    /// </summary>
+    public string Decision { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional comments from reviewer.
+    /// </summary>
+    public string? Comments { get; set; }
+    
+    /// <summary>
+    /// User performing the review.
+    /// </summary>
+    public string ReviewedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response containing variance flags for a data point comparison.
+/// Extended MetricComparisonResponse with variance flag information.
+/// </summary>
+public sealed class VarianceFlagInfo
+{
+    /// <summary>
+    /// Indicates if this variance requires explanation based on configured thresholds.
+    /// </summary>
+    public bool RequiresExplanation { get; set; }
+    
+    /// <summary>
+    /// Reason why explanation is required (if applicable).
+    /// Examples: "Exceeds 10% threshold", "Exceeds absolute threshold of 1000"
+    /// </summary>
+    public string? RequiresExplanationReason { get; set; }
+    
+    /// <summary>
+    /// Existing variance explanation (if one exists).
+    /// </summary>
+    public VarianceExplanation? Explanation { get; set; }
+    
+    /// <summary>
+    /// Indicates if the variance flag has been cleared (explanation approved or no review required).
+    /// </summary>
+    public bool IsFlagCleared { get; set; }
 }
