@@ -893,3 +893,44 @@ export interface RolloverRuleOverride {
   dataType: string
   ruleType: DataTypeRolloverRuleType
 }
+
+// Year-over-Year Metric Comparison Types
+
+export interface MetricPeriodValue {
+  periodId: string
+  periodName: string
+  startDate: string
+  endDate: string
+  value?: string
+  numericValue?: number
+  unit?: string
+  source: string
+  informationType: string
+  ownerName: string
+  evidenceCount: number
+  isMissing: boolean
+  missingReason?: string
+}
+
+export interface AvailableBaselinePeriod {
+  periodId: string
+  periodName: string
+  label: string
+  hasData: boolean
+  startDate: string
+  endDate: string
+}
+
+export interface MetricComparisonResponse {
+  dataPointId: string
+  title: string
+  currentPeriod: MetricPeriodValue
+  priorPeriod?: MetricPeriodValue
+  percentageChange?: number
+  absoluteChange?: number
+  isComparisonAvailable: boolean
+  unavailableReason?: string
+  unitsCompatible: boolean
+  unitWarning?: string
+  availableBaselines: AvailableBaselinePeriod[]
+}
