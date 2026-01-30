@@ -240,6 +240,9 @@ public sealed class InMemoryReportStore
                 OwnerId = request.OwnerId,
                 OrganizationId = request.OrganizationId
             };
+            
+            // Calculate and store integrity hash
+            newPeriod.IntegrityHash = Services.IntegrityService.CalculateReportingPeriodHash(newPeriod);
 
             _periods.Add(newPeriod);
 
@@ -638,6 +641,9 @@ public sealed class InMemoryReportStore
             period.EndDate = request.EndDate;
             period.ReportingMode = request.ReportingMode;
             period.ReportScope = request.ReportScope;
+            
+            // Recalculate integrity hash after update
+            period.IntegrityHash = Services.IntegrityService.CalculateReportingPeriodHash(period);
 
             return (true, null, period);
         }
@@ -6898,6 +6904,10 @@ public sealed class InMemoryReportStore
             CreatedBy = createdBy,
             CreatedAt = DateTime.UtcNow.ToString("o")
         };
+        
+        // Calculate and store integrity hash
+        decision.IntegrityHash = Services.IntegrityService.CalculateDecisionHash(decision);
+        decision.IntegrityStatus = "valid";
 
         lock (_lock)
         {
@@ -7008,6 +7018,8 @@ public sealed class InMemoryReportStore
                 CreatedAt = decision.CreatedAt,
                 ChangeNote = null
             };
+            // Store hash for historical version
+            version.IntegrityHash = decision.IntegrityHash;
             _decisionVersions.Add(version);
 
             // Update the decision
@@ -7020,6 +7032,10 @@ public sealed class InMemoryReportStore
             decision.UpdatedBy = updatedBy;
             decision.UpdatedAt = DateTime.UtcNow.ToString("o");
             decision.ChangeNote = changeNote.Trim();
+            
+            // Recalculate integrity hash for new version
+            decision.IntegrityHash = Services.IntegrityService.CalculateDecisionHash(decision);
+            decision.IntegrityStatus = "valid";
 
             // Log audit event only if there were changes
             if (changes.Count > 0)
@@ -8478,5 +8494,205 @@ public sealed class InMemoryReportStore
         }
     }
 
+    #endregion
+    
+    #region Integrity Verification
+    
+    /// <summary>
+    /// Verifies the integrity of a reporting period by comparing its stored hash with a recalculated hash.
+    /// </summary>
+    /// <returns>True if integrity is valid, false if mismatch detected</returns>
+    public bool VerifyReportingPeriodIntegrity(string periodId)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return false;
+            }
+            
+            var isValid = Services.IntegrityService.VerifyReportingPeriodIntegrity(period);
+            
+            if (!isValid)
+            {
+                period.IntegrityWarning = true;
+                period.IntegrityWarningDetails = $"Integrity check failed at {DateTime.UtcNow:O}. Stored hash does not match calculated hash.";
+            }
+            
+            return isValid;
+        }
+    }
+    
+    /// <summary>
+    /// Verifies the integrity of a decision by comparing its stored hash with a recalculated hash.
+    /// </summary>
+    /// <returns>True if integrity is valid, false if mismatch detected</returns>
+    public bool VerifyDecisionIntegrity(string decisionId)
+    {
+        lock (_lock)
+        {
+            var decision = _decisions.FirstOrDefault(d => d.Id == decisionId);
+            if (decision == null)
+            {
+                return false;
+            }
+            
+            var isValid = Services.IntegrityService.VerifyDecisionIntegrity(decision);
+            
+            decision.IntegrityStatus = isValid ? "valid" : "failed";
+            
+            return isValid;
+        }
+    }
+    
+    /// <summary>
+    /// Verifies integrity for all decisions in a reporting period.
+    /// </summary>
+    /// <returns>List of decision IDs that failed integrity check</returns>
+    public List<string> VerifyPeriodDecisionsIntegrity(string periodId)
+    {
+        lock (_lock)
+        {
+            var failedDecisions = new List<string>();
+            
+            // Get all sections for this period
+            var sectionIds = _sections
+                .Where(s => s.PeriodId == periodId)
+                .Select(s => s.Id)
+                .ToHashSet();
+            
+            // Check decisions linked to these sections
+            var periodDecisions = _decisions
+                .Where(d => d.SectionId != null && sectionIds.Contains(d.SectionId))
+                .ToList();
+            
+            foreach (var decision in periodDecisions)
+            {
+                if (!VerifyDecisionIntegrity(decision.Id))
+                {
+                    failedDecisions.Add(decision.Id);
+                }
+            }
+            
+            return failedDecisions;
+        }
+    }
+    
+    /// <summary>
+    /// Checks if a reporting period can be published based on integrity status.
+    /// </summary>
+    /// <returns>True if can publish, false if blocked by integrity warning</returns>
+    public bool CanPublishPeriod(string periodId)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return false;
+            }
+            
+            // Block publication if integrity warning exists
+            return !period.IntegrityWarning;
+        }
+    }
+    
+    /// <summary>
+    /// Overrides an integrity warning to allow publication. Requires admin justification.
+    /// </summary>
+    public (bool success, string? errorMessage) OverrideIntegrityWarning(
+        string periodId, 
+        string adminUserId, 
+        string justification)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.");
+            }
+            
+            if (!period.IntegrityWarning)
+            {
+                return (false, "No integrity warning exists for this period.");
+            }
+            
+            if (string.IsNullOrWhiteSpace(justification))
+            {
+                return (false, "Justification is required to override integrity warning.");
+            }
+            
+            // Verify user is admin
+            var user = _users.FirstOrDefault(u => u.Id == adminUserId);
+            if (user == null || user.Role != "admin")
+            {
+                return (false, "Only administrators can override integrity warnings.");
+            }
+            
+            // Clear warning but preserve details for audit trail
+            period.IntegrityWarning = false;
+            period.IntegrityWarningDetails = $"{period.IntegrityWarningDetails}\n\nOverridden by {user.Name} ({adminUserId}) at {DateTime.UtcNow:O}.\nJustification: {justification}";
+            
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new FieldChange 
+                { 
+                    Field = "IntegrityWarning", 
+                    OldValue = "true", 
+                    NewValue = "false (overridden)" 
+                }
+            };
+            
+            CreateAuditLogEntry(
+                adminUserId,
+                user.Name,
+                "override-integrity-warning",
+                "ReportingPeriod",
+                periodId,
+                changes,
+                $"Overrode integrity warning. Justification: {justification}");
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Gets the integrity status for a reporting period including all related entities.
+    /// </summary>
+    public IntegrityStatusReport GetIntegrityStatus(string periodId)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return new IntegrityStatusReport
+                {
+                    PeriodId = periodId,
+                    PeriodIntegrityValid = false,
+                    FailedDecisions = new List<string>(),
+                    CanPublish = false,
+                    ErrorMessage = "Reporting period not found."
+                };
+            }
+            
+            var periodValid = VerifyReportingPeriodIntegrity(periodId);
+            var failedDecisions = VerifyPeriodDecisionsIntegrity(periodId);
+            
+            return new IntegrityStatusReport
+            {
+                PeriodId = periodId,
+                PeriodIntegrityValid = periodValid,
+                PeriodIntegrityWarning = period.IntegrityWarning,
+                FailedDecisions = failedDecisions,
+                CanPublish = CanPublishPeriod(periodId),
+                WarningDetails = period.IntegrityWarningDetails
+            };
+        }
+    }
+    
     #endregion
 }
