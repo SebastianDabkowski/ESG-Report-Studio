@@ -4996,3 +4996,301 @@ public sealed class VarianceFlagInfo
     /// </summary>
     public bool IsFlagCleared { get; set; }
 }
+
+/// <summary>
+/// Represents a maturity model for measuring reporting progress over time.
+/// Maturity models are versioned to preserve historical assessments.
+/// </summary>
+public sealed class MaturityModel
+{
+    /// <summary>
+    /// Unique identifier for this maturity model.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the maturity model (e.g., "ESG Reporting Maturity Framework").
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of the maturity model and its purpose.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current version of this maturity model.
+    /// Incremented when levels or criteria are modified.
+    /// </summary>
+    public int Version { get; set; } = 1;
+    
+    /// <summary>
+    /// Indicates if this is the active/current version of the model.
+    /// Only one version can be active at a time.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Maturity levels in this model.
+    /// </summary>
+    public List<MaturityLevel> Levels { get; set; } = new();
+    
+    /// <summary>
+    /// User who created this model.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user who created this model.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when this model was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who last updated this model.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// User name who last updated this model.
+    /// </summary>
+    public string? UpdatedByName { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this model was last updated.
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Represents a maturity level within a maturity model.
+/// </summary>
+public sealed class MaturityLevel
+{
+    /// <summary>
+    /// Unique identifier for this level.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the maturity level (e.g., "Initial", "Repeatable", "Managed", "Auditable", "Optimized").
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of what this maturity level represents.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Order/rank of this level (1 = lowest maturity, higher = more mature).
+    /// </summary>
+    public int Order { get; set; }
+    
+    /// <summary>
+    /// Criteria that must be met to achieve this maturity level.
+    /// </summary>
+    public List<MaturityCriterion> Criteria { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a criterion within a maturity level.
+/// Criteria can be linked to data completeness, evidence, and process controls.
+/// </summary>
+public sealed class MaturityCriterion
+{
+    /// <summary>
+    /// Unique identifier for this criterion.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name/title of the criterion.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of what this criterion measures.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of criterion: "data-completeness", "evidence-quality", "process-control", "custom".
+    /// </summary>
+    public string CriterionType { get; set; } = "custom";
+    
+    /// <summary>
+    /// Target value for this criterion (e.g., "80" for 80% completeness).
+    /// </summary>
+    public string TargetValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Unit of measurement (e.g., "%", "count", "yes/no").
+    /// </summary>
+    public string Unit { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// For data-completeness criteria: minimum percentage of KPIs that must have values.
+    /// </summary>
+    public decimal? MinCompletionPercentage { get; set; }
+    
+    /// <summary>
+    /// For evidence-quality criteria: minimum percentage of KPIs that must have evidence.
+    /// </summary>
+    public decimal? MinEvidencePercentage { get; set; }
+    
+    /// <summary>
+    /// For process-control criteria: required control implementations.
+    /// Examples: "approval-workflow", "dual-validation", "audit-trail"
+    /// </summary>
+    public List<string> RequiredControls { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates if this criterion is mandatory for the level.
+    /// </summary>
+    public bool IsMandatory { get; set; } = true;
+}
+
+/// <summary>
+/// Request to create a new maturity model.
+/// </summary>
+public sealed class CreateMaturityModelRequest
+{
+    /// <summary>
+    /// Name of the maturity model.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of the maturity model.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Initial maturity levels.
+    /// </summary>
+    public List<MaturityLevelRequest> Levels { get; set; } = new();
+    
+    /// <summary>
+    /// User creating the model.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name creating the model.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update an existing maturity model.
+/// Creates a new version of the model.
+/// </summary>
+public sealed class UpdateMaturityModelRequest
+{
+    /// <summary>
+    /// Updated name of the maturity model.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Updated description of the maturity model.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Updated maturity levels.
+    /// </summary>
+    public List<MaturityLevelRequest> Levels { get; set; } = new();
+    
+    /// <summary>
+    /// User updating the model.
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name updating the model.
+    /// </summary>
+    public string UpdatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request model for a maturity level.
+/// </summary>
+public sealed class MaturityLevelRequest
+{
+    /// <summary>
+    /// Name of the maturity level.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of the maturity level.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Order/rank of this level.
+    /// </summary>
+    public int Order { get; set; }
+    
+    /// <summary>
+    /// Criteria for this level.
+    /// </summary>
+    public List<MaturityCriterionRequest> Criteria { get; set; } = new();
+}
+
+/// <summary>
+/// Request model for a maturity criterion.
+/// </summary>
+public sealed class MaturityCriterionRequest
+{
+    /// <summary>
+    /// Name of the criterion.
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Description of the criterion.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of criterion.
+    /// </summary>
+    public string CriterionType { get; set; } = "custom";
+    
+    /// <summary>
+    /// Target value for this criterion.
+    /// </summary>
+    public string TargetValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Unit of measurement.
+    /// </summary>
+    public string Unit { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Minimum completion percentage (optional).
+    /// </summary>
+    public decimal? MinCompletionPercentage { get; set; }
+    
+    /// <summary>
+    /// Minimum evidence percentage (optional).
+    /// </summary>
+    public decimal? MinEvidencePercentage { get; set; }
+    
+    /// <summary>
+    /// Required controls (optional).
+    /// </summary>
+    public List<string> RequiredControls { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates if this criterion is mandatory.
+    /// </summary>
+    public bool IsMandatory { get; set; } = true;
+}
