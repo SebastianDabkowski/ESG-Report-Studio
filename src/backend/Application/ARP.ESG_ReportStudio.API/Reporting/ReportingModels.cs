@@ -3109,6 +3109,7 @@ public sealed class ExportAuditPackageRequest
     
     /// <summary>
     /// User ID of the person requesting the export.
+    /// If the user doesn't exist in the system, the user ID will be used as the display name in export metadata.
     /// </summary>
     public string ExportedBy { get; set; } = string.Empty;
     
@@ -3140,11 +3141,15 @@ public sealed class ExportAuditPackageResult
     
     /// <summary>
     /// SHA-256 checksum of the entire package for integrity verification.
+    /// Note: Only populated when downloading the package via the download endpoint.
+    /// The export metadata endpoint returns an empty checksum.
     /// </summary>
     public string Checksum { get; set; } = string.Empty;
     
     /// <summary>
     /// Size of the package in bytes.
+    /// Note: Only populated when downloading the package via the download endpoint.
+    /// The export metadata endpoint returns 0.
     /// </summary>
     public long PackageSize { get; set; }
     

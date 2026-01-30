@@ -89,7 +89,7 @@ public sealed class AuditPackageExportTests
         Assert.Equal(period.Id, result!.Summary.PeriodId);
         Assert.Equal(period.Name, result.Summary.PeriodName);
         Assert.NotEmpty(result.ExportId);
-        Assert.NotEmpty(result.Checksum);
+        // Checksum and PackageSize are only populated during download, not in metadata endpoint
         Assert.Equal(user.Id, result.ExportedBy);
     }
 
@@ -117,28 +117,22 @@ public sealed class AuditPackageExportTests
     }
 
     [Fact]
-    public void GenerateAuditPackage_WithEmptyExportedBy_StillWorks()
+    public void GenerateAuditPackage_WithUnknownUser_UsesUserIdAsName()
     {
         // Arrange
         var store = new InMemoryReportStore();
         CreateTestConfiguration(store);
         
-        // Create test user and period
-        var user = new User
-        {
-            Id = "user1",
-            Name = "Test User",
-            Email = "test@example.com",
-            Role = "admin"
-        };
+        // Create test user and period (but don't add user to store)
+        var userId = "user1";
         
         var createPeriodRequest = new CreateReportingPeriodRequest
         {
             Name = "2024 Annual Report",
             StartDate = "2024-01-01",
             EndDate = "2024-12-31",
-            OwnerId = user.Id,
-            OwnerName = user.Name
+            OwnerId = userId,
+            OwnerName = "Test User"
         };
         
         var (isValid, _, snapshot) = store.ValidateAndCreatePeriod(createPeriodRequest);
@@ -148,7 +142,7 @@ public sealed class AuditPackageExportTests
         var exportRequest = new ExportAuditPackageRequest
         {
             PeriodId = period.Id,
-            ExportedBy = "unknown-user"
+            ExportedBy = userId
         };
         
         // Act
@@ -158,6 +152,7 @@ public sealed class AuditPackageExportTests
         Assert.True(resultIsValid);
         Assert.Null(errorMessage);
         Assert.NotNull(result);
+        Assert.Equal(userId, result!.ExportedBy);
     }
 
     [Fact]

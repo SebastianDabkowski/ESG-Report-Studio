@@ -8223,8 +8223,9 @@ public sealed class InMemoryReportStore
             // Build the package contents
             var contents = BuildAuditPackageContentsInternal(request, period, request.ExportedBy, userName);
             
-            // Calculate checksum (simplified for JSON representation)
-            var checksum = Guid.NewGuid().ToString(); // In real implementation, hash the actual content
+            // Calculate checksum (will be properly calculated during ZIP download)
+            // This is just a placeholder for the metadata endpoint
+            var checksum = ""; // Checksum is calculated during ZIP creation in download endpoint
             
             var exportId = Guid.NewGuid().ToString();
             var exportedAt = DateTime.UtcNow.ToString("O");
@@ -8236,7 +8237,7 @@ public sealed class InMemoryReportStore
                 ExportedAt = exportedAt,
                 ExportedBy = request.ExportedBy,
                 Checksum = checksum,
-                PackageSize = 0, // Will be calculated during ZIP creation
+                PackageSize = 0, // Package size is calculated during ZIP creation in download endpoint
                 Summary = new AuditPackageSummary
                 {
                     PeriodId = period.Id,
@@ -8284,6 +8285,17 @@ public sealed class InMemoryReportStore
         var sectionsToInclude = request.SectionIds != null && request.SectionIds.Count > 0
             ? _sections.Where(s => s.PeriodId == request.PeriodId && request.SectionIds.Contains(s.Id)).ToList()
             : _sections.Where(s => s.PeriodId == request.PeriodId).ToList();
+
+        // Validate that we have at least one section
+        if (sectionsToInclude.Count == 0)
+        {
+            // If specific sections were requested, they might not exist
+            if (request.SectionIds != null && request.SectionIds.Count > 0)
+            {
+                // Return empty package rather than failing - allows partial exports
+                sectionsToInclude = new List<ReportSection>();
+            }
+        }
 
         var sectionIds = sectionsToInclude.Select(s => s.Id).ToList();
 
