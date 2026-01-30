@@ -10700,6 +10700,9 @@ public sealed class InMemoryReportStore
             // Dictionary to map source gap IDs to target gap IDs
             var gapIdMapping = new Dictionary<string, string>();
             
+            // List to track inactive owner warnings
+            var inactiveOwnerWarnings = new List<InactiveOwnerWarning>();
+            
             // Copy disclosures (gaps, assumptions, remediation plans)
             if (request.Options.CopyDisclosures && request.Options.CopyStructure)
             {
@@ -10808,10 +10811,22 @@ public sealed class InMemoryReportStore
                 }
                 
                 // Copy remediation actions for carried forward plans
-                foreach (var sourceAction in _remediationActions.Where(a => remediationPlanIdMapping.ContainsKey(a.RemediationPlanId)))
+                var sourceActions = _remediationActions.Where(a => remediationPlanIdMapping.ContainsKey(a.RemediationPlanId)).ToList();
+                
+                foreach (var sourceAction in sourceActions)
                 {
                     if (sourceAction.Status == "pending" || sourceAction.Status == "in-progress")
                     {
+                        // Adjust due date if requested
+                        var adjustedDueDate = sourceAction.DueDate;
+                        if (request.Options.DueDateAdjustmentDays.HasValue && 
+                            request.Options.DueDateAdjustmentDays.Value != 0 &&
+                            !string.IsNullOrWhiteSpace(sourceAction.DueDate) &&
+                            DateTime.TryParse(sourceAction.DueDate, out var originalDueDate))
+                        {
+                            adjustedDueDate = originalDueDate.AddDays(request.Options.DueDateAdjustmentDays.Value).ToString("O");
+                        }
+                        
                         var targetAction = new RemediationAction
                         {
                             Id = Guid.NewGuid().ToString(),
@@ -10821,15 +10836,72 @@ public sealed class InMemoryReportStore
                             OwnerId = sourceAction.OwnerId,
                             OwnerName = sourceAction.OwnerName,
                             Status = sourceAction.Status,
-                            DueDate = sourceAction.DueDate,
+                            DueDate = adjustedDueDate,
                             CreatedBy = "system",
                             CreatedAt = now
                         };
                         
                         _remediationActions.Add(targetAction);
+                        
+                        // Check if owner is inactive
+                        var owner = _users.FirstOrDefault(u => u.Id == sourceAction.OwnerId);
+                        if (owner != null && !owner.IsActive)
+                        {
+                            inactiveOwnerWarnings.Add(new InactiveOwnerWarning
+                            {
+                                UserId = owner.Id,
+                                UserName = owner.Name,
+                                EntityType = "RemediationAction",
+                                EntityId = targetAction.Id,
+                                EntityTitle = targetAction.Title
+                            });
+                        }
+                    }
+                }
+                
+                // Check for inactive owners in remediation plans
+                foreach (var sourceRP in sourceRemediationPlans)
+                {
+                    var owner = _users.FirstOrDefault(u => u.Id == sourceRP.OwnerId);
+                    if (owner != null && !owner.IsActive)
+                    {
+                        var targetRPId = remediationPlanIdMapping[sourceRP.Id];
+                        inactiveOwnerWarnings.Add(new InactiveOwnerWarning
+                        {
+                            UserId = owner.Id,
+                            UserName = owner.Name,
+                            EntityType = "RemediationPlan",
+                            EntityId = targetRPId,
+                            EntityTitle = sourceRP.Title
+                        });
                     }
                 }
             }
+            
+            // Check for inactive owners in sections
+            var sectionInactiveWarnings = new List<InactiveOwnerWarning>();
+            if (request.Options.CopyStructure)
+            {
+                var targetSections = _sections.Where(s => s.PeriodId == targetPeriodId).ToList();
+                foreach (var targetSection in targetSections)
+                {
+                    var owner = _users.FirstOrDefault(u => u.Id == targetSection.OwnerId);
+                    if (owner != null && !owner.IsActive)
+                    {
+                        sectionInactiveWarnings.Add(new InactiveOwnerWarning
+                        {
+                            UserId = owner.Id,
+                            UserName = owner.Name,
+                            EntityType = "Section",
+                            EntityId = targetSection.Id,
+                            EntityTitle = targetSection.Title
+                        });
+                    }
+                }
+            }
+            
+            // Combine all inactive owner warnings
+            var allInactiveWarnings = inactiveOwnerWarnings.Concat(sectionInactiveWarnings).ToList();
             
             // Create rollover audit log
             var performedByUser = _users.FirstOrDefault(u => u.Id == request.PerformedBy);
@@ -10904,7 +10976,8 @@ public sealed class InMemoryReportStore
                 Success = true,
                 TargetPeriod = targetPeriod,
                 AuditLog = auditLog,
-                Reconciliation = reconciliation
+                Reconciliation = reconciliation,
+                InactiveOwnerWarnings = allInactiveWarnings
             };
             
             return (true, null, result);
