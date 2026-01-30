@@ -116,7 +116,7 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Export with attachments included
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = true,
@@ -230,7 +230,7 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Export WITHOUT attachments (default)
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = false
@@ -279,7 +279,7 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Export with low size limit
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         var pdfBytes = pdfService.GeneratePdf(report!, new PdfExportOptions
         {
             IncludeAttachments = true,
@@ -372,7 +372,7 @@ public sealed class AttachmentExportTests
         Assert.NotNull(report);
         
         // Act - Get filenames with and without attachments
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         var filenameWithAttachments = pdfService.GenerateFilename(report!);
         var filenameWithoutAttachments = pdfService.GenerateFilename(report!);
         

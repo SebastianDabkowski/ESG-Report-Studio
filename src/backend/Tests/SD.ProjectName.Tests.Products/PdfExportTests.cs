@@ -41,7 +41,7 @@ public sealed class PdfExportTests
         Assert.True(resultIsValid);
         Assert.NotNull(report);
         
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         
         // Act
         var pdfBytes = pdfService.GeneratePdf(report!);
@@ -88,7 +88,7 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         var options = new PdfExportOptions
         {
             IncludeTitlePage = true,
@@ -138,7 +138,7 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         
         // Act
         var filename = pdfService.GenerateFilename(report!);
@@ -182,7 +182,7 @@ public sealed class PdfExportTests
         var (resultIsValid, _, report) = store.GenerateReport(generateRequest);
         Assert.True(resultIsValid);
         
-        var pdfService = new PdfExportService();
+        var pdfService = new PdfExportService(ExportTestHelpers.CreateTestLocalizationService());
         
         // Act
         var filename = pdfService.GenerateFilename(report!, "Executive Summary");
