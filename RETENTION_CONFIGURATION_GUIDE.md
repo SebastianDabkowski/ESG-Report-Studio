@@ -343,12 +343,15 @@ Best practices:
 
 ### Setting Up Admin Users
 
-Ensure you have at least one user with admin role:
+**Note**: The current implementation uses an in-memory store. In a production database implementation, you would update user roles like this:
 
 ```sql
--- Example: Update user role in database
+-- Example for future database implementation:
+-- Update user role in database
 UPDATE Users SET Role = 'admin' WHERE Email = 'admin@company.com';
 ```
+
+For the current in-memory implementation, admin users are pre-configured in the system seed data.
 
 ### Security Best Practices
 
@@ -468,12 +471,21 @@ curl -X GET "https://your-domain/api/users/user-123"
 ### Adding Retention to Existing System
 
 1. **Audit current data age:**
+   
+   For production database implementations, you can query audit data age:
    ```sql
+   -- Example for future SQL database implementation:
    SELECT 
      MIN(Timestamp) as OldestEntry,
      MAX(Timestamp) as NewestEntry,
      COUNT(*) as TotalEntries
    FROM AuditLog
+   ```
+   
+   For the current in-memory implementation, use the API:
+   ```bash
+   curl -X GET "https://your-domain/api/audit-log" \
+     -H "X-User-Id: admin-user-id"
    ```
 
 2. **Create conservative policy:**

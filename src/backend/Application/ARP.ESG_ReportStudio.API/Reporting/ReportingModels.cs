@@ -3509,6 +3509,9 @@ public sealed class DeletionReport
 /// <summary>
 /// Request to create a retention policy.
 /// </summary>
+/// <summary>
+/// Request to create a retention policy.
+/// </summary>
 public sealed class CreateRetentionPolicyRequest
 {
     public string? TenantId { get; set; }
@@ -3516,6 +3519,11 @@ public sealed class CreateRetentionPolicyRequest
     public string DataCategory { get; set; } = "all";
     public int RetentionDays { get; set; }
     public bool AllowDeletion { get; set; } = true;
+    
+    /// <summary>
+    /// User creating the policy. Set automatically by controller from authenticated user.
+    /// API consumers should not set this field; it will be overwritten.
+    /// </summary>
     public string CreatedBy { get; set; } = string.Empty;
 }
 
@@ -3535,7 +3543,8 @@ public sealed class RunCleanupRequest
     public string? TenantId { get; set; }
     
     /// <summary>
-    /// User initiating the cleanup.
+    /// User initiating the cleanup. Set automatically by controller from authenticated user.
+    /// API consumers should not set this field; it will be overwritten.
     /// </summary>
     public string InitiatedBy { get; set; } = string.Empty;
 }

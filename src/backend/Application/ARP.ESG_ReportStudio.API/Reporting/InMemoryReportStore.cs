@@ -82,6 +82,11 @@ public sealed class InMemoryReportStore
         "simplified-scope",
         "other"
     };
+    
+    // Retention policy priority weights (higher = more specific)
+    private const int TenantSpecificityPriority = 10;
+    private const int ReportTypeSpecificityPriority = 5;
+    private const int DataCategorySpecificityPriority = 3;
 
     private readonly IReadOnlyList<SectionTemplate> _simplifiedTemplates = new List<SectionTemplate>
     {
@@ -8729,9 +8734,9 @@ public sealed class InMemoryReportStore
             
             // Calculate priority based on specificity (more specific = higher priority)
             int priority = 0;
-            if (request.TenantId != null) priority += 10;
-            if (request.ReportType != null) priority += 5;
-            if (request.DataCategory != "all") priority += 3;
+            if (request.TenantId != null) priority += TenantSpecificityPriority;
+            if (request.ReportType != null) priority += ReportTypeSpecificityPriority;
+            if (request.DataCategory != "all") priority += DataCategorySpecificityPriority;
             
             var policy = new RetentionPolicy
             {
@@ -8962,7 +8967,7 @@ public sealed class InMemoryReportStore
             DateRangeStart = dateRangeStart,
             DateRangeEnd = dateRangeEnd,
             TenantId = tenantId,
-            DeletionSummary = $"{recordCount} {dataCategory} records from {dateRangeStart} to {dateRangeEnd}"
+            DeletionSummary = $"{recordCount} {dataCategory} records from {FormatTimestampForReport(dateRangeStart)} to {FormatTimestampForReport(dateRangeEnd)}"
         };
         
         // Generate content hash
@@ -9120,6 +9125,18 @@ public sealed class InMemoryReportStore
         var bytes = Encoding.UTF8.GetBytes(content);
         var hash = SHA256.HashData(bytes);
         return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+    
+    /// <summary>
+    /// Formats ISO 8601 timestamp for deletion report summary.
+    /// </summary>
+    private static string FormatTimestampForReport(string isoTimestamp)
+    {
+        if (DateTime.TryParse(isoTimestamp, null, System.Globalization.DateTimeStyles.RoundtripKind, out var dt))
+        {
+            return dt.ToString("yyyy-MM-dd");
+        }
+        return isoTimestamp; // Fallback to original if parsing fails
     }
     
     #endregion
