@@ -6428,6 +6428,13 @@ public sealed class ReportVariant
     public bool IsActive { get; set; } = true;
     
     /// <summary>
+    /// Output language for this variant (e.g., "en-US", "de-DE").
+    /// When set, the variant uses this language for section titles, labels, and formatting.
+    /// User-entered content remains in the original language.
+    /// </summary>
+    public string? Language { get; set; }
+    
+    /// <summary>
     /// User ID who created this variant.
     /// </summary>
     public string CreatedBy { get; set; } = string.Empty;
@@ -6531,6 +6538,12 @@ public sealed class CreateVariantRequest
     public List<VariantRule> Rules { get; set; } = new();
     public List<RedactionRule> RedactionRules { get; set; } = new();
     public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Output language for this variant (e.g., "en-US", "de-DE").
+    /// When set, reports generated with this variant use this language for labels and formatting.
+    /// </summary>
+    public string? Language { get; set; }
 }
 
 /// <summary>
@@ -6545,6 +6558,12 @@ public sealed class UpdateVariantRequest
     public List<RedactionRule> RedactionRules { get; set; } = new();
     public bool IsActive { get; set; } = true;
     public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Output language for this variant (e.g., "en-US", "de-DE").
+    /// When set, reports generated with this variant use this language for labels and formatting.
+    /// </summary>
+    public string? Language { get; set; }
 }
 
 /// <summary>

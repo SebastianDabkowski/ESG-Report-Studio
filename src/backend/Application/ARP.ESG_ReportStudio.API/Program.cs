@@ -21,6 +21,9 @@ builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IPdfExportService, 
 // Add DOCX export service
 builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IDocxExportService, ARP.ESG_ReportStudio.API.Services.DocxExportService>();
 
+// Add localization service
+builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Services.ILocalizationService, ARP.ESG_ReportStudio.API.Services.LocalizationService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>

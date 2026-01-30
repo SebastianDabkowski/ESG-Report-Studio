@@ -70,4 +70,12 @@ public sealed class DocxExportOptions
     /// If not provided, default branding (if configured) may be applied.
     /// </summary>
     public Reporting.BrandingProfile? BrandingProfile { get; set; }
+    
+    /// <summary>
+    /// Output language for labels and formatting (e.g., "en-US", "de-DE").
+    /// When set, uses this language for section titles, labels, and locale-specific formatting.
+    /// User-entered content remains in the original language.
+    /// Defaults to "en-US" if not specified.
+    /// </summary>
+    public string? Language { get; set; }
 }
