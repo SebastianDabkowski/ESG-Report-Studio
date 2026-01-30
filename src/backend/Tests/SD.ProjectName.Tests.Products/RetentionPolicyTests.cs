@@ -93,6 +93,50 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
+        public void CreateRetentionPolicy_WithEmptyCreatedBy_ShouldFail()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var request = new CreateRetentionPolicyRequest
+            {
+                RetentionDays = 365,
+                DataCategory = "audit-log",
+                CreatedBy = ""
+            };
+
+            // Act
+            var (success, errorMessage, policy) = store.CreateRetentionPolicy(request);
+
+            // Assert
+            Assert.False(success);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("CreatedBy", errorMessage);
+            Assert.Null(policy);
+        }
+
+        [Fact]
+        public void CreateRetentionPolicy_WithInvalidDataCategory_ShouldFail()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var request = new CreateRetentionPolicyRequest
+            {
+                RetentionDays = 365,
+                DataCategory = "invalid-category",
+                CreatedBy = "user-2"
+            };
+
+            // Act
+            var (success, errorMessage, policy) = store.CreateRetentionPolicy(request);
+
+            // Assert
+            Assert.False(success);
+            Assert.NotNull(errorMessage);
+            Assert.Contains("DataCategory", errorMessage);
+            Assert.Null(policy);
+        }
+
+        [Fact]
         public void CreateRetentionPolicy_WithTenantId_ShouldHaveHigherPriority()
         {
             // Arrange

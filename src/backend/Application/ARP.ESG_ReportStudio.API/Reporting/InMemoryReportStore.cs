@@ -8709,10 +8709,22 @@ public sealed class InMemoryReportStore
     {
         lock (_lock)
         {
-            // Validate retention days
+            // Validate inputs
+            if (string.IsNullOrWhiteSpace(request.CreatedBy))
+            {
+                return (false, "CreatedBy is required.", null);
+            }
+            
             if (request.RetentionDays < 1)
             {
                 return (false, "Retention days must be at least 1.", null);
+            }
+            
+            // Validate data category
+            var validCategories = new[] { "all", "audit-log", "evidence" };
+            if (!validCategories.Contains(request.DataCategory))
+            {
+                return (false, $"DataCategory must be one of: {string.Join(", ", validCategories)}", null);
             }
             
             // Calculate priority based on specificity (more specific = higher priority)
@@ -8836,7 +8848,7 @@ public sealed class InMemoryReportStore
                 {
                     var cutoffDate = DateTime.UtcNow.AddDays(-auditPolicy.RetentionDays);
                     var eligibleEntries = _auditLog
-                        .Where(e => DateTime.Parse(e.Timestamp) < cutoffDate)
+                        .Where(e => DateTime.TryParse(e.Timestamp, null, System.Globalization.DateTimeStyles.RoundtripKind, out var timestamp) && timestamp < cutoffDate)
                         .ToList();
                     
                     result.RecordsIdentified += eligibleEntries.Count;
@@ -8883,7 +8895,7 @@ public sealed class InMemoryReportStore
                 {
                     var cutoffDate = DateTime.UtcNow.AddDays(-evidencePolicy.RetentionDays);
                     var eligibleEvidence = _evidence
-                        .Where(e => DateTime.Parse(e.UploadedAt) < cutoffDate)
+                        .Where(e => DateTime.TryParse(e.UploadedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out var uploadedAt) && uploadedAt < cutoffDate)
                         .ToList();
                     
                     result.RecordsIdentified += eligibleEvidence.Count;
@@ -8958,6 +8970,7 @@ public sealed class InMemoryReportStore
         report.ContentHash = ComputeSha256Hash(contentForHash);
         
         // Generate signature (simplified - in production, use proper cryptographic signing)
+        // TODO: Replace with proper asymmetric cryptography (RSA/ECDSA) before production use
         var signatureContent = $"{report.ContentHash}|{deletedBy}|{DateTime.UtcNow:o}";
         report.Signature = ComputeSha256Hash(signatureContent);
         

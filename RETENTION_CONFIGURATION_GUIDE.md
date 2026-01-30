@@ -280,13 +280,13 @@ Example cleanup script:
 #!/bin/bash
 
 # Dry run first
-DRY_RUN=$(curl -s -X POST https://your-domain/api/retention/cleanup \
+dry_run=$(curl -s -X POST https://your-domain/api/retention/cleanup \
   -H "X-User-Id: admin-user-id" \
   -H "Content-Type: application/json" \
   -d '{"dryRun": true}')
 
 # Check if dry run was successful
-if echo "$DRY_RUN" | grep -q '"success":true'; then
+if echo "$dry_run" | grep -q '"success":true'; then
   # Execute actual cleanup
   curl -X POST https://your-domain/api/retention/cleanup \
     -H "X-User-Id: admin-user-id" \

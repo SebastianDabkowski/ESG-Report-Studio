@@ -351,11 +351,11 @@ namespace SD.ProjectName.Tests.Products
             var auditLogField = typeof(InMemoryReportStore).GetField("_auditLog",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
             var auditLog = auditLogField!.GetValue(store) as List<AuditLogEntry>;
-            var oldDate = DateTime.UtcNow.AddDays(-400).ToString("o");
+            var oldDate2 = DateTime.UtcNow.AddDays(-400).AddSeconds(-1).ToString("o"); // Slightly different time
             auditLog!.Add(new AuditLogEntry
             {
                 Id = Guid.NewGuid().ToString(),
-                Timestamp = oldDate,
+                Timestamp = oldDate2,
                 UserId = "user-1",
                 UserName = "Test User",
                 Action = "test-action",
@@ -364,7 +364,6 @@ namespace SD.ProjectName.Tests.Products
                 Changes = new List<FieldChange>()
             });
             
-            Thread.Sleep(100); // Ensure different timestamps
             store.RunCleanup(new RunCleanupRequest { DryRun = false, InitiatedBy = "user-2" });
 
             // Act
@@ -376,8 +375,8 @@ namespace SD.ProjectName.Tests.Products
             // Verify reverse chronological order
             for (int i = 0; i < reports.Count - 1; i++)
             {
-                var current = DateTime.Parse(reports[i].DeletedAt);
-                var next = DateTime.Parse(reports[i + 1].DeletedAt);
+                var current = DateTime.Parse(reports[i].DeletedAt, null, System.Globalization.DateTimeStyles.RoundtripKind);
+                var next = DateTime.Parse(reports[i + 1].DeletedAt, null, System.Globalization.DateTimeStyles.RoundtripKind);
                 Assert.True(current >= next);
             }
         }
