@@ -2008,6 +2008,13 @@ public sealed class InMemoryReportStore
             }
             dataPoint.CalculationInputIds = request.CalculationInputIds ?? new List<string>();
             
+            // Update snapshot if this is a calculated point and inputs changed
+            if (dataPoint.IsCalculated && inputIdsChanged && dataPoint.CalculationInputIds.Any())
+            {
+                dataPoint.CalculationInputSnapshot = CaptureInputSnapshot(dataPoint.CalculationInputIds);
+                changes.Add(new FieldChange { Field = "CalculationInputSnapshot", OldValue = "previous", NewValue = "updated" });
+            }
+            
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
             {
@@ -9193,27 +9200,23 @@ public sealed class InMemoryReportStore
     /// </summary>
     private string CaptureInputSnapshot(List<string> inputIds)
     {
-        var snapshot = new System.Text.StringBuilder();
-        snapshot.Append("{");
+        var snapshot = new Dictionary<string, object>();
         
-        bool first = true;
         foreach (var inputId in inputIds)
         {
             var input = _dataPoints.FirstOrDefault(dp => dp.Id == inputId);
             if (input != null)
             {
-                if (!first) snapshot.Append(",");
-                snapshot.Append($"\"{inputId}\":{{");
-                snapshot.Append($"\"value\":\"{input.Value?.Replace("\"", "\\\"") ?? ""}\",");
-                snapshot.Append($"\"unit\":\"{input.Unit?.Replace("\"", "\\\"") ?? ""}\",");
-                snapshot.Append($"\"timestamp\":\"{input.UpdatedAt}\"");
-                snapshot.Append("}");
-                first = false;
+                snapshot[inputId] = new
+                {
+                    value = input.Value ?? "",
+                    unit = input.Unit ?? "",
+                    timestamp = input.UpdatedAt
+                };
             }
         }
         
-        snapshot.Append("}");
-        return snapshot.ToString();
+        return System.Text.Json.JsonSerializer.Serialize(snapshot);
     }
     
     /// <summary>
@@ -9293,17 +9296,24 @@ public sealed class InMemoryReportStore
                 var input = _dataPoints.FirstOrDefault(dp => dp.Id == inputId);
                 if (input != null)
                 {
-                    // Try to extract value from old snapshot
+                    // Try to extract value from old snapshot using proper JSON parsing
                     string? valueAtCalc = null;
                     if (!string.IsNullOrEmpty(dataPoint.CalculationInputSnapshot))
                     {
-                        // Simple JSON extraction (not robust but works for our format)
-                        var pattern = $"\"{inputId}\":{{\"value\":\"([^\"]*?)\"";
-                        var match = System.Text.RegularExpressions.Regex.Match(
-                            dataPoint.CalculationInputSnapshot, pattern);
-                        if (match.Success)
+                        try
                         {
-                            valueAtCalc = match.Groups[1].Value.Replace("\\\"", "\"");
+                            using var doc = System.Text.Json.JsonDocument.Parse(dataPoint.CalculationInputSnapshot);
+                            if (doc.RootElement.TryGetProperty(inputId, out var inputElement))
+                            {
+                                if (inputElement.TryGetProperty("value", out var valueElement))
+                                {
+                                    valueAtCalc = valueElement.GetString();
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // If JSON parsing fails, leave valueAtCalc as null
                         }
                     }
                     

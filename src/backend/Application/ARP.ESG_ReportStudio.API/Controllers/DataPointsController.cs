@@ -240,12 +240,17 @@ public sealed class DataPointsController : ControllerBase
         return Ok(lineage);
     }
 
+    /// <summary>
+    /// Recalculates a derived data point by updating its lineage metadata.
+    /// Note: This endpoint updates calculation metadata (version, snapshot) but does not
+    /// perform the actual calculation. The calculation logic must be implemented by the caller
+    /// and the resulting value should be passed separately.
+    /// </summary>
     [HttpPost("{id}/recalculate")]
     public ActionResult<DataPoint> RecalculateDataPoint(string id, [FromBody] RecalculateDataPointRequest request)
     {
-        // Note: In a real implementation, the calculation logic would be executed here
-        // based on the formula and input values. For now, we just update the lineage metadata.
-        // The actual value should be passed in or calculated based on the formula.
+        // TODO: Implement actual calculation logic based on formula
+        // For now, this endpoint only updates the lineage metadata
         
         var (isValid, errorMessage, dataPoint) = _store.RecalculateDataPoint(id, request, null, null);
         
