@@ -11766,4 +11766,350 @@ public sealed class InMemoryReportStore
     }
     
     #endregion
+    
+    #region Maturity Assessment
+    
+    private readonly List<MaturityAssessment> _maturityAssessments = new();
+    
+    /// <summary>
+    /// Calculate a maturity assessment for a reporting period.
+    /// Evaluates all criteria in the maturity model against actual data.
+    /// </summary>
+    public (bool isValid, string? errorMessage, MaturityAssessment? assessment) CalculateMaturityAssessment(CalculateMaturityAssessmentRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate period exists
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found", null);
+            }
+            
+            // Get maturity model (use specified or active)
+            MaturityModel? model;
+            if (!string.IsNullOrEmpty(request.MaturityModelId))
+            {
+                model = GetMaturityModel(request.MaturityModelId);
+                if (model == null)
+                {
+                    return (false, "Maturity model not found", null);
+                }
+            }
+            else
+            {
+                model = GetActiveMaturityModel();
+                if (model == null)
+                {
+                    return (false, "No active maturity model found", null);
+                }
+            }
+            
+            // Get all data points for the period
+            var sections = GetSections(request.PeriodId);
+            var allDataPoints = new List<DataPoint>();
+            foreach (var section in sections)
+            {
+                var sectionDataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+                allDataPoints.AddRange(sectionDataPoints);
+            }
+            
+            // Calculate stats
+            var stats = CalculateAssessmentStats(allDataPoints);
+            
+            // Evaluate each criterion
+            var criterionResults = new List<MaturityCriterionResult>();
+            foreach (var level in model.Levels.OrderBy(l => l.Order))
+            {
+                foreach (var criterion in level.Criteria)
+                {
+                    var result = EvaluateCriterion(level, criterion, stats, allDataPoints);
+                    criterionResults.Add(result);
+                }
+            }
+            
+            // Determine achieved level (highest level where all mandatory criteria pass)
+            // A level is achieved only if all mandatory criteria at that level AND all lower levels pass
+            MaturityLevel? achievedLevel = null;
+            foreach (var level in model.Levels.OrderBy(l => l.Order))
+            {
+                // Get all criteria up to and including this level
+                var criteriaUpToLevel = criterionResults
+                    .Where(r => r.LevelOrder <= level.Order && r.IsMandatory)
+                    .ToList();
+                
+                // Check if all mandatory criteria up to this level passed
+                if (criteriaUpToLevel.All(r => r.Passed))
+                {
+                    achievedLevel = level;
+                    // Continue to check higher levels
+                }
+                else
+                {
+                    // If any mandatory criterion failed, we can't achieve this or higher levels
+                    break;
+                }
+            }
+            
+            // Calculate overall score (0-100 based on criteria passed)
+            var totalCriteria = criterionResults.Count;
+            var passedCriteria = criterionResults.Count(r => r.Passed);
+            var overallScore = totalCriteria > 0 ? (decimal)passedCriteria / totalCriteria * 100 : 0;
+            
+            // Mark previous assessments as non-current
+            foreach (var existing in _maturityAssessments.Where(a => a.PeriodId == request.PeriodId && a.IsCurrent))
+            {
+                existing.IsCurrent = false;
+            }
+            
+            // Create assessment
+            var assessment = new MaturityAssessment
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = request.PeriodId,
+                MaturityModelId = model.Id,
+                ModelVersion = model.Version,
+                CalculatedAt = DateTime.UtcNow.ToString("o"),
+                CalculatedBy = request.CalculatedBy,
+                CalculatedByName = request.CalculatedByName,
+                IsCurrent = true,
+                AchievedLevelId = achievedLevel?.Id,
+                AchievedLevelName = achievedLevel?.Name,
+                AchievedLevelOrder = achievedLevel?.Order,
+                OverallScore = overallScore,
+                CriterionResults = criterionResults,
+                Stats = stats
+            };
+            
+            _maturityAssessments.Add(assessment);
+            
+            return (true, null, assessment);
+        }
+    }
+    
+    /// <summary>
+    /// Get the current (latest) maturity assessment for a period.
+    /// </summary>
+    public MaturityAssessment? GetCurrentMaturityAssessment(string periodId)
+    {
+        lock (_lock)
+        {
+            return _maturityAssessments
+                .Where(a => a.PeriodId == periodId && a.IsCurrent)
+                .OrderByDescending(a => a.CalculatedAt)
+                .FirstOrDefault();
+        }
+    }
+    
+    /// <summary>
+    /// Get all maturity assessments for a period (history).
+    /// </summary>
+    public List<MaturityAssessment> GetMaturityAssessmentHistory(string periodId)
+    {
+        lock (_lock)
+        {
+            return _maturityAssessments
+                .Where(a => a.PeriodId == periodId)
+                .OrderByDescending(a => a.CalculatedAt)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get a specific maturity assessment by ID.
+    /// </summary>
+    public MaturityAssessment? GetMaturityAssessment(string id)
+    {
+        lock (_lock)
+        {
+            return _maturityAssessments.FirstOrDefault(a => a.Id == id);
+        }
+    }
+    
+    /// <summary>
+    /// Calculate assessment statistics from data points.
+    /// </summary>
+    private MaturityAssessmentStats CalculateAssessmentStats(List<DataPoint> dataPoints)
+    {
+        var stats = new MaturityAssessmentStats
+        {
+            TotalDataPoints = dataPoints.Count
+        };
+        
+        if (dataPoints.Count == 0)
+        {
+            stats.DataCompletenessPercentage = 0;
+            stats.EvidenceQualityPercentage = 0;
+            return stats;
+        }
+        
+        // Count complete data points (those with content/value and not marked as missing)
+        stats.CompleteDataPoints = dataPoints.Count(dp => 
+            !dp.IsMissing && 
+            dp.CompletenessStatus == "complete"
+        );
+        
+        stats.DataCompletenessPercentage = (decimal)stats.CompleteDataPoints / stats.TotalDataPoints * 100;
+        
+        // Count data points with evidence
+        stats.DataPointsWithEvidence = dataPoints.Count(dp => dp.EvidenceIds.Count > 0);
+        stats.EvidenceQualityPercentage = (decimal)stats.DataPointsWithEvidence / stats.TotalDataPoints * 100;
+        
+        return stats;
+    }
+    
+    /// <summary>
+    /// Evaluate a single criterion against actual data.
+    /// </summary>
+    private MaturityCriterionResult EvaluateCriterion(
+        MaturityLevel level, 
+        MaturityCriterion criterion, 
+        MaturityAssessmentStats stats,
+        List<DataPoint> dataPoints)
+    {
+        var result = new MaturityCriterionResult
+        {
+            LevelId = level.Id,
+            LevelName = level.Name,
+            LevelOrder = level.Order,
+            CriterionId = criterion.Id,
+            CriterionName = criterion.Name,
+            CriterionType = criterion.CriterionType,
+            TargetValue = criterion.TargetValue,
+            Unit = criterion.Unit,
+            IsMandatory = criterion.IsMandatory
+        };
+        
+        // Evaluate based on criterion type
+        switch (criterion.CriterionType)
+        {
+            case "data-completeness":
+                return EvaluateDataCompletenessCriterion(criterion, stats, result);
+                
+            case "evidence-quality":
+                return EvaluateEvidenceQualityCriterion(criterion, stats, result);
+                
+            case "process-control":
+                return EvaluateProcessControlCriterion(criterion, result);
+                
+            case "custom":
+                return EvaluateCustomCriterion(criterion, result);
+                
+            default:
+                result.Status = "incomplete-data";
+                result.FailureReason = $"Unknown criterion type: {criterion.CriterionType}";
+                result.Passed = false;
+                return result;
+        }
+    }
+    
+    /// <summary>
+    /// Evaluate data completeness criterion.
+    /// </summary>
+    private MaturityCriterionResult EvaluateDataCompletenessCriterion(
+        MaturityCriterion criterion,
+        MaturityAssessmentStats stats,
+        MaturityCriterionResult result)
+    {
+        if (!criterion.MinCompletionPercentage.HasValue)
+        {
+            result.Status = "incomplete-data";
+            result.FailureReason = "Criterion configuration missing: MinCompletionPercentage not specified";
+            result.Passed = false;
+            return result;
+        }
+        
+        var targetPercentage = criterion.MinCompletionPercentage.Value;
+        var actualPercentage = stats.DataCompletenessPercentage;
+        
+        result.ActualValue = actualPercentage.ToString("F2");
+        result.Passed = actualPercentage >= targetPercentage;
+        result.Status = result.Passed ? "passed" : "failed";
+        
+        if (!result.Passed)
+        {
+            result.FailureReason = $"Data completeness is {actualPercentage:F2}%, below target of {targetPercentage}%. " +
+                                  $"Complete data points: {stats.CompleteDataPoints}/{stats.TotalDataPoints}";
+        }
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Evaluate evidence quality criterion.
+    /// </summary>
+    private MaturityCriterionResult EvaluateEvidenceQualityCriterion(
+        MaturityCriterion criterion,
+        MaturityAssessmentStats stats,
+        MaturityCriterionResult result)
+    {
+        if (!criterion.MinEvidencePercentage.HasValue)
+        {
+            result.Status = "incomplete-data";
+            result.FailureReason = "Criterion configuration missing: MinEvidencePercentage not specified";
+            result.Passed = false;
+            return result;
+        }
+        
+        var targetPercentage = criterion.MinEvidencePercentage.Value;
+        var actualPercentage = stats.EvidenceQualityPercentage;
+        
+        result.ActualValue = actualPercentage.ToString("F2");
+        result.Passed = actualPercentage >= targetPercentage;
+        result.Status = result.Passed ? "passed" : "failed";
+        
+        if (!result.Passed)
+        {
+            result.FailureReason = $"Evidence quality is {actualPercentage:F2}%, below target of {targetPercentage}%. " +
+                                  $"Data points with evidence: {stats.DataPointsWithEvidence}/{stats.TotalDataPoints}";
+        }
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Evaluate process control criterion.
+    /// Note: This is a simplified implementation. In production, you would check actual process control implementations.
+    /// </summary>
+    private MaturityCriterionResult EvaluateProcessControlCriterion(
+        MaturityCriterion criterion,
+        MaturityCriterionResult result)
+    {
+        if (criterion.RequiredControls.Count == 0)
+        {
+            result.Status = "incomplete-data";
+            result.FailureReason = "Criterion configuration missing: RequiredControls not specified";
+            result.Passed = false;
+            return result;
+        }
+        
+        // For now, we'll mark this as incomplete-data since we don't have actual control tracking
+        // In a full implementation, you would check if the required controls are actually enabled
+        result.ActualValue = "Not implemented";
+        result.Status = "incomplete-data";
+        result.FailureReason = "Process control validation not yet implemented. Required controls: " + 
+                              string.Join(", ", criterion.RequiredControls);
+        result.Passed = false;
+        
+        return result;
+    }
+    
+    /// <summary>
+    /// Evaluate custom criterion.
+    /// Note: This is a placeholder. Custom criteria would need specific evaluation logic.
+    /// </summary>
+    private MaturityCriterionResult EvaluateCustomCriterion(
+        MaturityCriterion criterion,
+        MaturityCriterionResult result)
+    {
+        // For custom criteria, we mark as incomplete-data since we can't automatically evaluate them
+        result.ActualValue = "Manual review required";
+        result.Status = "incomplete-data";
+        result.FailureReason = "Custom criteria require manual evaluation";
+        result.Passed = false;
+        
+        return result;
+    }
+    
+    #endregion
 }

@@ -19,7 +19,9 @@ import type {
   SaveDataTypeRolloverRuleRequest,
   RolloverRuleHistory,
   MetricComparisonResponse,
-  TextDisclosureComparisonResponse
+  TextDisclosureComparisonResponse,
+  MaturityAssessment,
+  CalculateMaturityAssessmentPayload
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1208,4 +1210,27 @@ export async function deleteMaturityModel(id: string): Promise<void> {
   await requestJson<void>(`maturity-models/${id}`, {
     method: 'DELETE'
   })
+}
+
+// Maturity Assessment API
+
+export async function calculateMaturityAssessment(
+  payload: CalculateMaturityAssessmentPayload
+): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>('maturity-assessments', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getCurrentMaturityAssessment(periodId: string): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>(`maturity-assessments/period/${periodId}/current`)
+}
+
+export async function getMaturityAssessmentHistory(periodId: string): Promise<MaturityAssessment[]> {
+  return requestJson<MaturityAssessment[]>(`maturity-assessments/period/${periodId}/history`)
+}
+
+export async function getMaturityAssessment(id: string): Promise<MaturityAssessment> {
+  return requestJson<MaturityAssessment>(`maturity-assessments/${id}`)
 }

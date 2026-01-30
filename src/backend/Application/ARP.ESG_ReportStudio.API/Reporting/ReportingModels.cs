@@ -5294,3 +5294,238 @@ public sealed class MaturityCriterionRequest
     /// </summary>
     public bool IsMandatory { get; set; } = true;
 }
+
+/// <summary>
+/// Represents a maturity assessment snapshot for a reporting period.
+/// Tracks the calculated maturity score and per-criterion status at a point in time.
+/// </summary>
+public sealed class MaturityAssessment
+{
+    /// <summary>
+    /// Unique identifier for this assessment.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the reporting period being assessed.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the maturity model version used for this assessment.
+    /// </summary>
+    public string MaturityModelId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Version number of the maturity model used.
+    /// </summary>
+    public int ModelVersion { get; set; }
+    
+    /// <summary>
+    /// Timestamp when this assessment was calculated.
+    /// </summary>
+    public string CalculatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User who triggered the assessment calculation.
+    /// </summary>
+    public string CalculatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user who triggered the assessment.
+    /// </summary>
+    public string CalculatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Indicates if this is the current/latest assessment for the period.
+    /// Only one assessment per period should be marked as current.
+    /// </summary>
+    public bool IsCurrent { get; set; } = true;
+    
+    /// <summary>
+    /// Highest maturity level achieved based on criteria evaluation.
+    /// Null if no level criteria are met.
+    /// </summary>
+    public string? AchievedLevelId { get; set; }
+    
+    /// <summary>
+    /// Name of the achieved maturity level.
+    /// </summary>
+    public string? AchievedLevelName { get; set; }
+    
+    /// <summary>
+    /// Order/rank of the achieved level (1 = lowest).
+    /// </summary>
+    public int? AchievedLevelOrder { get; set; }
+    
+    /// <summary>
+    /// Overall maturity score (0-100).
+    /// Calculated based on the percentage of criteria met across all levels.
+    /// </summary>
+    public decimal OverallScore { get; set; }
+    
+    /// <summary>
+    /// Results for each criterion evaluated.
+    /// </summary>
+    public List<MaturityCriterionResult> CriterionResults { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics about the assessment.
+    /// </summary>
+    public MaturityAssessmentStats Stats { get; set; } = new();
+}
+
+/// <summary>
+/// Result of evaluating a single maturity criterion against actual data.
+/// </summary>
+public sealed class MaturityCriterionResult
+{
+    /// <summary>
+    /// ID of the maturity level this criterion belongs to.
+    /// </summary>
+    public string LevelId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the maturity level.
+    /// </summary>
+    public string LevelName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Order of the maturity level.
+    /// </summary>
+    public int LevelOrder { get; set; }
+    
+    /// <summary>
+    /// ID of the criterion.
+    /// </summary>
+    public string CriterionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the criterion.
+    /// </summary>
+    public string CriterionName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of criterion.
+    /// </summary>
+    public string CriterionType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Target value defined in the criterion.
+    /// </summary>
+    public string TargetValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Actual measured value.
+    /// </summary>
+    public string ActualValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Unit of measurement.
+    /// </summary>
+    public string Unit { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the criterion passed (actual >= target).
+    /// </summary>
+    public bool Passed { get; set; }
+    
+    /// <summary>
+    /// Whether this criterion is mandatory for the level.
+    /// </summary>
+    public bool IsMandatory { get; set; }
+    
+    /// <summary>
+    /// Status: "passed", "failed", "incomplete-data"
+    /// </summary>
+    public string Status { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Explanation of why the criterion failed or has incomplete data.
+    /// Includes details about missing inputs.
+    /// </summary>
+    public string? FailureReason { get; set; }
+    
+    /// <summary>
+    /// Supporting evidence IDs referenced in the calculation.
+    /// </summary>
+    public List<string> EvidenceIds { get; set; } = new();
+}
+
+/// <summary>
+/// Summary statistics for a maturity assessment.
+/// </summary>
+public sealed class MaturityAssessmentStats
+{
+    /// <summary>
+    /// Total number of criteria evaluated.
+    /// </summary>
+    public int TotalCriteria { get; set; }
+    
+    /// <summary>
+    /// Number of criteria that passed.
+    /// </summary>
+    public int PassedCriteria { get; set; }
+    
+    /// <summary>
+    /// Number of criteria that failed.
+    /// </summary>
+    public int FailedCriteria { get; set; }
+    
+    /// <summary>
+    /// Number of criteria with incomplete data.
+    /// </summary>
+    public int IncompleteCriteria { get; set; }
+    
+    /// <summary>
+    /// Data completeness percentage across all data points.
+    /// </summary>
+    public decimal DataCompletenessPercentage { get; set; }
+    
+    /// <summary>
+    /// Evidence quality percentage (data points with evidence).
+    /// </summary>
+    public decimal EvidenceQualityPercentage { get; set; }
+    
+    /// <summary>
+    /// Number of total data points in the period.
+    /// </summary>
+    public int TotalDataPoints { get; set; }
+    
+    /// <summary>
+    /// Number of complete data points.
+    /// </summary>
+    public int CompleteDataPoints { get; set; }
+    
+    /// <summary>
+    /// Number of data points with evidence.
+    /// </summary>
+    public int DataPointsWithEvidence { get; set; }
+}
+
+/// <summary>
+/// Request to calculate a maturity assessment for a period.
+/// </summary>
+public sealed class CalculateMaturityAssessmentRequest
+{
+    /// <summary>
+    /// ID of the reporting period to assess.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional: ID of specific maturity model to use.
+    /// If not provided, uses the active maturity model.
+    /// </summary>
+    public string? MaturityModelId { get; set; }
+    
+    /// <summary>
+    /// User triggering the calculation.
+    /// </summary>
+    public string CalculatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user triggering the calculation.
+    /// </summary>
+    public string CalculatedByName { get; set; } = string.Empty;
+}
