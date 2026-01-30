@@ -793,6 +793,7 @@ export interface RolloverRequest {
   targetReportScope?: ReportScope
   options: RolloverOptions
   performedBy: string
+  ruleOverrides?: RolloverRuleOverride[]
 }
 
 export interface RolloverAuditLog {
@@ -818,4 +819,44 @@ export interface RolloverResult {
   errorMessage?: string
   targetPeriod?: ReportingPeriod
   auditLog?: RolloverAuditLog
+}
+
+// Rollover Rules Types
+export type DataTypeRolloverRuleType = 'Copy' | 'Reset' | 'CopyAsDraft'
+
+export interface DataTypeRolloverRule {
+  id: string
+  dataType: string
+  ruleType: DataTypeRolloverRuleType
+  description?: string
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+  version: number
+}
+
+export interface RolloverRuleHistory {
+  id: string
+  ruleId: string
+  dataType: string
+  ruleType: DataTypeRolloverRuleType
+  description?: string
+  version: number
+  changedAt: string
+  changedBy: string
+  changedByName: string
+  changeType: 'created' | 'updated' | 'deleted'
+}
+
+export interface SaveDataTypeRolloverRuleRequest {
+  dataType: string
+  ruleType: string
+  description?: string
+  savedBy: string
+}
+
+export interface RolloverRuleOverride {
+  dataType: string
+  ruleType: DataTypeRolloverRuleType
 }
