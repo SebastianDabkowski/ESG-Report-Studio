@@ -26,13 +26,19 @@ export default function MetricComparisonView({
 
   useEffect(() => {
     loadComparison(selectedPeriodId)
-  }, [dataPointId, selectedPeriodId])
+  }, [dataPointId, selectedPeriodId]) // Added dataPointId to dependency array
 
   async function loadComparison(priorPeriodId?: string) {
     try {
       setLoading(true)
       const data = await compareMetrics(dataPointId, priorPeriodId)
       setComparison(data)
+      
+      // If selectedPeriodId is not set and we have baselines, set it to the first one
+      if (!selectedPeriodId && data.availableBaselines.length > 0) {
+        setSelectedPeriodId(data.availableBaselines[0].periodId)
+      }
+      
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load comparison')
@@ -63,10 +69,11 @@ export default function MetricComparisonView({
       return <Minus size={24} weight="bold" className="text-gray-400" />
     }
     
+    // Use neutral colors - interpretation depends on metric type
     if (percentageChange > 0) {
-      return <TrendUp size={24} weight="bold" className="text-green-600" />
+      return <TrendUp size={24} weight="bold" className="text-blue-600" />
     } else if (percentageChange < 0) {
-      return <TrendDown size={24} weight="bold" className="text-red-600" />
+      return <TrendDown size={24} weight="bold" className="text-purple-600" />
     }
     
     return <Minus size={24} weight="bold" className="text-gray-400" />
@@ -74,8 +81,10 @@ export default function MetricComparisonView({
 
   function getTrendColor(percentageChange?: number): string {
     if (percentageChange === undefined || percentageChange === null) return 'text-gray-600'
-    if (percentageChange > 0) return 'text-green-600'
-    if (percentageChange < 0) return 'text-red-600'
+    // Use neutral blue colors since increase/decrease interpretation depends on metric type
+    // (e.g., emissions increase is bad, revenue increase is good)
+    if (percentageChange > 0) return 'text-blue-600'
+    if (percentageChange < 0) return 'text-purple-600'
     return 'text-gray-600'
   }
 

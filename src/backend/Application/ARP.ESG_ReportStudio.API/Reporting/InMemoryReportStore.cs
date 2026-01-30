@@ -1497,12 +1497,16 @@ public sealed class InMemoryReportStore
 
     /// <summary>
     /// Compares a numeric metric across two reporting periods.
+    /// Returns null if the data point does not exist.
     /// </summary>
     /// <param name="dataPointId">ID of the data point in the current period.</param>
     /// <param name="priorPeriodId">ID of the prior reporting period to compare against. If null, uses the most recent prior period.</param>
-    /// <returns>Metric comparison response with current value, prior value, and percentage change.</returns>
+    /// <returns>Metric comparison response with current value, prior value, and percentage change, or null if data point not found.</returns>
     public MetricComparisonResponse? CompareMetrics(string dataPointId, string? priorPeriodId = null)
     {
+        // Maximum number of years to look back for baseline periods
+        const int MaxBaselineYears = 5;
+        
         lock (_lock)
         {
             var currentDataPoint = _dataPoints.FirstOrDefault(d => d.Id == dataPointId);
@@ -1550,7 +1554,7 @@ public sealed class InMemoryReportStore
             var yearsBack = 0;
             var visitedDataPoints = new HashSet<string> { dataPointId };
             
-            while (!string.IsNullOrEmpty(priorDataPoint.SourceDataPointId) && yearsBack < 5)
+            while (!string.IsNullOrEmpty(priorDataPoint.SourceDataPointId) && yearsBack < MaxBaselineYears)
             {
                 var sourceDataPointId = priorDataPoint.SourceDataPointId;
                 if (visitedDataPoints.Contains(sourceDataPointId))
@@ -1698,14 +1702,21 @@ public sealed class InMemoryReportStore
                             if (priorValue != 0)
                             {
                                 percentageChange = ((currentValue - priorValue) / priorValue) * 100;
+                                isComparisonAvailable = true;
                             }
-                            else if (currentValue != 0)
+                            else if (currentValue == 0)
                             {
-                                // Prior value was 0, current is not - can't calculate percentage
-                                unavailableReason = "Prior period value is zero, percentage change cannot be calculated";
+                                // Both are zero - no change
+                                percentageChange = 0;
+                                isComparisonAvailable = true;
                             }
-                            
-                            isComparisonAvailable = true;
+                            else
+                            {
+                                // Prior value was 0, current is not - absolute change is valid but percentage is undefined
+                                // Mark comparison as available since absolute change provides meaningful information
+                                isComparisonAvailable = true;
+                                // percentageChange remains null since division by zero is undefined
+                            }
                         }
                     }
                 }
