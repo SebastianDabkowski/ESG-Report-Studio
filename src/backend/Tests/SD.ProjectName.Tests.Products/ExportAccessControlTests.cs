@@ -126,6 +126,72 @@ namespace SD.ProjectName.Tests.Products
         }
 
         [Fact]
+        public void CheckExportPermission_WithPeriodOwnerButNoGlobalPermission_ShouldAllowExport()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            
+            // Create a user with CanExport=false
+            var user = store.GetUser("user-3"); // contributor with CanExport=false
+            Assert.NotNull(user);
+            Assert.False(user.CanExport);
+            
+            // Create a new period owned by this contributor
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
+            {
+                Name = "FY 2025",
+                StartDate = "2025-01-01",
+                EndDate = "2025-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-3", // contributor owns this period
+                OwnerName = "John Smith"
+            });
+            
+            Assert.True(isValid);
+            var newPeriod = snapshot?.Periods.Last();
+            Assert.NotNull(newPeriod);
+            
+            // Act - user-3 should be able to export their own period despite CanExport=false
+            var (hasPermission, permissionError) = store.CheckExportPermission("user-3", newPeriod.Id);
+
+            // Assert
+            Assert.True(hasPermission, "Period owner should be able to export their own period");
+            Assert.Null(permissionError);
+        }
+
+        [Fact]
+        public void CheckExportPermission_WithoutOwnershipOrGlobalPermission_ShouldDenyExport()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            
+            // Create a new period owned by user-1
+            var (isValid, errorMessage, snapshot) = store.ValidateAndCreatePeriod(new CreateReportingPeriodRequest
+            {
+                Name = "FY 2026",
+                StartDate = "2026-01-01",
+                EndDate = "2026-12-31",
+                ReportingMode = "simplified",
+                ReportScope = "single-company",
+                OwnerId = "user-1", // owned by user-1
+                OwnerName = "Sarah Chen"
+            });
+            
+            Assert.True(isValid);
+            var newPeriod = snapshot?.Periods.Last();
+            Assert.NotNull(newPeriod);
+            
+            // Act - user-3 (contributor) tries to export a period they don't own
+            var (hasPermission, permissionError) = store.CheckExportPermission("user-3", newPeriod.Id);
+
+            // Assert
+            Assert.False(hasPermission, "Non-owner without global permission should be denied");
+            Assert.NotNull(permissionError);
+            Assert.Contains("do not have permission to export", permissionError);
+        }
+
+        [Fact]
         public void CheckExportPermission_WithInvalidUser_ShouldDenyExport()
         {
             // Arrange
