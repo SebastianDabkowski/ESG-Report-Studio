@@ -1,4 +1,24 @@
-import type { ReportingPeriod, ReportSection, SectionSummary, Organization, OrganizationalUnit, User, CompletenessStats, UpdateDataPointStatusRequest, StatusValidationError, DataPointNote, CreateDataPointNoteRequest, ResponsibilityMatrix, ReadinessReport, RolloverRequest, RolloverResult, RolloverAuditLog } from '@/lib/types'
+import type { 
+  ReportingPeriod, 
+  ReportSection, 
+  SectionSummary, 
+  Organization, 
+  OrganizationalUnit, 
+  User, 
+  CompletenessStats, 
+  UpdateDataPointStatusRequest, 
+  StatusValidationError, 
+  DataPointNote, 
+  CreateDataPointNoteRequest, 
+  ResponsibilityMatrix, 
+  ReadinessReport, 
+  RolloverRequest, 
+  RolloverResult, 
+  RolloverAuditLog,
+  DataTypeRolloverRule,
+  SaveDataTypeRolloverRuleRequest,
+  RolloverRuleHistory
+} from '@/lib/types'
 
 export interface ReportingDataSnapshot {
   organization: Organization | null
@@ -1023,4 +1043,31 @@ export async function rolloverPeriod(request: RolloverRequest): Promise<Rollover
 
 export async function getRolloverAuditLogs(periodId: string): Promise<RolloverAuditLog[]> {
   return requestJson<RolloverAuditLog[]>(`periods/${periodId}/rollover-audit`)
+}
+
+// Rollover Rules API
+export async function getRolloverRules(dataType?: string): Promise<DataTypeRolloverRule[]> {
+  const params = dataType ? `?dataType=${encodeURIComponent(dataType)}` : ''
+  return requestJson<DataTypeRolloverRule[]>(`rollover-rules${params}`)
+}
+
+export async function getRolloverRuleForDataType(dataType: string): Promise<DataTypeRolloverRule> {
+  return requestJson<DataTypeRolloverRule>(`rollover-rules/${encodeURIComponent(dataType)}`)
+}
+
+export async function saveRolloverRule(request: SaveDataTypeRolloverRuleRequest): Promise<DataTypeRolloverRule> {
+  return requestJson<DataTypeRolloverRule>('rollover-rules', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function deleteRolloverRule(dataType: string, deletedBy: string): Promise<void> {
+  await requestJson<void>(`rollover-rules/${encodeURIComponent(dataType)}?deletedBy=${encodeURIComponent(deletedBy)}`, {
+    method: 'DELETE'
+  })
+}
+
+export async function getRolloverRuleHistory(dataType: string): Promise<RolloverRuleHistory[]> {
+  return requestJson<RolloverRuleHistory[]>(`rollover-rules/${encodeURIComponent(dataType)}/history`)
 }

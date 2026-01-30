@@ -3838,6 +3838,12 @@ public sealed class RolloverRequest
     /// ID of the user performing the rollover (for audit trail).
     /// </summary>
     public string PerformedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional rule overrides for this specific rollover operation.
+    /// These temporary rules apply only to this rollover and don't affect the global configuration.
+    /// </summary>
+    public List<RolloverRuleOverride> RuleOverrides { get; set; } = new();
 }
 
 /// <summary>
@@ -3873,4 +3879,193 @@ public sealed class RolloverResult
     public string? ErrorMessage { get; set; }
     public ReportingPeriod? TargetPeriod { get; set; }
     public RolloverAuditLog? AuditLog { get; set; }
+}
+
+/// <summary>
+/// Rule type for how a data type should be handled during rollover.
+/// </summary>
+public enum DataTypeRolloverRuleType
+{
+    /// <summary>
+    /// Copy data values from source period to target period (default behavior).
+    /// </summary>
+    Copy,
+    
+    /// <summary>
+    /// Reset data values - don't copy data, create empty placeholders.
+    /// </summary>
+    Reset,
+    
+    /// <summary>
+    /// Copy data values but mark them as draft requiring review.
+    /// </summary>
+    CopyAsDraft
+}
+
+/// <summary>
+/// Rollover rule configuration for a specific data type.
+/// Defines how data points of this type should be handled during period rollover.
+/// </summary>
+public sealed class DataTypeRolloverRule
+{
+    /// <summary>
+    /// Unique identifier for this rule.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Data type this rule applies to (e.g., "narrative", "metric", "kpi", "policy", "target").
+    /// </summary>
+    public string DataType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Rule type defining how this data type is handled during rollover.
+    /// </summary>
+    public DataTypeRolloverRuleType RuleType { get; set; } = DataTypeRolloverRuleType.Copy;
+    
+    /// <summary>
+    /// Optional description explaining why this rule is configured this way.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this rule was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who created this rule.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this rule was last updated.
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// User ID who last updated this rule.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// Version number of this rule. Increments on each update for history tracking.
+    /// </summary>
+    public int Version { get; set; } = 1;
+}
+
+/// <summary>
+/// Historical record of a rollover rule change for audit purposes.
+/// </summary>
+public sealed class RolloverRuleHistory
+{
+    /// <summary>
+    /// Unique identifier for this history entry.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the rule this history entry relates to.
+    /// </summary>
+    public string RuleId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Data type the rule applies to.
+    /// </summary>
+    public string DataType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Rule type at this point in history.
+    /// </summary>
+    public DataTypeRolloverRuleType RuleType { get; set; }
+    
+    /// <summary>
+    /// Description at this point in history.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// Version number of the rule at this point.
+    /// </summary>
+    public int Version { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this change was made.
+    /// </summary>
+    public string ChangedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who made this change.
+    /// </summary>
+    public string ChangedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who made this change.
+    /// </summary>
+    public string ChangedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of change: "created", "updated", "deleted".
+    /// </summary>
+    public string ChangeType { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create or update a rollover rule for a data type.
+/// </summary>
+public sealed class SaveDataTypeRolloverRuleRequest
+{
+    /// <summary>
+    /// Data type this rule applies to (e.g., "narrative", "metric", "kpi", "policy", "target").
+    /// </summary>
+    public string DataType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Rule type defining how this data type is handled during rollover.
+    /// Valid values: "copy", "reset", "copy-as-draft".
+    /// </summary>
+    public string RuleType { get; set; } = "copy";
+    
+    /// <summary>
+    /// Optional description explaining why this rule is configured this way.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// User ID performing the save operation (for audit trail).
+    /// </summary>
+    public string SavedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response containing a rollover rule with additional metadata.
+/// </summary>
+public sealed class DataTypeRolloverRuleResponse
+{
+    /// <summary>
+    /// The rollover rule.
+    /// </summary>
+    public DataTypeRolloverRule Rule { get; set; } = new();
+    
+    /// <summary>
+    /// Number of history entries for this rule.
+    /// </summary>
+    public int HistoryCount { get; set; }
+}
+
+/// <summary>
+/// Override rules for a specific rollover operation.
+/// Allows temporary rule changes for a single rollover without affecting the global configuration.
+/// </summary>
+public sealed class RolloverRuleOverride
+{
+    /// <summary>
+    /// Data type to override the rule for.
+    /// </summary>
+    public string DataType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Rule type to use for this specific rollover.
+    /// </summary>
+    public DataTypeRolloverRuleType RuleType { get; set; }
 }
