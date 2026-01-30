@@ -46,6 +46,27 @@ public sealed class ReportingPeriod
     /// When null, variance explanations are not required.
     /// </summary>
     public VarianceThresholdConfig? VarianceThresholdConfig { get; set; }
+    
+    /// <summary>
+    /// Indicates if the period is locked to prevent accidental edits.
+    /// When true, only admins can make changes, and unlocking requires a documented reason.
+    /// </summary>
+    public bool IsLocked { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the period was locked (ISO 8601 format).
+    /// </summary>
+    public string? LockedAt { get; set; }
+    
+    /// <summary>
+    /// User ID of the person who locked the period.
+    /// </summary>
+    public string? LockedBy { get; set; }
+    
+    /// <summary>
+    /// User name of the person who locked the period.
+    /// </summary>
+    public string? LockedByName { get; set; }
 }
 
 public class ReportSection
@@ -120,6 +141,26 @@ public sealed class UpdateReportingPeriodRequest
     public string EndDate { get; set; } = string.Empty;
     public string ReportingMode { get; set; } = "simplified";
     public string ReportScope { get; set; } = "single-company";
+}
+
+/// <summary>
+/// Request to lock a reporting period.
+/// </summary>
+public sealed class LockPeriodRequest
+{
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to unlock a locked reporting period (admin only).
+/// </summary>
+public sealed class UnlockPeriodRequest
+{
+    public string UserId { get; set; } = string.Empty;
+    public string UserName { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>

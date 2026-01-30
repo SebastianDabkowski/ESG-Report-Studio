@@ -244,4 +244,72 @@ public sealed class ReportingController : ControllerBase
         
         return Ok(reconciliation);
     }
+    
+    /// <summary>
+    /// Lock a reporting period to prevent accidental edits.
+    /// </summary>
+    [HttpPost("periods/{periodId}/lock")]
+    public ActionResult<ReportingPeriod> LockPeriod(string periodId, [FromBody] LockPeriodRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.UserName))
+        {
+            return BadRequest(new { error = "UserId and UserName are required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return BadRequest(new { error = "A reason is required to lock a reporting period." });
+        }
+
+        var (isSuccess, errorMessage, period) = _store.LockPeriod(periodId, request);
+        
+        if (!isSuccess)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(period);
+    }
+    
+    /// <summary>
+    /// Unlock a locked reporting period (admin only). Requires a documented reason.
+    /// </summary>
+    [HttpPost("periods/{periodId}/unlock")]
+    public ActionResult<ReportingPeriod> UnlockPeriod(string periodId, [FromBody] UnlockPeriodRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.UserName))
+        {
+            return BadRequest(new { error = "UserId and UserName are required." });
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            return BadRequest(new { error = "A reason is required to unlock a reporting period." });
+        }
+
+        // Note: In a real implementation, you would check if the user is an admin
+        // For now, we assume the frontend has already validated this
+        // You could get the user from the store and check their role here
+        var user = _store.GetUser(request.UserId);
+        var isAdmin = user?.Role == "admin";
+
+        var (isSuccess, errorMessage, period) = _store.UnlockPeriod(periodId, request, isAdmin);
+        
+        if (!isSuccess)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(period);
+    }
+    
+    /// <summary>
+    /// Get audit trail for a specific period, including lock/unlock operations.
+    /// </summary>
+    [HttpGet("periods/{periodId}/audit")]
+    public ActionResult<IReadOnlyList<AuditLogEntry>> GetPeriodAuditTrail(string periodId)
+    {
+        var auditTrail = _store.GetPeriodAuditTrail(periodId);
+        return Ok(auditTrail);
+    }
 }

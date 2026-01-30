@@ -46,6 +46,7 @@ public sealed class InMemoryReportStore
     private readonly List<VarianceThresholdConfig> _varianceThresholdConfigs = new();
     private readonly List<VarianceExplanation> _varianceExplanations = new();
     private readonly List<MaturityModel> _maturityModels = new();
+    private readonly Dictionary<string, List<AuditLogEntry>> _periodAuditTrails = new(); // Key: periodId
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -673,6 +674,140 @@ public sealed class InMemoryReportStore
         }
     }
 
+    /// <summary>
+    /// Lock a reporting period to prevent accidental edits.
+    /// </summary>
+    public (bool IsSuccess, string? ErrorMessage, ReportingPeriod? Period) LockPeriod(string periodId, LockPeriodRequest request)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.", null);
+            }
+
+            if (period.IsLocked)
+            {
+                return (false, "Period is already locked.", null);
+            }
+
+            // Lock the period
+            period.IsLocked = true;
+            period.LockedAt = DateTime.UtcNow.ToString("o");
+            period.LockedBy = request.UserId;
+            period.LockedByName = request.UserName;
+
+            // Create audit log entry
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.UserId,
+                UserName = request.UserName,
+                Action = "lock",
+                EntityType = "ReportingPeriod",
+                EntityId = periodId,
+                ChangeNote = request.Reason,
+                Changes = new List<FieldChange>
+                {
+                    new() { Field = "IsLocked", OldValue = "false", NewValue = "true" },
+                    new() { Field = "LockedAt", OldValue = null, NewValue = period.LockedAt },
+                    new() { Field = "LockedBy", OldValue = null, NewValue = request.UserName }
+                }
+            };
+
+            // Find or create audit trail for this period
+            if (!_periodAuditTrails.ContainsKey(periodId))
+            {
+                _periodAuditTrails[periodId] = new List<AuditLogEntry>();
+            }
+            _periodAuditTrails[periodId].Add(auditEntry);
+
+            return (true, null, period);
+        }
+    }
+
+    /// <summary>
+    /// Unlock a locked reporting period (admin only). Requires a documented reason.
+    /// </summary>
+    public (bool IsSuccess, string? ErrorMessage, ReportingPeriod? Period) UnlockPeriod(string periodId, UnlockPeriodRequest request, bool isAdmin)
+    {
+        lock (_lock)
+        {
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.", null);
+            }
+
+            if (!period.IsLocked)
+            {
+                return (false, "Period is not locked.", null);
+            }
+
+            if (!isAdmin)
+            {
+                return (false, "Only administrators can unlock a reporting period.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return (false, "A reason is required to unlock a reporting period.", null);
+            }
+
+            var previousLockedBy = period.LockedByName;
+            var previousLockedAt = period.LockedAt;
+
+            // Unlock the period
+            period.IsLocked = false;
+            period.LockedAt = null;
+            period.LockedBy = null;
+            period.LockedByName = null;
+
+            // Create audit log entry
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.UserId,
+                UserName = request.UserName,
+                Action = "unlock",
+                EntityType = "ReportingPeriod",
+                EntityId = periodId,
+                ChangeNote = request.Reason,
+                Changes = new List<FieldChange>
+                {
+                    new() { Field = "IsLocked", OldValue = "true", NewValue = "false" },
+                    new() { Field = "LockedAt", OldValue = previousLockedAt, NewValue = null },
+                    new() { Field = "LockedBy", OldValue = previousLockedBy, NewValue = null }
+                }
+            };
+
+            // Find or create audit trail for this period
+            if (!_periodAuditTrails.ContainsKey(periodId))
+            {
+                _periodAuditTrails[periodId] = new List<AuditLogEntry>();
+            }
+            _periodAuditTrails[periodId].Add(auditEntry);
+
+            return (true, null, period);
+        }
+    }
+
+    /// <summary>
+    /// Get audit trail for a specific period, including lock/unlock operations.
+    /// </summary>
+    public IReadOnlyList<AuditLogEntry> GetPeriodAuditTrail(string periodId)
+    {
+        lock (_lock)
+        {
+            return _periodAuditTrails.TryGetValue(periodId, out var trail) 
+                ? trail.ToList() 
+                : new List<AuditLogEntry>();
+        }
+    }
+
     public IReadOnlyList<ReportSection> GetSections(string? periodId)
     {
         lock (_lock)
@@ -742,6 +877,13 @@ public sealed class InMemoryReportStore
                 return (false, "Section not found.", null);
             }
 
+            // Check if period is locked
+            var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+            if (period != null && period.IsLocked)
+            {
+                return (false, "Cannot modify section ownership when the reporting period is locked. Please unlock the period first.", null);
+            }
+
             // Validate the user making the change exists
             var updatingUser = _users.FirstOrDefault(u => u.Id == request.UpdatedBy);
             if (updatingUser == null)
@@ -768,8 +910,8 @@ public sealed class InMemoryReportStore
             else if (updatingUser.Role == "report-owner")
             {
                 // Report owners can only change ownership of sections in their own periods
-                var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
-                if (period == null || period.OwnerId != updatingUser.Id)
+                var ownerPeriod = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+                if (ownerPeriod == null || ownerPeriod.OwnerId != updatingUser.Id)
                 {
                     return (false, "Report owners can only change section ownership for their own reporting periods.", null);
                 }
@@ -2063,6 +2205,17 @@ public sealed class InMemoryReportStore
             if (dataPoint == null)
             {
                 return (false, "DataPoint not found.", null);
+            }
+
+            // Check if period is locked
+            var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+            if (section != null)
+            {
+                var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+                if (period != null && period.IsLocked)
+                {
+                    return (false, "Cannot modify data points when the reporting period is locked. Please unlock the period first.", null);
+                }
             }
 
             // Check if data point is approved and enforce read-only (unless updating review status ONLY)

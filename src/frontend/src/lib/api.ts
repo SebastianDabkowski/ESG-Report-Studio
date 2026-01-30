@@ -147,6 +147,32 @@ export function hasReportingStarted(id: string): Promise<boolean> {
   return requestJson<boolean>(`periods/${id}/has-started`)
 }
 
+export interface LockPeriodRequest {
+  userId: string
+  userName: string
+  reason: string
+}
+
+export interface UnlockPeriodRequest {
+  userId: string
+  userName: string
+  reason: string
+}
+
+export function lockPeriod(periodId: string, request: LockPeriodRequest): Promise<ReportingPeriod> {
+  return requestJson<ReportingPeriod>(`periods/${periodId}/lock`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export function unlockPeriod(periodId: string, request: UnlockPeriodRequest): Promise<ReportingPeriod> {
+  return requestJson<ReportingPeriod>(`periods/${periodId}/unlock`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
 export interface CreateOrganizationPayload {
   name: string
   legalForm: string
