@@ -121,7 +121,7 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
         copyDisclosures,
         copyDataValues,
         copyAttachments,
-        dueDateAdjustmentDays: dueDateAdjustmentDays > 0 ? dueDateAdjustmentDays : undefined
+        dueDateAdjustmentDays: dueDateAdjustmentDays !== 0 ? dueDateAdjustmentDays : undefined
       }
 
       const result = await rolloverPeriod({
@@ -410,15 +410,14 @@ export default function RolloverWizard({ isOpen, onClose, periods, currentUser, 
                 Due Date Adjustment (Days)
               </Label>
               <p className="text-xs text-muted-foreground mt-1 mb-2">
-                Automatically adjust task due dates when carrying forward remediation actions. Enter the number of days to add to existing due dates (e.g., 365 for one year).
+                Automatically adjust task due dates when carrying forward remediation actions. Enter the number of days to add (positive) or subtract (negative) from existing due dates (e.g., 365 for one year forward, -30 for one month backward).
               </p>
               <Input
                 id="due-date-adjustment"
                 type="number"
-                min="0"
                 value={dueDateAdjustmentDays}
                 onChange={(e) => setDueDateAdjustmentDays(parseInt(e.target.value) || 0)}
-                placeholder="0"
+                placeholder="0 (no adjustment)"
               />
             </div>
           )}
