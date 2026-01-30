@@ -426,5 +426,86 @@ namespace SD.ProjectName.Tests.Products
             Assert.Equal(3, processControl.RequiredControls.Count);
             Assert.Contains("approval-workflow", processControl.RequiredControls);
         }
+
+        [Fact]
+        public void GetMaturityModel_WithValidId_ReturnsModel()
+        {
+            // Arrange
+            var store = CreateStore();
+            var request = new CreateMaturityModelRequest
+            {
+                Name = "Test Model",
+                Description = "Test",
+                CreatedBy = "admin-user",
+                CreatedByName = "Admin User",
+                Levels = new List<MaturityLevelRequest>
+                {
+                    new MaturityLevelRequest { Name = "Initial", Description = "Test", Order = 1, Criteria = new List<MaturityCriterionRequest>() }
+                }
+            };
+
+            var (_, __, createdModel) = store.CreateMaturityModel(request);
+
+            // Act
+            var retrievedModel = store.GetMaturityModel(createdModel!.Id);
+
+            // Assert
+            Assert.NotNull(retrievedModel);
+            Assert.Equal(createdModel.Id, retrievedModel.Id);
+            Assert.Equal("Test Model", retrievedModel.Name);
+        }
+
+        [Fact]
+        public void GetMaturityModel_WithInvalidId_ReturnsNull()
+        {
+            // Arrange
+            var store = CreateStore();
+
+            // Act
+            var model = store.GetMaturityModel("non-existent-id");
+
+            // Assert
+            Assert.Null(model);
+        }
+
+        [Fact]
+        public void UpdateMaturityModel_WithInvalidId_ReturnsError()
+        {
+            // Arrange
+            var store = CreateStore();
+            var updateRequest = new UpdateMaturityModelRequest
+            {
+                Name = "Updated Model",
+                Description = "Test",
+                UpdatedBy = "admin-user",
+                UpdatedByName = "Admin User",
+                Levels = new List<MaturityLevelRequest>
+                {
+                    new MaturityLevelRequest { Name = "Initial", Description = "Test", Order = 1, Criteria = new List<MaturityCriterionRequest>() }
+                }
+            };
+
+            // Act
+            var (isValid, errorMessage, model) = store.UpdateMaturityModel("non-existent-id", updateRequest);
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Maturity model not found.", errorMessage);
+            Assert.Null(model);
+        }
+
+        [Fact]
+        public void DeleteMaturityModel_WithInvalidId_ReturnsError()
+        {
+            // Arrange
+            var store = CreateStore();
+
+            // Act
+            var (isValid, errorMessage) = store.DeleteMaturityModel("non-existent-id");
+
+            // Assert
+            Assert.False(isValid);
+            Assert.Equal("Maturity model not found.", errorMessage);
+        }
     }
 }

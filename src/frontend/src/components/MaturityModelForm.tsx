@@ -1,4 +1,4 @@
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, UseFormRegister, Control, UseFormWatch, UseFormSetValue, FieldErrors } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
 import { useState } from 'react'
@@ -137,9 +137,9 @@ export function MaturityModelForm({ currentUser, model, onSuccess, onCancel }: M
       }
 
       if (isEditMode) {
-        await updateMaturityModel(model.id, payload as any)
+        await updateMaturityModel(model.id, payload)
       } else {
-        await createMaturityModel(payload as any)
+        await createMaturityModel(payload)
       }
 
       onSuccess()
@@ -249,11 +249,11 @@ export function MaturityModelForm({ currentUser, model, onSuccess, onCancel }: M
 
 interface MaturityLevelFormProps {
   levelIndex: number
-  register: any
-  control: any
-  watch: any
-  setValue: any
-  errors: any
+  register: UseFormRegister<MaturityModelFormData>
+  control: Control<MaturityModelFormData>
+  watch: UseFormWatch<MaturityModelFormData>
+  setValue: UseFormSetValue<MaturityModelFormData>
+  errors: FieldErrors<MaturityModelFormData>
   onRemove: () => void
   onMoveUp?: () => void
   onMoveDown?: () => void
@@ -390,10 +390,10 @@ function MaturityLevelForm({
 interface MaturityCriterionFormProps {
   levelIndex: number
   criterionIndex: number
-  register: any
-  watch: any
-  setValue: any
-  errors: any
+  register: UseFormRegister<MaturityModelFormData>
+  watch: UseFormWatch<MaturityModelFormData>
+  setValue: UseFormSetValue<MaturityModelFormData>
+  errors: FieldErrors<MaturityModelFormData>['levels']
   onRemove: () => void
 }
 

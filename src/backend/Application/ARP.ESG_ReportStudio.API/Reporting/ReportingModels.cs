@@ -5041,7 +5041,7 @@ public sealed class MaturityModel
     public string CreatedBy { get; set; } = string.Empty;
     
     /// <summary>
-    /// User who created this model name.
+    /// Name of the user who created this model.
     /// </summary>
     public string CreatedByName { get; set; } = string.Empty;
     
