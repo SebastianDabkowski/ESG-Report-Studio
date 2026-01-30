@@ -43,6 +43,8 @@ public sealed class InMemoryReportStore
     private readonly List<DataTypeRolloverRule> _rolloverRules = new();
     private readonly List<RolloverRuleHistory> _rolloverRuleHistory = new();
     private readonly Dictionary<string, RolloverReconciliation> _rolloverReconciliations = new(); // Key: targetPeriodId
+    private readonly List<VarianceThresholdConfig> _varianceThresholdConfigs = new();
+    private readonly List<VarianceExplanation> _varianceExplanations = new();
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -1738,6 +1740,18 @@ public sealed class InMemoryReportStore
                 unavailableReason = "No prior period data available";
             }
             
+            // Check if variance requires explanation based on threshold configuration
+            VarianceFlagInfo? varianceFlag = null;
+            if (currentPeriod.VarianceThresholdConfig != null && isComparisonAvailable && !string.IsNullOrEmpty(targetPriorPeriodId))
+            {
+                varianceFlag = CheckVarianceThreshold(
+                    dataPointId,
+                    targetPriorPeriodId,
+                    currentPeriod.VarianceThresholdConfig,
+                    percentageChange,
+                    absoluteChange);
+            }
+            
             return new MetricComparisonResponse
             {
                 DataPointId = dataPointId,
@@ -1750,7 +1764,8 @@ public sealed class InMemoryReportStore
                 UnavailableReason = unavailableReason,
                 UnitsCompatible = unitsCompatible,
                 UnitWarning = unitWarning,
-                AvailableBaselines = availableBaselines
+                AvailableBaselines = availableBaselines,
+                VarianceFlag = varianceFlag
             };
         }
     }
@@ -10950,6 +10965,522 @@ public sealed class InMemoryReportStore
             return _dataPoints.FirstOrDefault(dp => 
                 dp.SectionId == sectionId && 
                 dp.Title.Equals(title, StringComparison.OrdinalIgnoreCase));
+        }
+    }
+    
+    #endregion
+    
+    #region Variance Explanation Methods
+    
+    /// <summary>
+    /// Creates a variance threshold configuration for a reporting period.
+    /// </summary>
+    public (bool isValid, string? errorMessage, VarianceThresholdConfig? config) CreateVarianceThresholdConfig(
+        string periodId, CreateVarianceThresholdConfigRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate period exists
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                return (false, $"Reporting period with ID '{periodId}' not found.", null);
+            }
+            
+            // Validate at least one threshold is provided
+            if (request.PercentageThreshold == null && request.AbsoluteThreshold == null)
+            {
+                return (false, "At least one threshold (percentage or absolute) must be specified.", null);
+            }
+            
+            // Validate threshold values are positive
+            if (request.PercentageThreshold.HasValue && request.PercentageThreshold.Value <= 0)
+            {
+                return (false, "Percentage threshold must be greater than zero.", null);
+            }
+            
+            if (request.AbsoluteThreshold.HasValue && request.AbsoluteThreshold.Value <= 0)
+            {
+                return (false, "Absolute threshold must be greater than zero.", null);
+            }
+            
+            var config = new VarianceThresholdConfig
+            {
+                Id = Guid.NewGuid().ToString(),
+                PercentageThreshold = request.PercentageThreshold,
+                AbsoluteThreshold = request.AbsoluteThreshold,
+                RequireBothThresholds = request.RequireBothThresholds,
+                RequireReviewerApproval = request.RequireReviewerApproval,
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                CreatedBy = request.CreatedBy
+            };
+            
+            _varianceThresholdConfigs.Add(config);
+            
+            // Update period with the new config
+            period.VarianceThresholdConfig = config;
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.CreatedBy,
+                UserName = request.CreatedBy,
+                Action = "created",
+                EntityType = "variance-threshold-config",
+                EntityId = config.Id,
+                ChangeNote = $"Created variance threshold configuration for period {period.Name}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return (true, null, config);
+        }
+    }
+    
+    /// <summary>
+    /// Checks if a variance exceeds the configured thresholds and returns flag information.
+    /// </summary>
+    private VarianceFlagInfo CheckVarianceThreshold(
+        string dataPointId,
+        string priorPeriodId,
+        VarianceThresholdConfig config,
+        decimal? percentageChange,
+        decimal? absoluteChange)
+    {
+        // Get existing explanation if one exists
+        var existingExplanation = _varianceExplanations.FirstOrDefault(ve => 
+            ve.DataPointId == dataPointId && 
+            ve.PriorPeriodId == priorPeriodId);
+        
+        bool requiresExplanation = false;
+        string? reason = null;
+        
+        // Check if thresholds are exceeded
+        bool percentageExceeded = config.PercentageThreshold.HasValue && 
+            percentageChange.HasValue && 
+            Math.Abs(percentageChange.Value) >= config.PercentageThreshold.Value;
+            
+        bool absoluteExceeded = config.AbsoluteThreshold.HasValue && 
+            absoluteChange.HasValue && 
+            Math.Abs(absoluteChange.Value) >= config.AbsoluteThreshold.Value;
+        
+        if (config.RequireBothThresholds)
+        {
+            requiresExplanation = percentageExceeded && absoluteExceeded;
+            if (requiresExplanation)
+            {
+                reason = $"Exceeds both percentage threshold ({config.PercentageThreshold}%) and absolute threshold ({config.AbsoluteThreshold})";
+            }
+        }
+        else
+        {
+            requiresExplanation = percentageExceeded || absoluteExceeded;
+            if (percentageExceeded && absoluteExceeded)
+            {
+                reason = $"Exceeds percentage threshold ({config.PercentageThreshold}%) and absolute threshold ({config.AbsoluteThreshold})";
+            }
+            else if (percentageExceeded)
+            {
+                reason = $"Exceeds percentage threshold ({config.PercentageThreshold}%)";
+            }
+            else if (absoluteExceeded)
+            {
+                reason = $"Exceeds absolute threshold ({config.AbsoluteThreshold})";
+            }
+        }
+        
+        // Determine if flag is cleared
+        bool isFlagCleared = false;
+        if (existingExplanation != null)
+        {
+            if (config.RequireReviewerApproval)
+            {
+                isFlagCleared = existingExplanation.Status == "approved";
+            }
+            else
+            {
+                isFlagCleared = existingExplanation.Status == "submitted" || existingExplanation.Status == "approved";
+            }
+        }
+        
+        return new VarianceFlagInfo
+        {
+            RequiresExplanation = requiresExplanation && !isFlagCleared,
+            RequiresExplanationReason = requiresExplanation ? reason : null,
+            Explanation = existingExplanation,
+            IsFlagCleared = isFlagCleared
+        };
+    }
+    
+    /// <summary>
+    /// Creates a variance explanation.
+    /// </summary>
+    public (bool isValid, string? errorMessage, VarianceExplanation? explanation) CreateVarianceExplanation(
+        CreateVarianceExplanationRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate data point exists
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == request.DataPointId);
+            if (dataPoint == null)
+            {
+                return (false, $"Data point with ID '{request.DataPointId}' not found.", null);
+            }
+            
+            // Validate prior period exists
+            var priorPeriod = _periods.FirstOrDefault(p => p.Id == request.PriorPeriodId);
+            if (priorPeriod == null)
+            {
+                return (false, $"Prior period with ID '{request.PriorPeriodId}' not found.", null);
+            }
+            
+            // Get comparison data
+            var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+            if (section == null)
+            {
+                return (false, "Data point's section not found.", null);
+            }
+            
+            var comparison = CompareMetrics(request.DataPointId, request.PriorPeriodId);
+            if (comparison == null)
+            {
+                return (false, "Unable to generate comparison for variance explanation.", null);
+            }
+            
+            // Find prior data point
+            string? priorDataPointId = null;
+            var tempDataPoint = dataPoint;
+            var visited = new HashSet<string> { dataPoint.Id };
+            
+            while (!string.IsNullOrEmpty(tempDataPoint.SourceDataPointId))
+            {
+                var sourceId = tempDataPoint.SourceDataPointId;
+                if (visited.Contains(sourceId)) break;
+                visited.Add(sourceId);
+                
+                tempDataPoint = _dataPoints.FirstOrDefault(d => d.Id == sourceId);
+                if (tempDataPoint == null) break;
+                
+                var tempSection = _sections.FirstOrDefault(s => s.Id == tempDataPoint.SectionId);
+                if (tempSection != null && tempSection.PeriodId == request.PriorPeriodId)
+                {
+                    priorDataPointId = tempDataPoint.Id;
+                    break;
+                }
+            }
+            
+            var explanation = new VarianceExplanation
+            {
+                Id = Guid.NewGuid().ToString(),
+                DataPointId = request.DataPointId,
+                PriorPeriodId = request.PriorPeriodId,
+                PriorDataPointId = priorDataPointId,
+                CurrentValue = comparison.CurrentPeriod.Value ?? "N/A",
+                PriorValue = comparison.PriorPeriod?.Value ?? "N/A",
+                PercentageChange = comparison.PercentageChange,
+                AbsoluteChange = comparison.AbsoluteChange,
+                Explanation = request.Explanation,
+                RootCause = request.RootCause,
+                Category = request.Category,
+                Status = "draft",
+                EvidenceIds = request.EvidenceIds,
+                References = request.References,
+                CreatedBy = request.CreatedBy,
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                IsFlagged = true
+            };
+            
+            _varianceExplanations.Add(explanation);
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.CreatedBy,
+                UserName = request.CreatedBy,
+                Action = "created",
+                EntityType = "variance-explanation",
+                EntityId = explanation.Id,
+                ChangeNote = $"Created variance explanation for data point {dataPoint.Title}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return (true, null, explanation);
+        }
+    }
+    
+    /// <summary>
+    /// Updates a variance explanation.
+    /// </summary>
+    public (bool isValid, string? errorMessage, VarianceExplanation? explanation) UpdateVarianceExplanation(
+        string id, UpdateVarianceExplanationRequest request)
+    {
+        lock (_lock)
+        {
+            var explanation = _varianceExplanations.FirstOrDefault(ve => ve.Id == id);
+            if (explanation == null)
+            {
+                return (false, $"Variance explanation with ID '{id}' not found.", null);
+            }
+            
+            // Can only update if in draft or revision-requested status
+            if (explanation.Status != "draft" && explanation.Status != "revision-requested")
+            {
+                return (false, $"Cannot update variance explanation in status '{explanation.Status}'.", null);
+            }
+            
+            // Update fields if provided
+            if (request.Explanation != null)
+            {
+                explanation.Explanation = request.Explanation;
+            }
+            
+            if (request.RootCause != null)
+            {
+                explanation.RootCause = request.RootCause;
+            }
+            
+            if (request.Category != null)
+            {
+                explanation.Category = request.Category;
+            }
+            
+            if (request.EvidenceIds != null)
+            {
+                explanation.EvidenceIds = request.EvidenceIds;
+            }
+            
+            if (request.References != null)
+            {
+                explanation.References = request.References;
+            }
+            
+            explanation.UpdatedBy = request.UpdatedBy;
+            explanation.UpdatedAt = DateTime.UtcNow.ToString("o");
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.UpdatedBy,
+                UserName = request.UpdatedBy,
+                Action = "updated",
+                EntityType = "variance-explanation",
+                EntityId = id,
+                ChangeNote = $"Updated variance explanation {id}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return (true, null, explanation);
+        }
+    }
+    
+    /// <summary>
+    /// Submits a variance explanation for review (or marks as complete if review not required).
+    /// </summary>
+    public (bool isValid, string? errorMessage, VarianceExplanation? explanation) SubmitVarianceExplanation(
+        string id, SubmitVarianceExplanationRequest request)
+    {
+        lock (_lock)
+        {
+            var explanation = _varianceExplanations.FirstOrDefault(ve => ve.Id == id);
+            if (explanation == null)
+            {
+                return (false, $"Variance explanation with ID '{id}' not found.", null);
+            }
+            
+            if (explanation.Status != "draft" && explanation.Status != "revision-requested")
+            {
+                return (false, $"Cannot submit variance explanation in status '{explanation.Status}'.", null);
+            }
+            
+            // Validate explanation is not empty
+            if (string.IsNullOrWhiteSpace(explanation.Explanation))
+            {
+                return (false, "Explanation text cannot be empty.", null);
+            }
+            
+            // Get the data point and its period to check if review is required
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == explanation.DataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "Associated data point not found.", null);
+            }
+            
+            var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+            if (section == null)
+            {
+                return (false, "Associated section not found.", null);
+            }
+            
+            var period = _periods.FirstOrDefault(p => p.Id == section.PeriodId);
+            if (period == null)
+            {
+                return (false, "Associated period not found.", null);
+            }
+            
+            explanation.Status = "submitted";
+            explanation.UpdatedBy = request.SubmittedBy;
+            explanation.UpdatedAt = DateTime.UtcNow.ToString("o");
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.SubmittedBy,
+                UserName = request.SubmittedBy,
+                Action = "submitted",
+                EntityType = "variance-explanation",
+                EntityId = id,
+                ChangeNote = $"Submitted variance explanation {id}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return (true, null, explanation);
+        }
+    }
+    
+    /// <summary>
+    /// Reviews a variance explanation (approve, reject, or request revision).
+    /// </summary>
+    public (bool isValid, string? errorMessage, VarianceExplanation? explanation) ReviewVarianceExplanation(
+        string id, ReviewVarianceExplanationRequest request)
+    {
+        lock (_lock)
+        {
+            var explanation = _varianceExplanations.FirstOrDefault(ve => ve.Id == id);
+            if (explanation == null)
+            {
+                return (false, $"Variance explanation with ID '{id}' not found.", null);
+            }
+            
+            if (explanation.Status != "submitted")
+            {
+                return (false, $"Cannot review variance explanation in status '{explanation.Status}'. Must be 'submitted'.", null);
+            }
+            
+            // Validate decision
+            if (request.Decision != "approve" && request.Decision != "reject" && request.Decision != "request-revision")
+            {
+                return (false, "Decision must be 'approve', 'reject', or 'request-revision'.", null);
+            }
+            
+            switch (request.Decision)
+            {
+                case "approve":
+                    explanation.Status = "approved";
+                    explanation.IsFlagged = false; // Clear the flag
+                    break;
+                case "reject":
+                    explanation.Status = "rejected";
+                    break;
+                case "request-revision":
+                    explanation.Status = "revision-requested";
+                    break;
+            }
+            
+            explanation.ReviewedBy = request.ReviewedBy;
+            explanation.ReviewedAt = DateTime.UtcNow.ToString("o");
+            explanation.ReviewComments = request.Comments;
+            explanation.UpdatedBy = request.ReviewedBy;
+            explanation.UpdatedAt = DateTime.UtcNow.ToString("o");
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.ReviewedBy,
+                UserName = request.ReviewedBy,
+                Action = "reviewed",
+                EntityType = "variance-explanation",
+                EntityId = id,
+                ChangeNote = $"Reviewed variance explanation {id} with decision: {request.Decision}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return (true, null, explanation);
+        }
+    }
+    
+    /// <summary>
+    /// Gets all variance explanations, optionally filtered by data point or period.
+    /// </summary>
+    public IReadOnlyList<VarianceExplanation> GetVarianceExplanations(string? dataPointId = null, string? periodId = null)
+    {
+        lock (_lock)
+        {
+            var query = _varianceExplanations.AsEnumerable();
+            
+            if (!string.IsNullOrEmpty(dataPointId))
+            {
+                query = query.Where(ve => ve.DataPointId == dataPointId);
+            }
+            
+            if (!string.IsNullOrEmpty(periodId))
+            {
+                // Filter by current period (data point's period) or prior period
+                query = query.Where(ve =>
+                {
+                    var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == ve.DataPointId);
+                    if (dataPoint == null) return false;
+                    
+                    var section = _sections.FirstOrDefault(s => s.Id == dataPoint.SectionId);
+                    if (section == null) return false;
+                    
+                    return section.PeriodId == periodId || ve.PriorPeriodId == periodId;
+                });
+            }
+            
+            return query.OrderByDescending(ve => ve.CreatedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Gets a single variance explanation by ID.
+    /// </summary>
+    public VarianceExplanation? GetVarianceExplanation(string id)
+    {
+        lock (_lock)
+        {
+            return _varianceExplanations.FirstOrDefault(ve => ve.Id == id);
+        }
+    }
+    
+    /// <summary>
+    /// Deletes a variance explanation.
+    /// </summary>
+    public bool DeleteVarianceExplanation(string id, string deletedBy)
+    {
+        lock (_lock)
+        {
+            var explanation = _varianceExplanations.FirstOrDefault(ve => ve.Id == id);
+            if (explanation == null)
+            {
+                return false;
+            }
+            
+            _varianceExplanations.Remove(explanation);
+            
+            // Log audit event
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = deletedBy,
+                UserName = deletedBy,
+                Action = "deleted",
+                EntityType = "variance-explanation",
+                EntityId = id,
+                ChangeNote = $"Deleted variance explanation {id}",
+                Changes = new List<FieldChange>()
+            });
+            
+            return true;
         }
     }
     
