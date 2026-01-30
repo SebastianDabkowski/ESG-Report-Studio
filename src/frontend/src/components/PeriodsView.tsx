@@ -7,11 +7,12 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Textarea } from '@/components/ui/textarea'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple, ArrowsClockwise } from '@phosphor-icons/react'
+import { Plus, CalendarDots, CheckCircle, Warning, PencilSimple, ArrowsClockwise, Lock, LockOpen } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, ReportSection, SectionSummary, ReportingMode, ReportScope, Organization, OrganizationalUnit } from '@/lib/types'
 import { formatDate, generateId } from '@/lib/helpers'
-import { createReportingPeriod, getReportingData, updateReportingPeriod, hasReportingStarted } from '@/lib/api'
+import { createReportingPeriod, getReportingData, updateReportingPeriod, hasReportingStarted, lockPeriod, unlockPeriod } from '@/lib/api'
 import RolloverWizard from '@/components/RolloverWizard'
 
 interface PeriodsViewProps {
@@ -48,6 +49,11 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isRolloverOpen, setIsRolloverOpen] = useState(false)
+  const [isLockOpen, setIsLockOpen] = useState(false)
+  const [isUnlockOpen, setIsUnlockOpen] = useState(false)
+  const [lockingPeriod, setLockingPeriod] = useState<ReportingPeriod | null>(null)
+  const [lockReason, setLockReason] = useState('')
+  const [unlockReason, setUnlockReason] = useState('')
   const [editingPeriod, setEditingPeriod] = useState<ReportingPeriod | null>(null)
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -289,6 +295,85 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
     } catch (error) {
       // Display server validation error
       const errorMessage = error instanceof Error ? error.message : 'Failed to update reporting period.'
+      setValidationError(errorMessage)
+    }
+  }
+
+  const handleLock = (period: ReportingPeriod) => {
+    setLockingPeriod(period)
+    setLockReason('')
+    setIsLockOpen(true)
+    setValidationError(null)
+  }
+
+  const handleConfirmLock = async () => {
+    if (!lockingPeriod) return
+
+    setValidationError(null)
+
+    if (!lockReason.trim()) {
+      setValidationError('A reason is required to lock the reporting period.')
+      return
+    }
+
+    try {
+      const updatedPeriod = await lockPeriod(lockingPeriod.id, {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        reason: lockReason
+      })
+
+      setPeriods((current) => 
+        (current || []).map(p => p.id === updatedPeriod.id ? updatedPeriod : p)
+      )
+
+      setIsLockOpen(false)
+      setLockingPeriod(null)
+      setLockReason('')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to lock reporting period.'
+      setValidationError(errorMessage)
+    }
+  }
+
+  const handleUnlock = (period: ReportingPeriod) => {
+    if (currentUser.role !== 'admin') {
+      setValidationError('Only administrators can unlock a reporting period.')
+      return
+    }
+
+    setLockingPeriod(period)
+    setUnlockReason('')
+    setIsUnlockOpen(true)
+    setValidationError(null)
+  }
+
+  const handleConfirmUnlock = async () => {
+    if (!lockingPeriod) return
+
+    setValidationError(null)
+
+    if (!unlockReason.trim()) {
+      setValidationError('A reason is required to unlock the reporting period.')
+      return
+    }
+
+    try {
+      const updatedPeriod = await unlockPeriod(lockingPeriod.id, {
+        userId: currentUser.id,
+        userName: currentUser.name,
+        reason: unlockReason
+      })
+
+      setPeriods((current) => 
+        (current || []).map(p => p.id === updatedPeriod.id ? updatedPeriod : p)
+      )
+
+      setIsUnlockOpen(false)
+      setLockingPeriod(null)
+      setUnlockReason('')
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to unlock reporting period.'
       setValidationError(errorMessage)
     }
   }
@@ -682,11 +767,22 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                         {period.status === 'active' && (
                           <Badge className="bg-accent text-accent-foreground">Active</Badge>
                         )}
+                        {period.isLocked && (
+                          <Badge variant="outline" className="gap-1 border-amber-500/50 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                            <Lock size={12} weight="fill" />
+                            Locked
+                          </Badge>
+                        )}
                       </div>
                       <CardDescription className="flex items-center gap-2">
                         <CalendarDots size={14} />
                         {formatDate(period.startDate)} - {formatDate(period.endDate)}
                       </CardDescription>
+                      {period.isLocked && period.lockedAt && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Locked {formatDate(period.lockedAt)} by {period.lockedByName}
+                        </p>
+                      )}
                     </div>
                     
                     <div className="text-right space-y-3">
@@ -713,15 +809,42 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
                       <span className="text-muted-foreground">/ {periodSections.length} sections approved</span>
                     </div>
                     {currentUser.role !== 'auditor' && (
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        onClick={() => handleEdit(period)}
-                        className="gap-2"
-                      >
-                        <PencilSimple size={14} weight="bold" />
-                        Edit Configuration
-                      </Button>
+                      <div className="flex gap-2">
+                        {period.isLocked ? (
+                          currentUser.role === 'admin' && (
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleUnlock(period)}
+                              className="gap-2"
+                            >
+                              <LockOpen size={14} weight="bold" />
+                              Unlock
+                            </Button>
+                          )
+                        ) : (
+                          <>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleLock(period)}
+                              className="gap-2"
+                            >
+                              <Lock size={14} weight="bold" />
+                              Lock
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleEdit(period)}
+                              className="gap-2"
+                            >
+                              <PencilSimple size={14} weight="bold" />
+                              Edit Configuration
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </CardContent>
@@ -740,6 +863,129 @@ export default function PeriodsView({ currentUser }: PeriodsViewProps) {
           </Card>
         )}
       </div>
+      
+      {/* Lock Period Dialog */}
+      <Dialog open={isLockOpen} onOpenChange={(open) => {
+        setIsLockOpen(open)
+        if (!open) {
+          setLockingPeriod(null)
+          setLockReason('')
+          setValidationError(null)
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Lock Reporting Period</DialogTitle>
+            <DialogDescription>
+              Locking this period will prevent accidental edits to data points and sections. Only administrators can unlock it.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {lockingPeriod && (
+              <div className="rounded-md bg-muted p-3">
+                <p className="text-sm font-medium">{lockingPeriod.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(lockingPeriod.startDate)} - {formatDate(lockingPeriod.endDate)}
+                </p>
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="lock-reason">Reason for Locking</Label>
+              <Textarea
+                id="lock-reason"
+                placeholder="e.g., Data collection complete, preparing for audit"
+                value={lockReason}
+                onChange={(e) => setLockReason(e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be recorded in the audit log.
+              </p>
+            </div>
+
+            {validationError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {validationError}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsLockOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmLock} disabled={!lockReason.trim()}>
+              Lock Period
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Unlock Period Dialog */}
+      <Dialog open={isUnlockOpen} onOpenChange={(open) => {
+        setIsUnlockOpen(open)
+        if (!open) {
+          setLockingPeriod(null)
+          setUnlockReason('')
+          setValidationError(null)
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unlock Reporting Period</DialogTitle>
+            <DialogDescription>
+              Unlocking this period will allow edits again. This action requires a documented reason and will be recorded in the audit log.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            {lockingPeriod && (
+              <div className="rounded-md bg-muted p-3">
+                <p className="text-sm font-medium">{lockingPeriod.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatDate(lockingPeriod.startDate)} - {formatDate(lockingPeriod.endDate)}
+                </p>
+                {lockingPeriod.lockedAt && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Locked {formatDate(lockingPeriod.lockedAt)} by {lockingPeriod.lockedByName}
+                  </p>
+                )}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="unlock-reason">Reason for Unlocking</Label>
+              <Textarea
+                id="unlock-reason"
+                placeholder="e.g., Correction needed for data error, additional evidence received"
+                value={unlockReason}
+                onChange={(e) => setUnlockReason(e.target.value)}
+                rows={3}
+              />
+              <p className="text-xs text-muted-foreground">
+                This reason will be recorded in the audit log.
+              </p>
+            </div>
+
+            {validationError && (
+              <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                {validationError}
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsUnlockOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleConfirmUnlock} disabled={!unlockReason.trim()}>
+              Unlock Period
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       
       <RolloverWizard
         isOpen={isRolloverOpen}

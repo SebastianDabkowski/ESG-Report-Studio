@@ -52,6 +52,10 @@ export interface ReportingPeriod {
   status: 'active' | 'closed'
   createdAt: string
   ownerId: string
+  isLocked?: boolean
+  lockedAt?: string
+  lockedBy?: string
+  lockedByName?: string
 }
 
 export interface ReportSection {
