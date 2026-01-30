@@ -1094,3 +1094,79 @@ export async function compareTextDisclosures(
   const queryString = params.toString()
   return requestJson<TextDisclosureComparisonResponse>(`data-points/${dataPointId}/compare-text${queryString ? '?' + queryString : ''}`)
 }
+
+// ==================== Variance Explanations ====================
+
+export async function createVarianceThresholdConfig(
+  periodId: string,
+  request: CreateVarianceThresholdConfigRequest
+): Promise<VarianceThresholdConfig> {
+  return requestJson<VarianceThresholdConfig>(`variance-explanations/threshold-config/${periodId}`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function createVarianceExplanation(
+  request: CreateVarianceExplanationRequest
+): Promise<VarianceExplanation> {
+  return requestJson<VarianceExplanation>('variance-explanations', {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function getVarianceExplanations(
+  dataPointId?: string,
+  periodId?: string
+): Promise<VarianceExplanation[]> {
+  const params = new URLSearchParams()
+  if (dataPointId) params.append('dataPointId', dataPointId)
+  if (periodId) params.append('periodId', periodId)
+  
+  const queryString = params.toString()
+  return requestJson<VarianceExplanation[]>(`variance-explanations${queryString ? '?' + queryString : ''}`)
+}
+
+export async function getVarianceExplanation(id: string): Promise<VarianceExplanation> {
+  return requestJson<VarianceExplanation>(`variance-explanations/${id}`)
+}
+
+export async function updateVarianceExplanation(
+  id: string,
+  request: UpdateVarianceExplanationRequest
+): Promise<VarianceExplanation> {
+  return requestJson<VarianceExplanation>(`variance-explanations/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function submitVarianceExplanation(
+  id: string,
+  request: SubmitVarianceExplanationRequest
+): Promise<VarianceExplanation> {
+  return requestJson<VarianceExplanation>(`variance-explanations/${id}/submit`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function reviewVarianceExplanation(
+  id: string,
+  request: ReviewVarianceExplanationRequest
+): Promise<VarianceExplanation> {
+  return requestJson<VarianceExplanation>(`variance-explanations/${id}/review`, {
+    method: 'POST',
+    body: JSON.stringify(request)
+  })
+}
+
+export async function deleteVarianceExplanation(
+  id: string,
+  deletedBy: string
+): Promise<void> {
+  await requestJson<void>(`variance-explanations/${id}?deletedBy=${encodeURIComponent(deletedBy)}`, {
+    method: 'DELETE'
+  })
+}

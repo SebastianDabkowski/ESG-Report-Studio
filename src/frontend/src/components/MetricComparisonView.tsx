@@ -171,6 +171,56 @@ export default function MetricComparisonView({
                 </Alert>
               )}
 
+              {/* Variance Flag Alert */}
+              {comparison.varianceFlag?.requiresExplanation && (
+                <Alert className="bg-amber-50 border-amber-300">
+                  <WarningCircle size={20} weight="fill" className="text-amber-600" />
+                  <AlertDescription>
+                    <div className="space-y-2">
+                      <div>
+                        <strong>Explanation Required:</strong> {comparison.varianceFlag.requiresExplanationReason}
+                      </div>
+                      {comparison.varianceFlag.explanation ? (
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant={
+                              comparison.varianceFlag.explanation.status === 'approved' ? 'default' :
+                              comparison.varianceFlag.explanation.status === 'submitted' ? 'secondary' :
+                              comparison.varianceFlag.explanation.status === 'rejected' ? 'destructive' :
+                              'outline'
+                            }>
+                              {comparison.varianceFlag.explanation.status}
+                            </Badge>
+                            {comparison.varianceFlag.isFlagCleared && (
+                              <Badge variant="default" className="bg-green-600">Cleared</Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-700 mt-2">
+                            <strong>Explanation:</strong> {comparison.varianceFlag.explanation.explanation}
+                          </p>
+                          {comparison.varianceFlag.explanation.rootCause && (
+                            <p className="text-sm text-gray-700">
+                              <strong>Root Cause:</strong> {comparison.varianceFlag.explanation.rootCause}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <Button 
+                          size="sm" 
+                          className="mt-2"
+                          onClick={() => {
+                            // TODO: Open variance explanation form
+                            alert('Variance explanation form - to be implemented')
+                          }}
+                        >
+                          Provide Explanation
+                        </Button>
+                      )}
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Comparison Summary */}
               {comparison.isComparisonAvailable && (
                 <Card className="bg-blue-50 border-blue-200">

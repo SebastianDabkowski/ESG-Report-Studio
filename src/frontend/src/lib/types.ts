@@ -933,6 +933,89 @@ export interface MetricComparisonResponse {
   unitsCompatible: boolean
   unitWarning?: string
   availableBaselines: AvailableBaselinePeriod[]
+  varianceFlag?: VarianceFlagInfo
+}
+
+// Variance Explanation Types
+
+export interface VarianceThresholdConfig {
+  id: string
+  percentageThreshold?: number
+  absoluteThreshold?: number
+  requireBothThresholds: boolean
+  requireReviewerApproval: boolean
+  createdAt: string
+  createdBy: string
+}
+
+export interface VarianceExplanation {
+  id: string
+  dataPointId: string
+  priorPeriodId: string
+  priorDataPointId?: string
+  currentValue: string
+  priorValue: string
+  percentageChange?: number
+  absoluteChange?: number
+  explanation: string
+  rootCause?: string
+  category?: string
+  status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'revision-requested'
+  evidenceIds: string[]
+  references: string[]
+  createdBy: string
+  createdAt: string
+  updatedBy?: string
+  updatedAt?: string
+  reviewedBy?: string
+  reviewedAt?: string
+  reviewComments?: string
+  isFlagged: boolean
+}
+
+export interface VarianceFlagInfo {
+  requiresExplanation: boolean
+  requiresExplanationReason?: string
+  explanation?: VarianceExplanation
+  isFlagCleared: boolean
+}
+
+export interface CreateVarianceThresholdConfigRequest {
+  percentageThreshold?: number
+  absoluteThreshold?: number
+  requireBothThresholds: boolean
+  requireReviewerApproval: boolean
+  createdBy: string
+}
+
+export interface CreateVarianceExplanationRequest {
+  dataPointId: string
+  priorPeriodId: string
+  explanation: string
+  rootCause?: string
+  category?: string
+  evidenceIds?: string[]
+  references?: string[]
+  createdBy: string
+}
+
+export interface UpdateVarianceExplanationRequest {
+  explanation?: string
+  rootCause?: string
+  category?: string
+  evidenceIds?: string[]
+  references?: string[]
+  updatedBy: string
+}
+
+export interface SubmitVarianceExplanationRequest {
+  submittedBy: string
+}
+
+export interface ReviewVarianceExplanationRequest {
+  decision: 'approve' | 'reject' | 'request-revision'
+  comments?: string
+  reviewedBy: string
 }
 
 // Text Disclosure Comparison Types
