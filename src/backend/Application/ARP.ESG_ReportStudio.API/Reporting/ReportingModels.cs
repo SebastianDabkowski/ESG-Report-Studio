@@ -584,6 +584,61 @@ public sealed class DataPoint
     /// ISO 8601 timestamp when provenance was flagged for review.
     /// </summary>
     public string? ProvenanceFlaggedAt { get; set; }
+    
+    // Calculation Lineage fields for Derived KPIs
+    /// <summary>
+    /// Indicates whether this data point is a calculated/derived value from other data points.
+    /// </summary>
+    public bool IsCalculated { get; set; }
+    
+    /// <summary>
+    /// Formula or method description used to calculate this value.
+    /// Example: "Total Scope 1 Emissions / Total Revenue", "Sum of all facility energy consumption".
+    /// </summary>
+    public string? CalculationFormula { get; set; }
+    
+    /// <summary>
+    /// List of input data point IDs used in the calculation.
+    /// These are the dependencies that, when changed, may require recalculation.
+    /// </summary>
+    public List<string> CalculationInputIds { get; set; } = new();
+    
+    /// <summary>
+    /// Detailed snapshot of input values at the time of calculation for audit trail.
+    /// JSON object containing { dataPointId: { value, unit, timestamp } } mappings.
+    /// </summary>
+    public string? CalculationInputSnapshot { get; set; }
+    
+    /// <summary>
+    /// Version number for this calculated value. Increments when recalculated.
+    /// </summary>
+    public int CalculationVersion { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this value was calculated.
+    /// </summary>
+    public string? CalculatedAt { get; set; }
+    
+    /// <summary>
+    /// User ID who performed or triggered the calculation.
+    /// </summary>
+    public string? CalculatedBy { get; set; }
+    
+    /// <summary>
+    /// Flag indicating that one or more input values have changed since this calculation.
+    /// Set to true when a dependent data point is updated.
+    /// </summary>
+    public bool CalculationNeedsRecalculation { get; set; }
+    
+    /// <summary>
+    /// Reason why recalculation is needed (e.g., "Input data point X updated", "Input data point Y value changed").
+    /// </summary>
+    public string? RecalculationReason { get; set; }
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the need for recalculation was detected.
+    /// </summary>
+    public string? RecalculationFlaggedAt { get; set; }
 }
 
 /// <summary>
@@ -642,6 +697,27 @@ public sealed class CreateDataPointRequest
     /// Optional: can be added to link narrative to source data for traceability.
     /// </summary>
     public List<NarrativeSourceReference> SourceReferences { get; set; } = new();
+    
+    // Calculation Lineage fields for Derived KPIs
+    /// <summary>
+    /// Indicates whether this data point is a calculated/derived value.
+    /// </summary>
+    public bool IsCalculated { get; set; }
+    
+    /// <summary>
+    /// Formula or method description used to calculate this value.
+    /// </summary>
+    public string? CalculationFormula { get; set; }
+    
+    /// <summary>
+    /// List of input data point IDs used in the calculation.
+    /// </summary>
+    public List<string> CalculationInputIds { get; set; } = new();
+    
+    /// <summary>
+    /// User ID who performed the calculation.
+    /// </summary>
+    public string? CalculatedBy { get; set; }
 }
 
 /// <summary>
@@ -701,6 +777,22 @@ public sealed class UpdateDataPointRequest
     /// Optional: can be added to link narrative to source data for traceability.
     /// </summary>
     public List<NarrativeSourceReference> SourceReferences { get; set; } = new();
+    
+    // Calculation Lineage fields for Derived KPIs
+    /// <summary>
+    /// Indicates whether this data point is a calculated/derived value.
+    /// </summary>
+    public bool IsCalculated { get; set; }
+    
+    /// <summary>
+    /// Formula or method description used to calculate this value.
+    /// </summary>
+    public string? CalculationFormula { get; set; }
+    
+    /// <summary>
+    /// List of input data point IDs used in the calculation.
+    /// </summary>
+    public List<string> CalculationInputIds { get; set; } = new();
 }
 
 /// <summary>
@@ -853,6 +945,114 @@ public sealed class GapStatusHistoryEntry
     /// Preserves the previous estimate for historical reference.
     /// </summary>
     public string? EstimateSnapshot { get; set; }
+}
+
+/// <summary>
+/// Request to recalculate a derived data point using current input values.
+/// </summary>
+public sealed class RecalculateDataPointRequest
+{
+    /// <summary>
+    /// User ID of the person triggering the recalculation.
+    /// </summary>
+    public string CalculatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for recalculation.
+    /// </summary>
+    public string? ChangeNote { get; set; }
+}
+
+/// <summary>
+/// Response containing calculation lineage information for a data point.
+/// </summary>
+public sealed class CalculationLineageResponse
+{
+    /// <summary>
+    /// The data point ID for which lineage is being provided.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Formula or method used for calculation.
+    /// </summary>
+    public string? Formula { get; set; }
+    
+    /// <summary>
+    /// Current version of the calculation.
+    /// </summary>
+    public int Version { get; set; }
+    
+    /// <summary>
+    /// When this calculation was performed.
+    /// </summary>
+    public string? CalculatedAt { get; set; }
+    
+    /// <summary>
+    /// Who performed or triggered the calculation.
+    /// </summary>
+    public string? CalculatedBy { get; set; }
+    
+    /// <summary>
+    /// List of input data points with their current values and metadata.
+    /// </summary>
+    public List<LineageInput> Inputs { get; set; } = new();
+    
+    /// <summary>
+    /// Snapshot of input values at the time of last calculation.
+    /// </summary>
+    public string? InputSnapshot { get; set; }
+    
+    /// <summary>
+    /// Flag indicating inputs have changed since last calculation.
+    /// </summary>
+    public bool NeedsRecalculation { get; set; }
+    
+    /// <summary>
+    /// Reason why recalculation is needed.
+    /// </summary>
+    public string? RecalculationReason { get; set; }
+}
+
+/// <summary>
+/// Represents an input data point in the calculation lineage.
+/// </summary>
+public sealed class LineageInput
+{
+    /// <summary>
+    /// ID of the input data point.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title of the input data point.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Current value of the input.
+    /// </summary>
+    public string? CurrentValue { get; set; }
+    
+    /// <summary>
+    /// Unit of the current value.
+    /// </summary>
+    public string? Unit { get; set; }
+    
+    /// <summary>
+    /// Value used in the last calculation (may differ from current if changed).
+    /// </summary>
+    public string? ValueAtCalculation { get; set; }
+    
+    /// <summary>
+    /// When this input was last updated.
+    /// </summary>
+    public string? LastUpdated { get; set; }
+    
+    /// <summary>
+    /// Flag indicating this input has changed since the calculation.
+    /// </summary>
+    public bool HasChanged { get; set; }
 }
 
 /// <summary>

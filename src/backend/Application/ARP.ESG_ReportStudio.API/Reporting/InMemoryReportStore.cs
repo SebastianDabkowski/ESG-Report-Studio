@@ -1591,8 +1591,22 @@ public sealed class InMemoryReportStore
                 EstimateCreatedAt = request.InformationType?.Equals("estimate", StringComparison.OrdinalIgnoreCase) == true 
                     ? now : null,
                 SourceReferences = request.SourceReferences ?? new List<NarrativeSourceReference>(),
-                ProvenanceNeedsReview = false
+                ProvenanceNeedsReview = false,
+                // Calculation lineage fields
+                IsCalculated = request.IsCalculated,
+                CalculationFormula = request.CalculationFormula,
+                CalculationInputIds = request.CalculationInputIds ?? new List<string>(),
+                CalculationVersion = request.IsCalculated ? 1 : 0,
+                CalculatedAt = request.IsCalculated ? now : null,
+                CalculatedBy = request.IsCalculated ? request.CalculatedBy : null,
+                CalculationNeedsRecalculation = false
             };
+            
+            // Capture input snapshot if this is a calculated data point
+            if (newDataPoint.IsCalculated && newDataPoint.CalculationInputIds.Any())
+            {
+                newDataPoint.CalculationInputSnapshot = CaptureInputSnapshot(newDataPoint.CalculationInputIds);
+            }
 
             // Validate against validation rules
             var (isValidAgainstRules, ruleErrorMessage) = ValidateDataPointAgainstRules(newDataPoint);
@@ -1787,6 +1801,9 @@ public sealed class InMemoryReportStore
             // Capture changes for audit log
             var changes = new List<FieldChange>();
             
+            // Check if value or unit changed - needed for flagging dependent calculations
+            bool valueOrUnitChanged = (dataPoint.Value != request.Value) || (dataPoint.Unit != request.Unit);
+            
             if (dataPoint.Type != request.Type)
                 changes.Add(new FieldChange { Field = "Type", OldValue = dataPoint.Type, NewValue = request.Type });
             
@@ -1971,10 +1988,44 @@ public sealed class InMemoryReportStore
             }
             dataPoint.SourceReferences = request.SourceReferences ?? new List<NarrativeSourceReference>();
             
+            // Update calculation lineage fields
+            if (dataPoint.IsCalculated != request.IsCalculated)
+            {
+                changes.Add(new FieldChange { Field = "IsCalculated", OldValue = dataPoint.IsCalculated.ToString(), NewValue = request.IsCalculated.ToString() });
+            }
+            dataPoint.IsCalculated = request.IsCalculated;
+            
+            if (dataPoint.CalculationFormula != request.CalculationFormula)
+            {
+                changes.Add(new FieldChange { Field = "CalculationFormula", OldValue = dataPoint.CalculationFormula ?? "", NewValue = request.CalculationFormula ?? "" });
+            }
+            dataPoint.CalculationFormula = request.CalculationFormula;
+            
+            var inputIdsChanged = !AreListsEqual(dataPoint.CalculationInputIds, request.CalculationInputIds);
+            if (inputIdsChanged)
+            {
+                changes.Add(new FieldChange { Field = "CalculationInputIds", OldValue = $"{dataPoint.CalculationInputIds.Count} inputs", NewValue = $"{request.CalculationInputIds?.Count ?? 0} inputs" });
+            }
+            dataPoint.CalculationInputIds = request.CalculationInputIds ?? new List<string>();
+            
+            // Update snapshot if this is a calculated point and inputs changed
+            if (dataPoint.IsCalculated && inputIdsChanged && dataPoint.CalculationInputIds.Any())
+            {
+                dataPoint.CalculationInputSnapshot = CaptureInputSnapshot(dataPoint.CalculationInputIds);
+                changes.Add(new FieldChange { Field = "CalculationInputSnapshot", OldValue = "previous", NewValue = "updated" });
+            }
+            
             // Update review status if provided
             if (!string.IsNullOrWhiteSpace(request.ReviewStatus))
             {
                 dataPoint.ReviewStatus = request.ReviewStatus;
+            }
+            
+            // Detect changes to input data points and flag calculated points for recalculation
+            // Must be done BEFORE the dataPoint value is updated, so we use the flag captured earlier
+            if (valueOrUnitChanged)
+            {
+                FlagDependentCalculationsForRecalculation(dataPoint.Id, request.UpdatedBy ?? "system");
             }
 
             // Create audit log entry if there are changes
@@ -9137,6 +9188,244 @@ public sealed class InMemoryReportStore
             return dt.ToString("yyyy-MM-dd");
         }
         return isoTimestamp; // Fallback to original if parsing fails
+    }
+    
+    #endregion
+    
+    #region Calculation Lineage Helper Methods
+    
+    /// <summary>
+    /// Captures a snapshot of input data point values at calculation time.
+    /// Returns JSON string with input values for audit trail.
+    /// </summary>
+    private string CaptureInputSnapshot(List<string> inputIds)
+    {
+        var snapshot = new Dictionary<string, object>();
+        
+        foreach (var inputId in inputIds)
+        {
+            var input = _dataPoints.FirstOrDefault(dp => dp.Id == inputId);
+            if (input != null)
+            {
+                snapshot[inputId] = new
+                {
+                    value = input.Value ?? "",
+                    unit = input.Unit ?? "",
+                    timestamp = input.UpdatedAt
+                };
+            }
+        }
+        
+        return System.Text.Json.JsonSerializer.Serialize(snapshot);
+    }
+    
+    /// <summary>
+    /// Flags all calculated data points that depend on the given input for recalculation.
+    /// </summary>
+    private void FlagDependentCalculationsForRecalculation(string changedDataPointId, string flaggedBy)
+    {
+        var now = DateTime.UtcNow.ToString("O");
+        var changedDataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == changedDataPointId);
+        
+        if (changedDataPoint == null) return;
+        
+        // Find all calculated data points that depend on this input
+        var dependentCalculations = _dataPoints.Where(dp => 
+            dp.IsCalculated && 
+            dp.CalculationInputIds.Contains(changedDataPointId));
+        
+        foreach (var calc in dependentCalculations)
+        {
+            calc.CalculationNeedsRecalculation = true;
+            calc.RecalculationReason = $"Input data point '{changedDataPoint.Title}' (ID: {changedDataPointId}) was updated";
+            calc.RecalculationFlaggedAt = now;
+            
+            // Create audit log entry
+            var changes = new List<FieldChange>
+            {
+                new() { Field = "CalculationNeedsRecalculation", OldValue = "false", NewValue = "true" },
+                new() { Field = "RecalculationReason", OldValue = "", NewValue = calc.RecalculationReason }
+            };
+            
+            CreateAuditLogEntry(
+                flaggedBy,
+                "System",
+                "flag-recalculation",
+                "DataPoint",
+                calc.Id,
+                changes,
+                $"Automatically flagged for recalculation due to input change"
+            );
+        }
+    }
+    
+    /// <summary>
+    /// Helper to compare two lists of strings for equality.
+    /// </summary>
+    private static bool AreListsEqual(List<string> list1, List<string>? list2)
+    {
+        if (list2 == null) return list1.Count == 0;
+        if (list1.Count != list2.Count) return false;
+        
+        var sorted1 = list1.OrderBy(x => x).ToList();
+        var sorted2 = list2.OrderBy(x => x).ToList();
+        
+        return sorted1.SequenceEqual(sorted2);
+    }
+    
+    /// <summary>
+    /// Gets calculation lineage information for a data point.
+    /// </summary>
+    public CalculationLineageResponse? GetCalculationLineage(string dataPointId)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == dataPointId);
+            if (dataPoint == null || !dataPoint.IsCalculated)
+            {
+                return null;
+            }
+            
+            var inputs = new List<LineageInput>();
+            
+            // Build input snapshot JSON for comparison
+            var currentSnapshot = CaptureInputSnapshot(dataPoint.CalculationInputIds);
+            
+            foreach (var inputId in dataPoint.CalculationInputIds)
+            {
+                var input = _dataPoints.FirstOrDefault(dp => dp.Id == inputId);
+                if (input != null)
+                {
+                    // Try to extract value from old snapshot using proper JSON parsing
+                    string? valueAtCalc = null;
+                    if (!string.IsNullOrEmpty(dataPoint.CalculationInputSnapshot))
+                    {
+                        try
+                        {
+                            using var doc = System.Text.Json.JsonDocument.Parse(dataPoint.CalculationInputSnapshot);
+                            if (doc.RootElement.TryGetProperty(inputId, out var inputElement))
+                            {
+                                if (inputElement.TryGetProperty("value", out var valueElement))
+                                {
+                                    valueAtCalc = valueElement.GetString();
+                                }
+                            }
+                        }
+                        catch
+                        {
+                            // If JSON parsing fails, leave valueAtCalc as null
+                        }
+                    }
+                    
+                    inputs.Add(new LineageInput
+                    {
+                        DataPointId = input.Id,
+                        Title = input.Title,
+                        CurrentValue = input.Value,
+                        Unit = input.Unit,
+                        ValueAtCalculation = valueAtCalc,
+                        LastUpdated = input.UpdatedAt,
+                        HasChanged = input.Value != valueAtCalc
+                    });
+                }
+            }
+            
+            return new CalculationLineageResponse
+            {
+                DataPointId = dataPoint.Id,
+                Formula = dataPoint.CalculationFormula,
+                Version = dataPoint.CalculationVersion,
+                CalculatedAt = dataPoint.CalculatedAt,
+                CalculatedBy = dataPoint.CalculatedBy,
+                Inputs = inputs,
+                InputSnapshot = dataPoint.CalculationInputSnapshot,
+                NeedsRecalculation = dataPoint.CalculationNeedsRecalculation,
+                RecalculationReason = dataPoint.RecalculationReason
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Recalculates a derived data point by capturing new input snapshot and incrementing version.
+    /// Note: This does not actually compute the value - that's done externally.
+    /// This method updates the lineage metadata.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, DataPoint? DataPoint) RecalculateDataPoint(
+        string dataPointId, 
+        RecalculateDataPointRequest request,
+        string? newValue,
+        string? newUnit)
+    {
+        lock (_lock)
+        {
+            var dataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == dataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "DataPoint not found.", null);
+            }
+            
+            if (!dataPoint.IsCalculated)
+            {
+                return (false, "DataPoint is not a calculated value.", null);
+            }
+            
+            var now = DateTime.UtcNow.ToString("O");
+            var changes = new List<FieldChange>();
+            
+            // Update value if provided
+            if (newValue != null && dataPoint.Value != newValue)
+            {
+                changes.Add(new FieldChange { Field = "Value", OldValue = dataPoint.Value ?? "", NewValue = newValue });
+                dataPoint.Value = newValue;
+            }
+            
+            if (newUnit != null && dataPoint.Unit != newUnit)
+            {
+                changes.Add(new FieldChange { Field = "Unit", OldValue = dataPoint.Unit ?? "", NewValue = newUnit });
+                dataPoint.Unit = newUnit;
+            }
+            
+            // Capture new input snapshot
+            var newSnapshot = CaptureInputSnapshot(dataPoint.CalculationInputIds);
+            if (dataPoint.CalculationInputSnapshot != newSnapshot)
+            {
+                changes.Add(new FieldChange { Field = "CalculationInputSnapshot", OldValue = "previous", NewValue = "updated" });
+            }
+            dataPoint.CalculationInputSnapshot = newSnapshot;
+            
+            // Increment version
+            dataPoint.CalculationVersion++;
+            changes.Add(new FieldChange { Field = "CalculationVersion", OldValue = (dataPoint.CalculationVersion - 1).ToString(), NewValue = dataPoint.CalculationVersion.ToString() });
+            
+            // Update calculation metadata
+            dataPoint.CalculatedAt = now;
+            dataPoint.CalculatedBy = request.CalculatedBy;
+            dataPoint.UpdatedAt = now;
+            
+            // Clear recalculation flag
+            if (dataPoint.CalculationNeedsRecalculation)
+            {
+                changes.Add(new FieldChange { Field = "CalculationNeedsRecalculation", OldValue = "true", NewValue = "false" });
+                dataPoint.CalculationNeedsRecalculation = false;
+                dataPoint.RecalculationReason = null;
+                dataPoint.RecalculationFlaggedAt = null;
+            }
+            
+            // Create audit log entry
+            var user = _users.FirstOrDefault(u => u.Id == request.CalculatedBy);
+            var userName = user?.Name ?? request.CalculatedBy;
+            CreateAuditLogEntry(
+                request.CalculatedBy,
+                userName,
+                "recalculate",
+                "DataPoint",
+                dataPoint.Id,
+                changes,
+                request.ChangeNote ?? "Data point recalculated with updated inputs"
+            );
+            
+            return (true, null, dataPoint);
+        }
     }
     
     #endregion

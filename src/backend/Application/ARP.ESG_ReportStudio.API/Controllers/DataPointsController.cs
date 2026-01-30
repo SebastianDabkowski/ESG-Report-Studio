@@ -226,4 +226,39 @@ public sealed class DataPointsController : ControllerBase
 
         return Ok(dataPoint);
     }
+
+    [HttpGet("{id}/lineage")]
+    public ActionResult<CalculationLineageResponse> GetCalculationLineage(string id)
+    {
+        var lineage = _store.GetCalculationLineage(id);
+        
+        if (lineage == null)
+        {
+            return NotFound(new { error = $"DataPoint with ID '{id}' not found or is not a calculated value." });
+        }
+
+        return Ok(lineage);
+    }
+
+    /// <summary>
+    /// Recalculates a derived data point by updating its lineage metadata.
+    /// Note: This endpoint updates calculation metadata (version, snapshot) but does not
+    /// perform the actual calculation. The calculation logic must be implemented by the caller
+    /// and the resulting value should be passed separately.
+    /// </summary>
+    [HttpPost("{id}/recalculate")]
+    public ActionResult<DataPoint> RecalculateDataPoint(string id, [FromBody] RecalculateDataPointRequest request)
+    {
+        // TODO: Implement actual calculation logic based on formula
+        // For now, this endpoint only updates the lineage metadata
+        
+        var (isValid, errorMessage, dataPoint) = _store.RecalculateDataPoint(id, request, null, null);
+        
+        if (!isValid)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+
+        return Ok(dataPoint);
+    }
 }
