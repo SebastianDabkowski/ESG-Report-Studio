@@ -95,7 +95,7 @@ namespace SD.ProjectName.Tests.Products
             var sectionId = CreateTestSection(store, periodId, "ready-for-review");
 
             // Create data point without evidence
-            store.CreateDataPoint(new CreateDataPointRequest
+            var (dpValid, dpError, dataPoint) = store.CreateDataPoint(new CreateDataPointRequest
             {
                 SectionId = sectionId,
                 Title = "CO2 Emissions",
@@ -103,11 +103,13 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Total CO2 emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e",
                 Source = "Energy meter readings"
             });
+            Assert.True(dpValid, $"DataPoint creation failed: {dpError}");
+            Assert.NotNull(dataPoint);
 
             var request = new RunValidationRequest
             {
@@ -159,7 +161,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Total CO2 emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e"
             };
@@ -219,7 +221,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Calculated total emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e",
                 IsCalculated = true,
@@ -315,7 +317,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Not applicable",
                 OwnerId = "user-1",
                 CompletenessStatus = "not-applicable",
-                InformationType = "measured"
+                InformationType = "fact"
             });
 
             var request = new RunValidationRequest
@@ -405,7 +407,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Total CO2 emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e"
             });
@@ -673,7 +675,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Total CO2 emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e"
                 // Missing: ProvenanceSource, EvidenceIds, Classification (required for CSRD)
@@ -729,7 +731,7 @@ namespace SD.ProjectName.Tests.Products
                 Content = "Total CO2 emissions",
                 OwnerId = "user-1",
                 CompletenessStatus = "complete",
-                InformationType = "measured",
+                InformationType = "fact",
                 Value = "1000",
                 Unit = "tCO2e",
                 Source = "Energy meter readings"
