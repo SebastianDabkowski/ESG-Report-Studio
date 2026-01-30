@@ -1055,3 +1055,88 @@ export interface TextDisclosureComparisonResponse {
   isDraftCopy: boolean
   hasBeenEdited: boolean
 }
+
+// Maturity Model Types
+export type CriterionType = 'data-completeness' | 'evidence-quality' | 'process-control' | 'custom'
+
+export interface MaturityCriterion {
+  id: string
+  name: string
+  description: string
+  criterionType: CriterionType
+  targetValue: string
+  unit: string
+  minCompletionPercentage?: number
+  minEvidencePercentage?: number
+  requiredControls: string[]
+  isMandatory: boolean
+}
+
+export interface MaturityLevel {
+  id: string
+  name: string
+  description: string
+  order: number
+  criteria: MaturityCriterion[]
+}
+
+export interface MaturityModel {
+  id: string
+  name: string
+  description: string
+  version: number
+  isActive: boolean
+  levels: MaturityLevel[]
+  createdBy: string
+  createdByName: string
+  createdAt: string
+  updatedBy?: string
+  updatedByName?: string
+  updatedAt?: string
+}
+
+export interface CreateMaturityModelPayload {
+  name: string
+  description: string
+  createdBy: string
+  createdByName: string
+  levels: {
+    name: string
+    description: string
+    order: number
+    criteria: {
+      name: string
+      description: string
+      criterionType: CriterionType
+      targetValue: string
+      unit: string
+      minCompletionPercentage?: number
+      minEvidencePercentage?: number
+      requiredControls: string[]
+      isMandatory: boolean
+    }[]
+  }[]
+}
+
+export interface UpdateMaturityModelPayload {
+  name: string
+  description: string
+  updatedBy: string
+  updatedByName: string
+  levels: {
+    name: string
+    description: string
+    order: number
+    criteria: {
+      name: string
+      description: string
+      criterionType: CriterionType
+      targetValue: string
+      unit: string
+      minCompletionPercentage?: number
+      minEvidencePercentage?: number
+      requiredControls: string[]
+      isMandatory: boolean
+    }[]
+  }[]
+}

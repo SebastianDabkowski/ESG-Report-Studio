@@ -15,6 +15,7 @@ import ReadinessReportView from '@/components/ReadinessReportView'
 import GapsAndImprovementsView from '@/components/GapsAndImprovementsView'
 import GapsDashboard from '@/components/GapsDashboard'
 import HistoryDemoView from '@/components/HistoryDemoView'
+import MaturityModelsView from '@/components/MaturityModelsView'
 import { useKV } from '@github/spark/hooks'
 import type { User } from '@/lib/types'
 
@@ -77,6 +78,7 @@ function App() {
             <TabsTrigger value="evidence">Evidence</TabsTrigger>
             <TabsTrigger value="audit">Audit Trail</TabsTrigger>
             <TabsTrigger value="history">Change History</TabsTrigger>
+            <TabsTrigger value="maturity">Maturity Models</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -133,6 +135,10 @@ function App() {
 
           <TabsContent value="history" className="space-y-6">
             <HistoryDemoView />
+          </TabsContent>
+
+          <TabsContent value="maturity" className="space-y-6">
+            <MaturityModelsView currentUser={currentUser} />
           </TabsContent>
         </Tabs>
       </main>

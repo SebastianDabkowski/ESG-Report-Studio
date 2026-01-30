@@ -1170,3 +1170,42 @@ export async function deleteVarianceExplanation(
     method: 'DELETE'
   })
 }
+
+// Maturity Model API
+import type { MaturityModel, CreateMaturityModelPayload, UpdateMaturityModelPayload } from '@/lib/types'
+
+export async function getMaturityModels(includeInactive = false): Promise<MaturityModel[]> {
+  return requestJson<MaturityModel[]>(`maturity-models?includeInactive=${includeInactive}`)
+}
+
+export async function getActiveMaturityModel(): Promise<MaturityModel> {
+  return requestJson<MaturityModel>('maturity-models/active')
+}
+
+export async function getMaturityModel(id: string): Promise<MaturityModel> {
+  return requestJson<MaturityModel>(`maturity-models/${id}`)
+}
+
+export async function getMaturityModelVersionHistory(id: string): Promise<MaturityModel[]> {
+  return requestJson<MaturityModel[]>(`maturity-models/${id}/versions`)
+}
+
+export async function createMaturityModel(payload: CreateMaturityModelPayload): Promise<MaturityModel> {
+  return requestJson<MaturityModel>('maturity-models', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function updateMaturityModel(id: string, payload: UpdateMaturityModelPayload): Promise<MaturityModel> {
+  return requestJson<MaturityModel>(`maturity-models/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function deleteMaturityModel(id: string): Promise<void> {
+  await requestJson<void>(`maturity-models/${id}`, {
+    method: 'DELETE'
+  })
+}
