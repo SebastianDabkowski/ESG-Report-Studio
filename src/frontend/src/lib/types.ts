@@ -1580,3 +1580,96 @@ export interface TemplateUsageRecord {
   generatedBy: string
   generatedAt: string
 }
+
+// Generation and Export History Types
+export interface SectionSnapshot {
+  sectionId: string
+  sectionTitle: string
+  catalogCode?: string
+  dataPointCount: number
+}
+
+export interface GenerationHistoryEntry {
+  id: string
+  periodId: string
+  generatedAt: string
+  generatedBy: string
+  generatedByName: string
+  generationNote?: string
+  checksum: string
+  variantId?: string
+  variantName?: string
+  status: 'draft' | 'final' | 'archived'
+  sectionCount: number
+  dataPointCount: number
+  evidenceCount: number
+  sectionSnapshots: SectionSnapshot[]
+  markedFinalAt?: string
+  markedFinalBy?: string
+  markedFinalByName?: string
+  report?: GeneratedReport
+}
+
+export interface ExportHistoryEntry {
+  id: string
+  generationId: string
+  periodId: string
+  format: 'pdf' | 'docx'
+  fileName: string
+  fileSize: number
+  fileChecksum: string
+  exportedAt: string
+  exportedBy: string
+  exportedByName: string
+  variantName?: string
+  includedTitlePage: boolean
+  includedTableOfContents: boolean
+  includedAttachments: boolean
+  downloadCount: number
+  lastDownloadedAt?: string
+}
+
+export interface MarkGenerationFinalRequest {
+  generationId: string
+  userId: string
+  userName: string
+  note?: string
+}
+
+export interface CompareGenerationsRequest {
+  generation1Id: string
+  generation2Id: string
+  userId: string
+}
+
+export interface GenerationSectionDifference {
+  sectionId: string
+  sectionTitle: string
+  catalogCode?: string
+  differenceType: 'added' | 'removed' | 'modified' | 'unchanged'
+  dataPointCount1: number
+  dataPointCount2: number
+  changes: string[]
+}
+
+export interface GenerationComparisonSummary {
+  totalSections: number
+  sectionsAdded: number
+  sectionsRemoved: number
+  sectionsModified: number
+  sectionsUnchanged: number
+  totalDataPoints1: number
+  totalDataPoints2: number
+}
+
+export interface GenerationComparison {
+  generation1: GenerationHistoryEntry
+  generation2: GenerationHistoryEntry
+  period: ReportingPeriod
+  comparedAt: string
+  comparedBy: string
+  sectionDifferences: GenerationSectionDifference[]
+  changedDataSources: string[]
+  summary: GenerationComparisonSummary
+}
+

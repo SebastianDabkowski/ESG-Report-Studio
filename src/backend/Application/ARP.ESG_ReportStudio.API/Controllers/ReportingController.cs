@@ -462,8 +462,36 @@ public sealed class ReportingController : ControllerBase
         // Generate filename
         var filename = _pdfExportService.GenerateFilename(report, request.VariantName);
         
+        // Record export in history
+        var exportEntry = new ExportHistoryEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            GenerationId = report.Id,
+            PeriodId = periodId,
+            Format = "pdf",
+            FileName = filename,
+            FileSize = pdfBytes.Length,
+            FileChecksum = CalculateFileChecksum(pdfBytes),
+            ExportedAt = DateTime.UtcNow.ToString("O"),
+            ExportedBy = request.GeneratedBy,
+            ExportedByName = report.GeneratedByName,
+            VariantName = request.VariantName,
+            IncludedTitlePage = options.IncludeTitlePage,
+            IncludedTableOfContents = options.IncludeTableOfContents,
+            IncludedAttachments = options.IncludeAttachments,
+            DownloadCount = 0
+        };
+        _store.RecordExport(exportEntry);
+        
         // Return PDF file
         return File(pdfBytes, "application/pdf", filename);
+    }
+    
+    private static string CalculateFileChecksum(byte[] fileBytes)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var hash = sha256.ComputeHash(fileBytes);
+        return Convert.ToBase64String(hash);
     }
     
     /// <summary>
@@ -526,8 +554,126 @@ public sealed class ReportingController : ControllerBase
         // Generate filename
         var filename = _docxExportService.GenerateFilename(report, request.VariantName);
         
+        // Record export in history
+        var exportEntry = new ExportHistoryEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            GenerationId = report.Id,
+            PeriodId = periodId,
+            Format = "docx",
+            FileName = filename,
+            FileSize = docxBytes.Length,
+            FileChecksum = CalculateFileChecksum(docxBytes),
+            ExportedAt = DateTime.UtcNow.ToString("O"),
+            ExportedBy = request.GeneratedBy,
+            ExportedByName = report.GeneratedByName,
+            VariantName = request.VariantName,
+            IncludedTitlePage = options.IncludeTitlePage,
+            IncludedTableOfContents = options.IncludeTableOfContents,
+            IncludedAttachments = options.IncludeAttachments,
+            DownloadCount = 0
+        };
+        _store.RecordExport(exportEntry);
+        
         // Return DOCX file
         return File(docxBytes, "application/vnd.openxmlformats-officedocument.wordprocessingml.document", filename);
+    }
+    
+    /// <summary>
+    /// Get generation history for a reporting period.
+    /// </summary>
+    [HttpGet("periods/{periodId}/generation-history")]
+    public ActionResult<IReadOnlyList<GenerationHistoryEntry>> GetGenerationHistory(string periodId)
+    {
+        var period = _store.GetPeriods().FirstOrDefault(p => p.Id == periodId);
+        if (period == null)
+        {
+            return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
+        var history = _store.GetGenerationHistory(periodId);
+        return Ok(history);
+    }
+    
+    /// <summary>
+    /// Get a specific generation by ID.
+    /// </summary>
+    [HttpGet("generation-history/{generationId}")]
+    public ActionResult<GenerationHistoryEntry> GetGeneration(string generationId)
+    {
+        var generation = _store.GetGeneration(generationId);
+        if (generation == null)
+        {
+            return NotFound(new { error = $"Generation with ID '{generationId}' not found." });
+        }
+        
+        return Ok(generation);
+    }
+    
+    /// <summary>
+    /// Mark a generation as final.
+    /// </summary>
+    [HttpPost("generation-history/{generationId}/mark-final")]
+    public ActionResult<GenerationHistoryEntry> MarkGenerationFinal(string generationId, [FromBody] MarkGenerationFinalRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.UserId) || string.IsNullOrWhiteSpace(request.UserName))
+        {
+            return BadRequest(new { error = "UserId and UserName are required." });
+        }
+        
+        // Ensure the request has the correct generation ID from the path
+        request.GenerationId = generationId;
+        
+        var (isSuccess, errorMessage, entry) = _store.MarkGenerationAsFinal(request);
+        
+        if (!isSuccess)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(entry);
+    }
+    
+    /// <summary>
+    /// Compare two report generations.
+    /// </summary>
+    [HttpPost("generation-history/compare")]
+    public ActionResult<GenerationComparison> CompareGenerations([FromBody] CompareGenerationsRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Generation1Id) || string.IsNullOrWhiteSpace(request.Generation2Id))
+        {
+            return BadRequest(new { error = "Both Generation1Id and Generation2Id are required." });
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.UserId))
+        {
+            return BadRequest(new { error = "UserId is required." });
+        }
+        
+        var (isSuccess, errorMessage, comparison) = _store.CompareGenerations(request);
+        
+        if (!isSuccess)
+        {
+            return BadRequest(new { error = errorMessage });
+        }
+        
+        return Ok(comparison);
+    }
+    
+    /// <summary>
+    /// Get export history for a reporting period.
+    /// </summary>
+    [HttpGet("periods/{periodId}/export-history")]
+    public ActionResult<IReadOnlyList<ExportHistoryEntry>> GetExportHistory(string periodId)
+    {
+        var period = _store.GetPeriods().FirstOrDefault(p => p.Id == periodId);
+        if (period == null)
+        {
+            return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
+        var history = _store.GetExportHistory(periodId);
+        return Ok(history);
     }
 }
 

@@ -52,6 +52,8 @@ public sealed class InMemoryReportStore
     private readonly List<BrandingProfile> _brandingProfiles = new(); // Corporate branding profiles
     private readonly List<DocumentTemplate> _documentTemplates = new(); // Document templates with versioning
     private readonly List<TemplateUsageRecord> _templateUsageRecords = new(); // Template usage audit trail
+    private readonly List<GenerationHistoryEntry> _generationHistory = new(); // Report generation history
+    private readonly List<ExportHistoryEntry> _exportHistory = new(); // Export history (PDF/DOCX)
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -13736,6 +13738,33 @@ public sealed class InMemoryReportStore
             };
             _auditLog.Add(auditEntry);
             
+            // Store generation in history
+            var historyEntry = new GenerationHistoryEntry
+            {
+                Id = reportId,
+                PeriodId = request.PeriodId,
+                GeneratedAt = generatedAt,
+                GeneratedBy = request.GeneratedBy,
+                GeneratedByName = userName,
+                GenerationNote = request.GenerationNote,
+                Checksum = report.Checksum,
+                VariantId = null, // No variant for base generation
+                VariantName = null,
+                Status = "draft",
+                SectionCount = generatedSections.Count,
+                DataPointCount = generatedSections.Sum(s => s.DataPoints.Count),
+                EvidenceCount = generatedSections.Sum(s => s.Evidence.Count),
+                SectionSnapshots = generatedSections.Select(s => new SectionSnapshot
+                {
+                    SectionId = s.Section.Id,
+                    SectionTitle = s.Section.Title,
+                    CatalogCode = s.Section.CatalogCode,
+                    DataPointCount = s.DataPoints.Count
+                }).ToList(),
+                Report = report
+            };
+            _generationHistory.Add(historyEntry);
+            
             return (true, null, report);
         }
     }
@@ -14793,6 +14822,327 @@ public sealed class InMemoryReportStore
         lock (_lock)
         {
             return _templateUsageRecords.Where(r => r.PeriodId == periodId).OrderByDescending(r => r.GeneratedAt).ToList();
+        }
+    }
+    
+    #endregion
+    
+    #region Generation and Export History
+    
+    /// <summary>
+    /// Get generation history for a specific reporting period.
+    /// </summary>
+    public IReadOnlyList<GenerationHistoryEntry> GetGenerationHistory(string periodId)
+    {
+        lock (_lock)
+        {
+            return _generationHistory
+                .Where(h => h.PeriodId == periodId)
+                .OrderByDescending(h => h.GeneratedAt)
+                .Select(h => new GenerationHistoryEntry
+                {
+                    Id = h.Id,
+                    PeriodId = h.PeriodId,
+                    GeneratedAt = h.GeneratedAt,
+                    GeneratedBy = h.GeneratedBy,
+                    GeneratedByName = h.GeneratedByName,
+                    GenerationNote = h.GenerationNote,
+                    Checksum = h.Checksum,
+                    VariantId = h.VariantId,
+                    VariantName = h.VariantName,
+                    Status = h.Status,
+                    SectionCount = h.SectionCount,
+                    DataPointCount = h.DataPointCount,
+                    EvidenceCount = h.EvidenceCount,
+                    SectionSnapshots = h.SectionSnapshots,
+                    MarkedFinalAt = h.MarkedFinalAt,
+                    MarkedFinalBy = h.MarkedFinalBy,
+                    MarkedFinalByName = h.MarkedFinalByName,
+                    Report = null // Don't include full report in list view
+                })
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get a specific generation by ID.
+    /// </summary>
+    public GenerationHistoryEntry? GetGeneration(string generationId)
+    {
+        lock (_lock)
+        {
+            return _generationHistory.FirstOrDefault(h => h.Id == generationId);
+        }
+    }
+    
+    /// <summary>
+    /// Mark a generation as final.
+    /// </summary>
+    public (bool IsSuccess, string? ErrorMessage, GenerationHistoryEntry? Entry) MarkGenerationAsFinal(MarkGenerationFinalRequest request)
+    {
+        lock (_lock)
+        {
+            var generation = _generationHistory.FirstOrDefault(h => h.Id == request.GenerationId);
+            if (generation == null)
+            {
+                return (false, $"Generation with ID '{request.GenerationId}' not found.", null);
+            }
+            
+            if (generation.Status == "final")
+            {
+                return (false, "This generation is already marked as final.", null);
+            }
+            
+            var markedAt = DateTime.UtcNow.ToString("O");
+            generation.Status = "final";
+            generation.MarkedFinalAt = markedAt;
+            generation.MarkedFinalBy = request.UserId;
+            generation.MarkedFinalByName = request.UserName;
+            
+            // Add audit log entry
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = markedAt,
+                UserId = request.UserId,
+                UserName = request.UserName,
+                Action = "mark-final",
+                EntityType = "generation",
+                EntityId = request.GenerationId,
+                ChangeNote = request.Note ?? "Marked generation as final"
+            };
+            _auditLog.Add(auditEntry);
+            
+            return (true, null, generation);
+        }
+    }
+    
+    /// <summary>
+    /// Compare two report generations.
+    /// </summary>
+    public (bool IsSuccess, string? ErrorMessage, GenerationComparison? Comparison) CompareGenerations(CompareGenerationsRequest request)
+    {
+        lock (_lock)
+        {
+            var gen1 = _generationHistory.FirstOrDefault(h => h.Id == request.Generation1Id);
+            if (gen1 == null)
+            {
+                return (false, $"Generation '{request.Generation1Id}' not found.", null);
+            }
+            
+            var gen2 = _generationHistory.FirstOrDefault(h => h.Id == request.Generation2Id);
+            if (gen2 == null)
+            {
+                return (false, $"Generation '{request.Generation2Id}' not found.", null);
+            }
+            
+            if (gen1.PeriodId != gen2.PeriodId)
+            {
+                return (false, "Cannot compare generations from different periods.", null);
+            }
+            
+            var period = _periods.FirstOrDefault(p => p.Id == gen1.PeriodId);
+            if (period == null)
+            {
+                return (false, "Period not found.", null);
+            }
+            
+            // Build section differences
+            var sectionDifferences = new List<GenerationSectionDifference>();
+            var changedDataSources = new List<string>();
+            
+            var sections1 = gen1.SectionSnapshots.ToDictionary(s => s.SectionId);
+            var sections2 = gen2.SectionSnapshots.ToDictionary(s => s.SectionId);
+            
+            var allSectionIds = sections1.Keys.Union(sections2.Keys).ToList();
+            
+            int totalSections = allSectionIds.Count;
+            int sectionsAdded = 0;
+            int sectionsRemoved = 0;
+            int sectionsModified = 0;
+            int sectionsUnchanged = 0;
+            
+            foreach (var sectionId in allSectionIds)
+            {
+                var inGen1 = sections1.ContainsKey(sectionId);
+                var inGen2 = sections2.ContainsKey(sectionId);
+                
+                if (!inGen1 && inGen2)
+                {
+                    // Section added
+                    sectionsAdded++;
+                    sectionDifferences.Add(new GenerationSectionDifference
+                    {
+                        SectionId = sectionId,
+                        SectionTitle = sections2[sectionId].SectionTitle,
+                        CatalogCode = sections2[sectionId].CatalogCode,
+                        DifferenceType = "added",
+                        DataPointCount1 = 0,
+                        DataPointCount2 = sections2[sectionId].DataPointCount,
+                        Changes = new List<string> { "Section added in generation 2" }
+                    });
+                    changedDataSources.Add(sections2[sectionId].SectionTitle);
+                }
+                else if (inGen1 && !inGen2)
+                {
+                    // Section removed
+                    sectionsRemoved++;
+                    sectionDifferences.Add(new GenerationSectionDifference
+                    {
+                        SectionId = sectionId,
+                        SectionTitle = sections1[sectionId].SectionTitle,
+                        CatalogCode = sections1[sectionId].CatalogCode,
+                        DifferenceType = "removed",
+                        DataPointCount1 = sections1[sectionId].DataPointCount,
+                        DataPointCount2 = 0,
+                        Changes = new List<string> { "Section removed in generation 2" }
+                    });
+                    changedDataSources.Add(sections1[sectionId].SectionTitle);
+                }
+                else
+                {
+                    // Section exists in both
+                    var section1 = sections1[sectionId];
+                    var section2 = sections2[sectionId];
+                    
+                    var changes = new List<string>();
+                    var isModified = false;
+                    
+                    if (section1.DataPointCount != section2.DataPointCount)
+                    {
+                        changes.Add($"Data point count changed from {section1.DataPointCount} to {section2.DataPointCount}");
+                        isModified = true;
+                    }
+                    
+                    if (section1.SectionTitle != section2.SectionTitle)
+                    {
+                        changes.Add($"Title changed from '{section1.SectionTitle}' to '{section2.SectionTitle}'");
+                        isModified = true;
+                    }
+                    
+                    if (isModified)
+                    {
+                        sectionsModified++;
+                        sectionDifferences.Add(new GenerationSectionDifference
+                        {
+                            SectionId = sectionId,
+                            SectionTitle = section2.SectionTitle,
+                            CatalogCode = section2.CatalogCode,
+                            DifferenceType = "modified",
+                            DataPointCount1 = section1.DataPointCount,
+                            DataPointCount2 = section2.DataPointCount,
+                            Changes = changes
+                        });
+                        changedDataSources.Add(section2.SectionTitle);
+                    }
+                    else
+                    {
+                        sectionsUnchanged++;
+                        sectionDifferences.Add(new GenerationSectionDifference
+                        {
+                            SectionId = sectionId,
+                            SectionTitle = section2.SectionTitle,
+                            CatalogCode = section2.CatalogCode,
+                            DifferenceType = "unchanged",
+                            DataPointCount1 = section1.DataPointCount,
+                            DataPointCount2 = section2.DataPointCount,
+                            Changes = new List<string>()
+                        });
+                    }
+                }
+            }
+            
+            var comparison = new GenerationComparison
+            {
+                Generation1 = gen1,
+                Generation2 = gen2,
+                Period = period,
+                ComparedAt = DateTime.UtcNow.ToString("O"),
+                ComparedBy = request.UserId,
+                SectionDifferences = sectionDifferences,
+                ChangedDataSources = changedDataSources,
+                Summary = new GenerationComparisonSummary
+                {
+                    TotalSections = totalSections,
+                    SectionsAdded = sectionsAdded,
+                    SectionsRemoved = sectionsRemoved,
+                    SectionsModified = sectionsModified,
+                    SectionsUnchanged = sectionsUnchanged,
+                    TotalDataPoints1 = gen1.DataPointCount,
+                    TotalDataPoints2 = gen2.DataPointCount
+                }
+            };
+            
+            return (true, null, comparison);
+        }
+    }
+    
+    /// <summary>
+    /// Record an export event.
+    /// </summary>
+    public void RecordExport(ExportHistoryEntry export)
+    {
+        lock (_lock)
+        {
+            _exportHistory.Add(export);
+            
+            // Add audit log entry
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = export.ExportedAt,
+                UserId = export.ExportedBy,
+                UserName = export.ExportedByName,
+                Action = "export",
+                EntityType = "report",
+                EntityId = export.GenerationId,
+                ChangeNote = $"Exported report as {export.Format.ToUpper()} - {export.FileName}"
+            };
+            _auditLog.Add(auditEntry);
+        }
+    }
+    
+    /// <summary>
+    /// Get export history for a specific reporting period.
+    /// </summary>
+    public IReadOnlyList<ExportHistoryEntry> GetExportHistory(string periodId)
+    {
+        lock (_lock)
+        {
+            return _exportHistory
+                .Where(e => e.PeriodId == periodId)
+                .OrderByDescending(e => e.ExportedAt)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get export history for a specific generation.
+    /// </summary>
+    public IReadOnlyList<ExportHistoryEntry> GetExportHistoryForGeneration(string generationId)
+    {
+        lock (_lock)
+        {
+            return _exportHistory
+                .Where(e => e.GenerationId == generationId)
+                .OrderByDescending(e => e.ExportedAt)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Record a download of an export.
+    /// </summary>
+    public void RecordExportDownload(string exportId)
+    {
+        lock (_lock)
+        {
+            var export = _exportHistory.FirstOrDefault(e => e.Id == exportId);
+            if (export != null)
+            {
+                export.DownloadCount++;
+                export.LastDownloadedAt = DateTime.UtcNow.ToString("O");
+            }
         }
     }
     
