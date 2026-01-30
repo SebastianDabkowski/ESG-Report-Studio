@@ -9964,15 +9964,18 @@ public sealed class InMemoryReportStore
     /// </summary>
     private DataTypeRolloverRuleType GetEffectiveRolloverRule(
         string dataType, 
-        List<RolloverRuleOverride> overrides)
+        List<RolloverRuleOverride>? overrides)
     {
         // Check for override first
-        var override_ = overrides.FirstOrDefault(o => 
-            o.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
-        
-        if (override_ != null)
+        if (overrides != null)
         {
-            return override_.RuleType;
+            var override_ = overrides.FirstOrDefault(o => 
+                o.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase));
+            
+            if (override_ != null)
+            {
+                return override_.RuleType;
+            }
         }
         
         // Check for configured rule
@@ -10001,10 +10004,11 @@ public sealed class InMemoryReportStore
                 throw new ArgumentException("DataType is required");
             }
             
-            // Parse rule type
-            if (!Enum.TryParse<DataTypeRolloverRuleType>(request.RuleType, true, out var ruleType))
+            // Normalize and parse rule type (handle both "copy-as-draft" and "CopyAsDraft")
+            var normalizedRuleType = request.RuleType.Replace("-", "").Replace("_", "");
+            if (!Enum.TryParse<DataTypeRolloverRuleType>(normalizedRuleType, true, out var ruleType))
             {
-                throw new ArgumentException($"Invalid RuleType: {request.RuleType}. Valid values are: Copy, Reset, CopyAsDraft");
+                throw new ArgumentException($"Invalid RuleType: {request.RuleType}. Valid values are: Copy, Reset, CopyAsDraft (or copy-as-draft)");
             }
             
             // Get user for audit trail
