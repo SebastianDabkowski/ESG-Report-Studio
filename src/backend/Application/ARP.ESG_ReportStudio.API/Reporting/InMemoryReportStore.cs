@@ -12889,4 +12889,415 @@ public sealed class InMemoryReportStore
     }
     
     #endregion
+    
+    #region Year-over-Year Annex Export
+    
+    private readonly List<YoYAnnexExportRecord> _yoyAnnexExports = new();
+    
+    /// <summary>
+    /// Generates a year-over-year annex export for auditors.
+    /// Includes metric deltas, variance explanations, narrative diffs, and evidence references.
+    /// Filters confidential items based on user role.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ExportYoYAnnexResult? Result) GenerateYoYAnnex(ExportYoYAnnexRequest request)
+    {
+        // Validate request
+        if (string.IsNullOrWhiteSpace(request.CurrentPeriodId))
+            return (false, "CurrentPeriodId is required.", null);
+        
+        if (string.IsNullOrWhiteSpace(request.PriorPeriodId))
+            return (false, "PriorPeriodId is required.", null);
+        
+        if (string.IsNullOrWhiteSpace(request.ExportedBy))
+            return (false, "ExportedBy is required.", null);
+        
+        // Validate periods exist
+        var currentPeriod = _periods.FirstOrDefault(p => p.Id == request.CurrentPeriodId);
+        if (currentPeriod == null)
+            return (false, $"Current period with ID '{request.CurrentPeriodId}' not found.", null);
+        
+        var priorPeriod = _periods.FirstOrDefault(p => p.Id == request.PriorPeriodId);
+        if (priorPeriod == null)
+            return (false, $"Prior period with ID '{request.PriorPeriodId}' not found.", null);
+        
+        // Build contents
+        var contents = BuildYoYAnnexContents(request);
+        if (contents == null)
+            return (false, "Failed to build YoY annex contents.", null);
+        
+        // Generate export ID and metadata
+        var exportId = Guid.NewGuid().ToString();
+        var exportedAt = DateTime.UtcNow.ToString("O");
+        var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+        var exportedByName = user?.Name ?? request.ExportedBy;
+        
+        // Create result
+        var result = new ExportYoYAnnexResult
+        {
+            ExportId = exportId,
+            ExportedAt = exportedAt,
+            ExportedBy = request.ExportedBy,
+            ExportedByName = exportedByName,
+            Checksum = string.Empty, // Will be calculated by controller after ZIP creation
+            PackageSize = 0, // Will be set by controller after ZIP creation
+            Summary = contents.Summary
+        };
+        
+        return (true, null, result);
+    }
+    
+    /// <summary>
+    /// Builds the complete contents of a YoY annex package.
+    /// </summary>
+    public YoYAnnexContents? BuildYoYAnnexContents(ExportYoYAnnexRequest request)
+    {
+        var currentPeriod = _periods.FirstOrDefault(p => p.Id == request.CurrentPeriodId);
+        var priorPeriod = _periods.FirstOrDefault(p => p.Id == request.PriorPeriodId);
+        
+        if (currentPeriod == null || priorPeriod == null)
+            return null;
+        
+        var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+        var userRole = user?.Role ?? "contributor";
+        
+        // Get sections to include
+        var sectionsQuery = _sections.Where(s => s.PeriodId == request.CurrentPeriodId);
+        if (request.SectionIds.Any())
+        {
+            sectionsQuery = sectionsQuery.Where(s => request.SectionIds.Contains(s.Id));
+        }
+        var sections = sectionsQuery.ToList();
+        
+        // Build YoY section data with metric comparisons
+        var yoySections = new List<YoYAnnexSectionData>();
+        var allVarianceExplanations = new List<VarianceExplanation>();
+        var allEvidenceReferences = new List<EvidenceReference>();
+        var allNarrativeDiffs = new List<NarrativeDiffSummary>();
+        var exclusionNotes = new List<string>();
+        int totalMetricRows = 0;
+        int confidentialItemsExcluded = 0;
+        
+        foreach (var section in sections)
+        {
+            var ownerUser = _users.FirstOrDefault(u => u.Id == section.OwnerId);
+            var sectionData = new YoYAnnexSectionData
+            {
+                SectionId = section.Id,
+                Title = section.Title,
+                Category = section.Category,
+                OwnerName = ownerUser?.Name ?? section.OwnerId,
+                Metrics = new List<YoYMetricRow>()
+            };
+            
+            // Get data points for this section in current period
+            var currentDataPoints = _dataPoints.Where(dp => dp.SectionId == section.Id).ToList();
+            
+            foreach (var currentDp in currentDataPoints)
+            {
+                // Skip confidential items for restricted users
+                if (userRole == "contributor" && IsConfidentialDataPoint(currentDp))
+                {
+                    confidentialItemsExcluded++;
+                    continue;
+                }
+                
+                // Find prior period data point via rollover lineage
+                DataPoint? priorDp = null;
+                if (!string.IsNullOrEmpty(currentDp.SourceDataPointId))
+                {
+                    priorDp = _dataPoints.FirstOrDefault(dp => dp.Id == currentDp.SourceDataPointId);
+                }
+                else
+                {
+                    // Try to find by matching section and title in prior period
+                    var priorSection = _sections.FirstOrDefault(s => 
+                        s.PeriodId == request.PriorPeriodId && 
+                        s.CatalogCode == section.CatalogCode);
+                    if (priorSection != null)
+                    {
+                        priorDp = _dataPoints.FirstOrDefault(dp => 
+                            dp.SectionId == priorSection.Id && 
+                            dp.Title == currentDp.Title);
+                    }
+                }
+                
+                // Calculate deltas
+                decimal? percentageChange = null;
+                decimal? absoluteChange = null;
+                
+                if (priorDp != null && 
+                    decimal.TryParse(currentDp.Value, out var currentVal) && 
+                    decimal.TryParse(priorDp.Value, out var priorVal))
+                {
+                    absoluteChange = currentVal - priorVal;
+                    if (priorVal != 0)
+                    {
+                        percentageChange = (absoluteChange.Value / priorVal) * 100;
+                    }
+                }
+                
+                // Get variance explanation if exists
+                var varianceExplanation = _varianceExplanations.FirstOrDefault(ve => 
+                    ve.DataPointId == currentDp.Id && 
+                    ve.PriorPeriodId == request.PriorPeriodId);
+                
+                string? varianceExplanationId = null;
+                string? varianceExplanationSummary = null;
+                bool hasVarianceFlag = false;
+                
+                if (varianceExplanation != null)
+                {
+                    varianceExplanationId = varianceExplanation.Id;
+                    varianceExplanationSummary = varianceExplanation.Explanation;
+                    hasVarianceFlag = varianceExplanation.Status != "approved";
+                    
+                    if (request.IncludeVarianceExplanations && !allVarianceExplanations.Any(ve => ve.Id == varianceExplanation.Id))
+                    {
+                        allVarianceExplanations.Add(varianceExplanation);
+                    }
+                }
+                
+                // Check if variance threshold is exceeded
+                if (currentPeriod.VarianceThresholdConfig != null && percentageChange.HasValue)
+                {
+                    var config = currentPeriod.VarianceThresholdConfig;
+                    bool exceedsThreshold = false;
+                    
+                    if (config.RequireBothThresholds)
+                    {
+                        exceedsThreshold = 
+                            (config.PercentageThreshold.HasValue && Math.Abs(percentageChange.Value) >= config.PercentageThreshold.Value) &&
+                            (config.AbsoluteThreshold.HasValue && absoluteChange.HasValue && Math.Abs(absoluteChange.Value) >= config.AbsoluteThreshold.Value);
+                    }
+                    else
+                    {
+                        exceedsThreshold = 
+                            (config.PercentageThreshold.HasValue && Math.Abs(percentageChange.Value) >= config.PercentageThreshold.Value) ||
+                            (config.AbsoluteThreshold.HasValue && absoluteChange.HasValue && Math.Abs(absoluteChange.Value) >= config.AbsoluteThreshold.Value);
+                    }
+                    
+                    if (exceedsThreshold && varianceExplanation == null)
+                    {
+                        hasVarianceFlag = true;
+                    }
+                }
+                
+                // Get evidence counts
+                var currentEvidence = _evidence.Where(e => 
+                    e.LinkedDataPoints.Contains(currentDp.Id)).ToList();
+                var priorEvidence = priorDp != null 
+                    ? _evidence.Where(e => e.LinkedDataPoints.Contains(priorDp.Id)).ToList() 
+                    : new List<Evidence>();
+                
+                // Add evidence references if requested
+                if (request.IncludeEvidenceReferences)
+                {
+                    foreach (var evidence in currentEvidence)
+                    {
+                        // Skip confidential evidence for restricted users
+                        if (userRole == "contributor" && IsConfidentialEvidence(evidence))
+                        {
+                            confidentialItemsExcluded++;
+                            continue;
+                        }
+                        
+                        if (!allEvidenceReferences.Any(er => er.Id == evidence.Id))
+                        {
+                            allEvidenceReferences.Add(new EvidenceReference
+                            {
+                                Id = evidence.Id,
+                                FileName = evidence.FileName,
+                                FileUrl = evidence.FileUrl,
+                                FileSize = null,
+                                Checksum = evidence.Checksum,
+                                ContentType = null,
+                                IntegrityStatus = evidence.IntegrityStatus,
+                                SectionId = evidence.SectionId,
+                                UploadedBy = evidence.UploadedBy,
+                                UploadedAt = evidence.UploadedAt,
+                                LinkedDataPointIds = evidence.LinkedDataPoints
+                            });
+                        }
+                    }
+                }
+                
+                // Add narrative diff summary if requested and data point is narrative type
+                if (request.IncludeNarrativeDiffs && currentDp.Type == "narrative")
+                {
+                    var (success, _, diffResponse) = CompareTextDisclosures(currentDp.Id, request.PriorPeriodId, "word");
+                    if (success && diffResponse != null && diffResponse.Summary.HasChanges)
+                    {
+                        allNarrativeDiffs.Add(new NarrativeDiffSummary
+                        {
+                            DataPointId = currentDp.Id,
+                            Title = currentDp.Title,
+                            AddedSegments = diffResponse.Summary.AddedSegments,
+                            RemovedSegments = diffResponse.Summary.RemovedSegments,
+                            UnchangedSegments = diffResponse.Summary.UnchangedSegments,
+                            TotalSegments = diffResponse.Summary.TotalSegments,
+                            HasChanges = diffResponse.Summary.HasChanges,
+                            ChangeDescription = $"{diffResponse.Summary.AddedSegments} segments added, {diffResponse.Summary.RemovedSegments} removed"
+                        });
+                    }
+                }
+                
+                // Create metric row
+                var metricRow = new YoYMetricRow
+                {
+                    DataPointId = currentDp.Id,
+                    MetricTitle = currentDp.Title,
+                    CurrentValue = currentDp.Value ?? string.Empty,
+                    PriorValue = priorDp?.Value ?? string.Empty,
+                    Unit = currentDp.Unit,
+                    PercentageChange = percentageChange,
+                    AbsoluteChange = absoluteChange,
+                    VarianceExplanationId = varianceExplanationId,
+                    VarianceExplanationSummary = varianceExplanationSummary,
+                    HasVarianceFlag = hasVarianceFlag,
+                    CurrentEvidenceCount = currentEvidence.Count,
+                    PriorEvidenceCount = priorEvidence.Count,
+                    OwnerName = ownerUser?.Name ?? currentDp.OwnerId,
+                    InformationType = currentDp.InformationType
+                };
+                
+                sectionData.Metrics.Add(metricRow);
+                totalMetricRows++;
+            }
+            
+            yoySections.Add(sectionData);
+        }
+        
+        // Add exclusion notes if items were filtered
+        if (confidentialItemsExcluded > 0)
+        {
+            exclusionNotes.Add($"{confidentialItemsExcluded} confidential items were excluded based on user access rights.");
+        }
+        
+        // Build metadata
+        var exportedAt = DateTime.UtcNow.ToString("O");
+        var exportUser = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+        
+        var metadata = new ExportMetadata
+        {
+            ExportId = Guid.NewGuid().ToString(),
+            ExportedAt = exportedAt,
+            ExportedBy = request.ExportedBy,
+            ExportedByName = exportUser?.Name ?? request.ExportedBy,
+            Version = "1.0",
+            ExportNote = request.ExportNote
+        };
+        
+        // Build summary
+        var summary = new YoYAnnexSummary
+        {
+            CurrentPeriodId = currentPeriod.Id,
+            CurrentPeriodName = currentPeriod.Name,
+            PriorPeriodId = priorPeriod.Id,
+            PriorPeriodName = priorPeriod.Name,
+            SectionCount = yoySections.Count,
+            MetricRowCount = totalMetricRows,
+            NarrativeComparisonCount = allNarrativeDiffs.Count,
+            VarianceExplanationCount = allVarianceExplanations.Count,
+            EvidenceReferenceCount = allEvidenceReferences.Count,
+            ConfidentialItemsExcluded = confidentialItemsExcluded
+        };
+        
+        // Build complete contents
+        var contents = new YoYAnnexContents
+        {
+            Metadata = metadata,
+            CurrentPeriod = currentPeriod,
+            PriorPeriod = priorPeriod,
+            Sections = yoySections,
+            VarianceExplanations = allVarianceExplanations,
+            EvidenceReferences = allEvidenceReferences,
+            NarrativeDiffs = allNarrativeDiffs,
+            Summary = summary,
+            ExclusionNotes = exclusionNotes
+        };
+        
+        return contents;
+    }
+    
+    /// <summary>
+    /// Records a YoY annex export for audit purposes.
+    /// </summary>
+    public void RecordYoYAnnexExport(ExportYoYAnnexRequest request, string checksum, long packageSize)
+    {
+        var currentPeriod = _periods.FirstOrDefault(p => p.Id == request.CurrentPeriodId);
+        var priorPeriod = _periods.FirstOrDefault(p => p.Id == request.PriorPeriodId);
+        var user = _users.FirstOrDefault(u => u.Id == request.ExportedBy);
+        
+        var contents = BuildYoYAnnexContents(request);
+        
+        var record = new YoYAnnexExportRecord
+        {
+            Id = Guid.NewGuid().ToString(),
+            CurrentPeriodId = request.CurrentPeriodId,
+            CurrentPeriodName = currentPeriod?.Name ?? string.Empty,
+            PriorPeriodId = request.PriorPeriodId,
+            PriorPeriodName = priorPeriod?.Name ?? string.Empty,
+            SectionIds = request.SectionIds,
+            ExportedAt = DateTime.UtcNow.ToString("O"),
+            ExportedBy = request.ExportedBy,
+            ExportedByName = user?.Name ?? request.ExportedBy,
+            ExportNote = request.ExportNote,
+            Checksum = checksum,
+            PackageSize = packageSize,
+            MetricRowCount = contents?.Summary.MetricRowCount ?? 0,
+            VarianceExplanationCount = contents?.Summary.VarianceExplanationCount ?? 0,
+            EvidenceReferenceCount = contents?.Summary.EvidenceReferenceCount ?? 0
+        };
+        
+        _yoyAnnexExports.Add(record);
+        
+        // Log to audit trail
+        var auditEntry = new AuditLogEntry
+        {
+            Id = Guid.NewGuid().ToString(),
+            Timestamp = DateTime.UtcNow.ToString("O"),
+            UserId = request.ExportedBy,
+            UserName = user?.Name ?? request.ExportedBy,
+            Action = "yoy-annex-exported",
+            EntityType = "yoy-annex",
+            EntityId = record.Id,
+            ChangeNote = $"Exported YoY annex: {priorPeriod?.Name} → {currentPeriod?.Name}. Metric rows: {record.MetricRowCount}, Variance explanations: {record.VarianceExplanationCount}, Evidence references: {record.EvidenceReferenceCount}, Package size: {packageSize} bytes, Checksum: {checksum}",
+            Changes = new List<FieldChange>()
+        };
+        
+        _auditLog.Add(auditEntry);
+    }
+    
+    /// <summary>
+    /// Gets all YoY annex export records for a specific current period.
+    /// </summary>
+    public IReadOnlyList<YoYAnnexExportRecord> GetYoYAnnexExports(string currentPeriodId)
+    {
+        return _yoyAnnexExports
+            .Where(e => e.CurrentPeriodId == currentPeriodId)
+            .OrderByDescending(e => e.ExportedAt)
+            .ToList();
+    }
+    
+    /// <summary>
+    /// Checks if a data point contains confidential information.
+    /// </summary>
+    private bool IsConfidentialDataPoint(DataPoint dataPoint)
+    {
+        // Add logic to determine confidentiality
+        // For now, use a simple heuristic: data points with "confidential" in title or marked with specific tags
+        return dataPoint.Title?.Contains("confidential", StringComparison.OrdinalIgnoreCase) == true;
+    }
+    
+    /// <summary>
+    /// Checks if evidence contains confidential information.
+    /// </summary>
+    private bool IsConfidentialEvidence(Evidence evidence)
+    {
+        // Add logic to determine confidentiality
+        // For now, use a simple heuristic: evidence with "confidential" in title
+        return evidence.Title?.Contains("confidential", StringComparison.OrdinalIgnoreCase) == true;
+    }
+    
+    #endregion
 }

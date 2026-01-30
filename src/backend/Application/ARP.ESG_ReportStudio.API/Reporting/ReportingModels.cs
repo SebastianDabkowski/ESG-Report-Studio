@@ -5970,3 +5970,170 @@ public sealed class OutstandingActionsSummary
     public int BlockedDataPoints { get; set; }
     public int PendingApprovals { get; set; }
 }
+
+// ============================================================================
+// Year-over-Year Annex Export Models
+// ============================================================================
+
+/// <summary>
+/// Request to export a year-over-year annex for auditors.
+/// </summary>
+public sealed class ExportYoYAnnexRequest
+{
+    /// <summary>
+    /// ID of the current (more recent) reporting period.
+    /// </summary>
+    public string CurrentPeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the prior reporting period to compare against.
+    /// </summary>
+    public string PriorPeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional list of section IDs to include. If empty, includes all sections.
+    /// </summary>
+    public List<string> SectionIds { get; set; } = new();
+    
+    /// <summary>
+    /// Include variance explanations in the export.
+    /// </summary>
+    public bool IncludeVarianceExplanations { get; set; } = true;
+    
+    /// <summary>
+    /// Include evidence references according to user's access rights.
+    /// </summary>
+    public bool IncludeEvidenceReferences { get; set; } = true;
+    
+    /// <summary>
+    /// Include narrative text diffs summary.
+    /// </summary>
+    public bool IncludeNarrativeDiffs { get; set; } = true;
+    
+    /// <summary>
+    /// User ID who is exporting the annex.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note about the export purpose.
+    /// </summary>
+    public string? ExportNote { get; set; }
+}
+
+/// <summary>
+/// Result of a YoY annex export operation (metadata only).
+/// </summary>
+public sealed class ExportYoYAnnexResult
+{
+    public string ExportId { get; set; } = string.Empty;
+    public string ExportedAt { get; set; } = string.Empty;
+    public string ExportedBy { get; set; } = string.Empty;
+    public string ExportedByName { get; set; } = string.Empty;
+    public string Checksum { get; set; } = string.Empty;
+    public long PackageSize { get; set; }
+    public YoYAnnexSummary Summary { get; set; } = new();
+}
+
+/// <summary>
+/// Summary statistics for a YoY annex export.
+/// </summary>
+public sealed class YoYAnnexSummary
+{
+    public string CurrentPeriodId { get; set; } = string.Empty;
+    public string CurrentPeriodName { get; set; } = string.Empty;
+    public string PriorPeriodId { get; set; } = string.Empty;
+    public string PriorPeriodName { get; set; } = string.Empty;
+    public int SectionCount { get; set; }
+    public int MetricRowCount { get; set; }
+    public int NarrativeComparisonCount { get; set; }
+    public int VarianceExplanationCount { get; set; }
+    public int EvidenceReferenceCount { get; set; }
+    public int ConfidentialItemsExcluded { get; set; }
+}
+
+/// <summary>
+/// Complete contents of a YoY annex package.
+/// </summary>
+public sealed class YoYAnnexContents
+{
+    public ExportMetadata Metadata { get; set; } = new();
+    public ReportingPeriod CurrentPeriod { get; set; } = new();
+    public ReportingPeriod PriorPeriod { get; set; } = new();
+    public List<YoYAnnexSectionData> Sections { get; set; } = new();
+    public List<VarianceExplanation> VarianceExplanations { get; set; } = new();
+    public List<EvidenceReference> EvidenceReferences { get; set; } = new();
+    public List<NarrativeDiffSummary> NarrativeDiffs { get; set; } = new();
+    public YoYAnnexSummary Summary { get; set; } = new();
+    public List<string> ExclusionNotes { get; set; } = new();
+}
+
+/// <summary>
+/// Section-level data for YoY annex with metric comparisons.
+/// </summary>
+public sealed class YoYAnnexSectionData
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public string OwnerName { get; set; } = string.Empty;
+    public List<YoYMetricRow> Metrics { get; set; } = new();
+}
+
+/// <summary>
+/// Single metric row with current/prior values and variance info.
+/// </summary>
+public sealed class YoYMetricRow
+{
+    public string DataPointId { get; set; } = string.Empty;
+    public string MetricTitle { get; set; } = string.Empty;
+    public string CurrentValue { get; set; } = string.Empty;
+    public string PriorValue { get; set; } = string.Empty;
+    public string? Unit { get; set; }
+    public decimal? PercentageChange { get; set; }
+    public decimal? AbsoluteChange { get; set; }
+    public string? VarianceExplanationId { get; set; }
+    public string? VarianceExplanationSummary { get; set; }
+    public bool HasVarianceFlag { get; set; }
+    public int CurrentEvidenceCount { get; set; }
+    public int PriorEvidenceCount { get; set; }
+    public string OwnerName { get; set; } = string.Empty;
+    public string InformationType { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Summary of narrative text differences between periods.
+/// </summary>
+public sealed class NarrativeDiffSummary
+{
+    public string DataPointId { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public int AddedSegments { get; set; }
+    public int RemovedSegments { get; set; }
+    public int UnchangedSegments { get; set; }
+    public int TotalSegments { get; set; }
+    public bool HasChanges { get; set; }
+    public string ChangeDescription { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Record of a YoY annex export for tracking/audit purposes.
+/// </summary>
+public sealed class YoYAnnexExportRecord
+{
+    public string Id { get; set; } = string.Empty;
+    public string CurrentPeriodId { get; set; } = string.Empty;
+    public string CurrentPeriodName { get; set; } = string.Empty;
+    public string PriorPeriodId { get; set; } = string.Empty;
+    public string PriorPeriodName { get; set; } = string.Empty;
+    public List<string> SectionIds { get; set; } = new();
+    public string ExportedAt { get; set; } = string.Empty;
+    public string ExportedBy { get; set; } = string.Empty;
+    public string ExportedByName { get; set; } = string.Empty;
+    public string? ExportNote { get; set; }
+    public string Checksum { get; set; } = string.Empty;
+    public long PackageSize { get; set; }
+    public int MetricRowCount { get; set; }
+    public int VarianceExplanationCount { get; set; }
+    public int EvidenceReferenceCount { get; set; }
+}
