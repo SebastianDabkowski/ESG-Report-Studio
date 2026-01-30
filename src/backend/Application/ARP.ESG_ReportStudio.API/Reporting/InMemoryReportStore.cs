@@ -9669,6 +9669,9 @@ public sealed class InMemoryReportStore
                 }
             }
             
+            // Dictionary to map source gap IDs to target gap IDs
+            var gapIdMapping = new Dictionary<string, string>();
+            
             // Copy disclosures (gaps, assumptions, remediation plans)
             if (request.Options.CopyDisclosures && request.Options.CopyStructure)
             {
@@ -9679,9 +9682,12 @@ public sealed class InMemoryReportStore
                 
                 foreach (var sourceGap in sourceGaps)
                 {
+                    var targetGapId = Guid.NewGuid().ToString();
+                    gapIdMapping[sourceGap.Id] = targetGapId;
+                    
                     var targetGap = new Gap
                     {
-                        Id = Guid.NewGuid().ToString(),
+                        Id = targetGapId,
                         SectionId = sectionIdMapping[sourceGap.SectionId],
                         Title = sourceGap.Title,
                         Description = $"[Carried forward from previous period] {sourceGap.Description}",
@@ -9710,7 +9716,7 @@ public sealed class InMemoryReportStore
                             ? dataPointIdMapping[sourceAssumption.DataPointId]
                             : null,
                         Title = sourceAssumption.Title,
-                        Description = sourceAssumption.Description,
+                        Description = $"[Carried forward from previous period] {sourceAssumption.Description}",
                         Scope = sourceAssumption.Scope,
                         Methodology = sourceAssumption.Methodology,
                         Rationale = sourceAssumption.Rationale,
@@ -9730,12 +9736,8 @@ public sealed class InMemoryReportStore
                         DateTime.TryParse(request.TargetPeriodStartDate, out var periodStart) &&
                         validityEnd < periodStart)
                     {
-                        targetAssumption.Description = $"[Carried forward from previous period] ⚠️ WARNING: This assumption expired on {sourceAssumption.ValidityEndDate}. Please review and update before use. {sourceAssumption.Description}";
-                        targetAssumption.Limitations = $"[EXPIRED - Requires Review] {sourceAssumption.Limitations}";
-                    }
-                    else
-                    {
-                        targetAssumption.Description = $"[Carried forward from previous period] {sourceAssumption.Description}";
+                        targetAssumption.Description = $"{targetAssumption.Description}\n\n⚠️ WARNING: This assumption expired on {sourceAssumption.ValidityEndDate}. Please review and update before use.";
+                        targetAssumption.Limitations = $"[EXPIRED - Requires Review] {targetAssumption.Limitations}";
                     }
                     
                     _assumptions.Add(targetAssumption);
@@ -9759,7 +9761,9 @@ public sealed class InMemoryReportStore
                     {
                         Id = targetRPId,
                         SectionId = sectionIdMapping[sourceRP.SectionId],
-                        GapId = sourceRP.GapId, // Note: Gap IDs won't match since new gaps are created
+                        GapId = sourceRP.GapId != null && gapIdMapping.ContainsKey(sourceRP.GapId)
+                            ? gapIdMapping[sourceRP.GapId]
+                            : null,
                         Title = sourceRP.Title,
                         Description = $"[Carried forward from previous period] {sourceRP.Description}",
                         OwnerId = sourceRP.OwnerId,
