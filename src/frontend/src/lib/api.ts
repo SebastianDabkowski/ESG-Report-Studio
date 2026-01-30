@@ -18,7 +18,8 @@ import type {
   DataTypeRolloverRule,
   SaveDataTypeRolloverRuleRequest,
   RolloverRuleHistory,
-  MetricComparisonResponse
+  MetricComparisonResponse,
+  TextDisclosureComparisonResponse
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1077,4 +1078,19 @@ export async function getRolloverRuleHistory(dataType: string): Promise<Rollover
 export async function compareMetrics(dataPointId: string, priorPeriodId?: string): Promise<MetricComparisonResponse> {
   const params = priorPeriodId ? `?priorPeriodId=${encodeURIComponent(priorPeriodId)}` : ''
   return requestJson<MetricComparisonResponse>(`data-points/${dataPointId}/compare-periods${params}`)
+}
+
+export async function compareTextDisclosures(
+  dataPointId: string, 
+  previousPeriodId?: string,
+  granularity: 'word' | 'sentence' = 'word'
+): Promise<TextDisclosureComparisonResponse> {
+  const params = new URLSearchParams()
+  if (previousPeriodId) {
+    params.append('previousPeriodId', previousPeriodId)
+  }
+  params.append('granularity', granularity)
+  
+  const queryString = params.toString()
+  return requestJson<TextDisclosureComparisonResponse>(`data-points/${dataPointId}/compare-text${queryString ? '?' + queryString : ''}`)
 }

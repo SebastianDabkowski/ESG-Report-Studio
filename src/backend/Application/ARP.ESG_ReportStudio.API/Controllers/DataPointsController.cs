@@ -312,4 +312,33 @@ public sealed class DataPointsController : ControllerBase
         
         return Ok(comparison);
     }
+
+    /// <summary>
+    /// Compares narrative text disclosures between reporting periods to show year-over-year changes.
+    /// Supports word-level and sentence-level diffs with draft copy detection.
+    /// </summary>
+    /// <param name="id">Current data point ID</param>
+    /// <param name="previousPeriodId">Optional ID of the previous period to compare against. If not provided, uses rollover lineage.</param>
+    /// <param name="granularity">Diff granularity: "word" or "sentence". Defaults to "word".</param>
+    /// <returns>Text disclosure comparison response with highlighted changes</returns>
+    [HttpGet("{id}/compare-text")]
+    public ActionResult<TextDisclosureComparisonResponse> CompareTextDisclosures(
+        string id, 
+        [FromQuery] string? previousPeriodId = null,
+        [FromQuery] string granularity = "word")
+    {
+        if (granularity != "word" && granularity != "sentence")
+        {
+            return BadRequest(new { error = "Granularity must be 'word' or 'sentence'." });
+        }
+
+        var (success, errorMessage, response) = _store.CompareTextDisclosures(id, previousPeriodId, granularity);
+        
+        if (!success)
+        {
+            return NotFound(new { error = errorMessage });
+        }
+        
+        return Ok(response);
+    }
 }

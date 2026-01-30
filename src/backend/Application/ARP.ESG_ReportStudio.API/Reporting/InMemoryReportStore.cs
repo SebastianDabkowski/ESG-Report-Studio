@@ -1,11 +1,13 @@
 using System.Security.Cryptography;
 using System.Text;
+using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Reporting;
 
 public sealed class InMemoryReportStore
 {
     private readonly object _lock = new();
+    private readonly TextDiffService _textDiffService;
     private Organization? _organization;
     private readonly List<ReportingPeriod> _periods = new();
     private readonly List<ReportSection> _sections = new();
@@ -104,8 +106,14 @@ public sealed class InMemoryReportStore
 
     private readonly IReadOnlyList<SectionTemplate> _extendedTemplates;
 
-    public InMemoryReportStore()
+    public InMemoryReportStore() : this(new TextDiffService())
     {
+    }
+    
+    public InMemoryReportStore(TextDiffService textDiffService)
+    {
+        _textDiffService = textDiffService;
+        
         var extended = new List<SectionTemplate>(_simplifiedTemplates)
         {
             new("Water & Biodiversity", "environmental", "Water usage, water quality, biodiversity impact"),
@@ -10735,6 +10743,213 @@ public sealed class InMemoryReportStore
                 .Where(h => h.DataType.Equals(dataType, StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(h => h.ChangedAt)
                 .ToList();
+        }
+    }
+    
+    #endregion
+    
+    #region Text Disclosure Comparison
+    
+    /// <summary>
+    /// Compares narrative text content between a current data point and its previous period version.
+    /// Supports draft copy detection - shows no changes if the data point was copied and not yet edited.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, TextDisclosureComparisonResponse? Response) 
+        CompareTextDisclosures(string currentDataPointId, string? previousPeriodId = null, string granularity = "word")
+    {
+        lock (_lock)
+        {
+            // Get current data point
+            var currentDataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == currentDataPointId);
+            if (currentDataPoint == null)
+            {
+                return (false, $"Data point with ID '{currentDataPointId}' not found.", null);
+            }
+            
+            // Get current period
+            var currentSection = _sections.FirstOrDefault(s => s.Id == currentDataPoint.SectionId);
+            if (currentSection == null)
+            {
+                return (false, "Current section not found.", null);
+            }
+            
+            var currentPeriod = _periods.FirstOrDefault(p => p.Id == currentSection.PeriodId);
+            if (currentPeriod == null)
+            {
+                return (false, "Current period not found.", null);
+            }
+            
+            // Determine previous data point
+            DataPoint? previousDataPoint = null;
+            ReportingPeriod? previousPeriod = null;
+            
+            if (!string.IsNullOrEmpty(previousPeriodId))
+            {
+                // User explicitly specified a previous period
+                previousPeriod = _periods.FirstOrDefault(p => p.Id == previousPeriodId);
+                if (previousPeriod == null)
+                {
+                    return (false, $"Previous period with ID '{previousPeriodId}' not found.", null);
+                }
+                
+                // Find matching data point in previous period by section catalog code and title
+                var previousSection = _sections.FirstOrDefault(s => 
+                    s.PeriodId == previousPeriodId && 
+                    s.CatalogCode == currentSection.CatalogCode);
+                    
+                if (previousSection != null)
+                {
+                    previousDataPoint = _dataPoints.FirstOrDefault(dp => 
+                        dp.SectionId == previousSection.Id && 
+                        dp.Title == currentDataPoint.Title);
+                }
+            }
+            else if (!string.IsNullOrEmpty(currentDataPoint.SourceDataPointId))
+            {
+                // Use rollover lineage to find previous version
+                previousDataPoint = _dataPoints.FirstOrDefault(dp => dp.Id == currentDataPoint.SourceDataPointId);
+                if (previousDataPoint != null)
+                {
+                    var previousSection = _sections.FirstOrDefault(s => s.Id == previousDataPoint.SectionId);
+                    if (previousSection != null)
+                    {
+                        previousPeriod = _periods.FirstOrDefault(p => p.Id == previousSection.PeriodId);
+                    }
+                }
+            }
+            
+            // Check if this is a draft copy (rolled over but not yet edited)
+            // A true draft copy must have rollover lineage AND draft status
+            bool isDraftCopy = !string.IsNullOrEmpty(currentDataPoint.SourceDataPointId) && 
+                              currentDataPoint.ReviewStatus == "draft" &&
+                              !string.IsNullOrEmpty(currentDataPoint.RolloverTimestamp);
+                              
+            bool hasBeenEdited = false;
+            
+            if (isDraftCopy && previousDataPoint != null)
+            {
+                // Check if content has been edited since rollover
+                // For narrative disclosures, compare the Content field (primary narrative text)
+                // and Title to determine if editing occurred
+                hasBeenEdited = currentDataPoint.Content != previousDataPoint.Content ||
+                               currentDataPoint.Title != previousDataPoint.Title;
+            }
+            
+            var response = new TextDisclosureComparisonResponse
+            {
+                CurrentDataPoint = new DataPointInfo
+                {
+                    Id = currentDataPoint.Id,
+                    PeriodId = currentPeriod.Id,
+                    PeriodName = currentPeriod.Name,
+                    Title = currentDataPoint.Title,
+                    Content = currentDataPoint.Content,
+                    ReviewStatus = currentDataPoint.ReviewStatus,
+                    UpdatedAt = currentDataPoint.UpdatedAt,
+                    SourcePeriodId = currentDataPoint.SourcePeriodId,
+                    SourceDataPointId = currentDataPoint.SourceDataPointId,
+                    RolloverTimestamp = currentDataPoint.RolloverTimestamp
+                },
+                IsDraftCopy = isDraftCopy,
+                HasBeenEdited = hasBeenEdited
+            };
+            
+            if (previousDataPoint != null && previousPeriod != null)
+            {
+                response.PreviousDataPoint = new DataPointInfo
+                {
+                    Id = previousDataPoint.Id,
+                    PeriodId = previousPeriod.Id,
+                    PeriodName = previousPeriod.Name,
+                    Title = previousDataPoint.Title,
+                    Content = previousDataPoint.Content,
+                    ReviewStatus = previousDataPoint.ReviewStatus,
+                    UpdatedAt = previousDataPoint.UpdatedAt,
+                    SourcePeriodId = previousDataPoint.SourcePeriodId,
+                    SourceDataPointId = previousDataPoint.SourceDataPointId,
+                    RolloverTimestamp = previousDataPoint.RolloverTimestamp
+                };
+                
+                // Compute text diff
+                // For draft copies that haven't been edited, show no changes
+                string oldText = previousDataPoint.Content;
+                string newText = currentDataPoint.Content;
+                
+                if (isDraftCopy && !hasBeenEdited)
+                {
+                    // Show as unchanged - both texts are the same
+                    oldText = currentDataPoint.Content;
+                    newText = currentDataPoint.Content;
+                }
+                
+                List<TextSegment> segments;
+                if (granularity == "sentence")
+                {
+                    segments = _textDiffService.ComputeSentenceLevelDiff(oldText, newText);
+                }
+                else
+                {
+                    segments = _textDiffService.ComputeWordLevelDiff(oldText, newText);
+                }
+                
+                // Convert to DTOs
+                response.Segments = segments.Select(s => new TextSegmentDto
+                {
+                    Text = s.Text,
+                    ChangeType = s.ChangeType
+                }).ToList();
+                
+                // Generate summary
+                var summary = _textDiffService.GenerateSummary(oldText, newText);
+                response.Summary = new DiffSummaryDto
+                {
+                    TotalSegments = summary.TotalSegments,
+                    AddedSegments = summary.AddedSegments,
+                    RemovedSegments = summary.RemovedSegments,
+                    UnchangedSegments = summary.UnchangedSegments,
+                    OldTextLength = summary.OldTextLength,
+                    NewTextLength = summary.NewTextLength,
+                    HasChanges = summary.HasChanges
+                };
+            }
+            else
+            {
+                // No previous data point to compare - show current content as all new
+                var segments = new List<TextSegmentDto>
+                {
+                    new TextSegmentDto
+                    {
+                        Text = currentDataPoint.Content,
+                        ChangeType = "added"
+                    }
+                };
+                response.Segments = segments;
+                response.Summary = new DiffSummaryDto
+                {
+                    TotalSegments = 1,
+                    AddedSegments = 1,
+                    RemovedSegments = 0,
+                    UnchangedSegments = 0,
+                    OldTextLength = 0,
+                    NewTextLength = currentDataPoint.Content.Length,
+                    HasChanges = true
+                };
+            }
+            
+            return (true, null, response);
+        }
+    }
+    
+    /// <summary>
+    /// Gets a data point by section ID and title match (for period-to-period comparison).
+    /// </summary>
+    public DataPoint? GetDataPointBySectionAndTitle(string sectionId, string title)
+    {
+        lock (_lock)
+        {
+            return _dataPoints.FirstOrDefault(dp => 
+                dp.SectionId == sectionId && 
+                dp.Title.Equals(title, StringComparison.OrdinalIgnoreCase));
         }
     }
     

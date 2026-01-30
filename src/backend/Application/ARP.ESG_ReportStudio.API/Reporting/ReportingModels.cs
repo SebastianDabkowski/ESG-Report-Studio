@@ -4540,3 +4540,109 @@ public sealed class AvailableBaselinePeriod
     /// </summary>
     public string EndDate { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Request to compare narrative text disclosures between two periods.
+/// </summary>
+public sealed class CompareTextDisclosuresRequest
+{
+    /// <summary>
+    /// ID of the data point in the current period.
+    /// </summary>
+    public string CurrentDataPointId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional: ID of the previous period to compare against.
+    /// If not provided, compares against the data point's source period (if it was rolled over).
+    /// </summary>
+    public string? PreviousPeriodId { get; set; }
+    
+    /// <summary>
+    /// Diff granularity: "word" or "sentence". Defaults to "word".
+    /// </summary>
+    public string Granularity { get; set; } = "word";
+}
+
+/// <summary>
+/// Response containing text disclosure comparison results.
+/// </summary>
+public sealed class TextDisclosureComparisonResponse
+{
+    /// <summary>
+    /// Current data point information.
+    /// </summary>
+    public DataPointInfo CurrentDataPoint { get; set; } = new();
+    
+    /// <summary>
+    /// Previous data point information (if found).
+    /// </summary>
+    public DataPointInfo? PreviousDataPoint { get; set; }
+    
+    /// <summary>
+    /// List of text segments with change indicators.
+    /// </summary>
+    public List<TextSegmentDto> Segments { get; set; } = new();
+    
+    /// <summary>
+    /// Summary of changes.
+    /// </summary>
+    public DiffSummaryDto Summary { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates if the current data point is a draft copy from a previous period.
+    /// When true and no edits have been made, the diff shows no changes.
+    /// </summary>
+    public bool IsDraftCopy { get; set; }
+    
+    /// <summary>
+    /// Indicates if the disclosure has been edited since being copied/rolled over.
+    /// </summary>
+    public bool HasBeenEdited { get; set; }
+}
+
+/// <summary>
+/// Summary information about a data point for comparison.
+/// </summary>
+public sealed class DataPointInfo
+{
+    public string Id { get; set; } = string.Empty;
+    public string PeriodId { get; set; } = string.Empty;
+    public string PeriodName { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Content { get; set; } = string.Empty;
+    public string ReviewStatus { get; set; } = string.Empty;
+    public string UpdatedAt { get; set; } = string.Empty;
+    public string? SourcePeriodId { get; set; }
+    public string? SourceDataPointId { get; set; }
+    public string? RolloverTimestamp { get; set; }
+}
+
+/// <summary>
+/// DTO for text segment with change type.
+/// </summary>
+public sealed class TextSegmentDto
+{
+    /// <summary>
+    /// The text content of this segment.
+    /// </summary>
+    public string Text { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Change type: "unchanged", "added", "removed", "modified".
+    /// </summary>
+    public string ChangeType { get; set; } = "unchanged";
+}
+
+/// <summary>
+/// DTO for diff summary statistics.
+/// </summary>
+public sealed class DiffSummaryDto
+{
+    public int TotalSegments { get; set; }
+    public int AddedSegments { get; set; }
+    public int RemovedSegments { get; set; }
+    public int UnchangedSegments { get; set; }
+    public int OldTextLength { get; set; }
+    public int NewTextLength { get; set; }
+    public bool HasChanges { get; set; }
+}
