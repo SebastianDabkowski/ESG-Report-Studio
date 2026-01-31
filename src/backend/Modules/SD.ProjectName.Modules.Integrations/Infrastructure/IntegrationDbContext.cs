@@ -19,6 +19,10 @@ public class IntegrationDbContext : DbContext
     public DbSet<HRSyncRecord> HRSyncRecords { get; set; } = null!;
     public DbSet<FinanceEntity> FinanceEntities { get; set; } = null!;
     public DbSet<FinanceSyncRecord> FinanceSyncRecords { get; set; } = null!;
+    public DbSet<CanonicalEntity> CanonicalEntities { get; set; } = null!;
+    public DbSet<CanonicalEntityVersion> CanonicalEntityVersions { get; set; } = null!;
+    public DbSet<CanonicalAttribute> CanonicalAttributes { get; set; } = null!;
+    public DbSet<CanonicalMapping> CanonicalMappings { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -92,6 +96,12 @@ public class IntegrationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ConnectorId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            // Foreign key to canonical entity
+            entity.HasOne(e => e.CanonicalEntity)
+                .WithMany()
+                .HasForeignKey(e => e.CanonicalEntityId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // HRSyncRecord configuration
@@ -147,6 +157,12 @@ public class IntegrationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.ConnectorId)
                 .OnDelete(DeleteBehavior.Restrict);
+            
+            // Foreign key to canonical entity
+            entity.HasOne(e => e.CanonicalEntity)
+                .WithMany()
+                .HasForeignKey(e => e.CanonicalEntityId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // FinanceSyncRecord configuration
@@ -179,6 +195,103 @@ public class IntegrationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(r => r.FinanceEntityId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // CanonicalEntity configuration
+        modelBuilder.Entity<CanonicalEntity>(entity =>
+        {
+            entity.ToTable("CanonicalEntities");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.EntityType).IsRequired();
+            entity.Property(e => e.SchemaVersion).IsRequired();
+            entity.Property(e => e.ExternalId).HasMaxLength(200);
+            entity.Property(e => e.Data).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.SourceSystem).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.SourceVersion).HasMaxLength(100);
+            entity.Property(e => e.ImportedByJobId).HasMaxLength(200);
+            entity.Property(e => e.VendorExtensions).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.UpdatedBy).HasMaxLength(200);
+            
+            entity.HasIndex(e => e.EntityType);
+            entity.HasIndex(e => new { e.SourceSystem, e.ExternalId });
+            entity.HasIndex(e => e.ImportedByJobId);
+            entity.HasIndex(e => e.SchemaVersion);
+            entity.HasIndex(e => e.IsApproved);
+            
+            // Foreign key relationship to schema version
+            entity.HasOne(e => e.Schema)
+                .WithMany(v => v.Entities)
+                .HasForeignKey(e => new { e.EntityType, e.SchemaVersion })
+                .HasPrincipalKey(v => new { v.EntityType, v.Version })
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // CanonicalEntityVersion configuration
+        modelBuilder.Entity<CanonicalEntityVersion>(entity =>
+        {
+            entity.ToTable("CanonicalEntityVersions");
+            entity.HasKey(v => v.Id);
+            entity.Property(v => v.EntityType).IsRequired();
+            entity.Property(v => v.Version).IsRequired();
+            entity.Property(v => v.SchemaDefinition).HasColumnType("nvarchar(max)");
+            entity.Property(v => v.Description).IsRequired().HasMaxLength(1000);
+            entity.Property(v => v.MigrationRules).HasColumnType("nvarchar(max)");
+            entity.Property(v => v.CreatedBy).IsRequired().HasMaxLength(200);
+            
+            // Composite unique index for entity type + version
+            entity.HasIndex(v => new { v.EntityType, v.Version }).IsUnique();
+            entity.HasIndex(v => v.IsActive);
+            entity.HasIndex(v => v.IsDeprecated);
+        });
+
+        // CanonicalAttribute configuration
+        modelBuilder.Entity<CanonicalAttribute>(entity =>
+        {
+            entity.ToTable("CanonicalAttributes");
+            entity.HasKey(a => a.Id);
+            entity.Property(a => a.EntityType).IsRequired();
+            entity.Property(a => a.SchemaVersion).IsRequired();
+            entity.Property(a => a.AttributeName).IsRequired().HasMaxLength(200);
+            entity.Property(a => a.DataType).IsRequired().HasMaxLength(50);
+            entity.Property(a => a.Description).IsRequired().HasMaxLength(1000);
+            entity.Property(a => a.ExampleValues).HasMaxLength(500);
+            entity.Property(a => a.ValidationRules).HasColumnType("nvarchar(max)");
+            entity.Property(a => a.DefaultValue).HasMaxLength(500);
+            entity.Property(a => a.ReplacedBy).HasMaxLength(200);
+            
+            entity.HasIndex(a => new { a.EntityType, a.SchemaVersion, a.AttributeName }).IsUnique();
+            entity.HasIndex(a => a.IsRequired);
+            entity.HasIndex(a => a.IsDeprecated);
+        });
+
+        // CanonicalMapping configuration
+        modelBuilder.Entity<CanonicalMapping>(entity =>
+        {
+            entity.ToTable("CanonicalMappings");
+            entity.HasKey(m => m.Id);
+            entity.Property(m => m.ConnectorId).IsRequired();
+            entity.Property(m => m.TargetEntityType).IsRequired();
+            entity.Property(m => m.TargetSchemaVersion).IsRequired();
+            entity.Property(m => m.ExternalField).IsRequired().HasMaxLength(200);
+            entity.Property(m => m.CanonicalAttribute).IsRequired().HasMaxLength(200);
+            entity.Property(m => m.TransformationType).IsRequired().HasMaxLength(50);
+            entity.Property(m => m.TransformationParams).HasColumnType("nvarchar(max)");
+            entity.Property(m => m.DefaultValue).HasMaxLength(500);
+            entity.Property(m => m.Notes).HasMaxLength(1000);
+            entity.Property(m => m.CreatedBy).IsRequired().HasMaxLength(200);
+            entity.Property(m => m.UpdatedBy).HasMaxLength(200);
+            
+            entity.HasIndex(m => m.ConnectorId);
+            entity.HasIndex(m => new { m.ConnectorId, m.TargetEntityType });
+            entity.HasIndex(m => new { m.ConnectorId, m.TargetEntityType, m.TargetSchemaVersion });
+            entity.HasIndex(m => m.IsActive);
+            entity.HasIndex(m => m.IsRequired);
+            
+            // Foreign key relationship to connector
+            entity.HasOne(m => m.Connector)
+                .WithMany()
+                .HasForeignKey(m => m.ConnectorId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }
