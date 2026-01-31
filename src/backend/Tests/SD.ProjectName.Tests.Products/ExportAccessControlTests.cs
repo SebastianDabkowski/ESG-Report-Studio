@@ -499,5 +499,152 @@ namespace SD.ProjectName.Tests.Products
         }
 
         #endregion
+        
+        #region Export Scope Tests
+        
+        [Fact]
+        public void ExportPdf_WithFullReport_ShouldRecordFullScope()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockPdfService.Setup(x => x.GeneratePdf(It.IsAny<GeneratedReport>(), It.IsAny<PdfExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockPdfService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.pdf");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Export without specifying section IDs (full report)
+            var request = new ExportPdfRequest { GeneratedBy = "user-2" };
+            controller.ExportPdf(periodId, request);
+
+            // Assert - Check export history has full scope
+            var history = store.GetExportHistory(periodId);
+            Assert.NotEmpty(history);
+            
+            var exportEntry = history.First();
+            Assert.Equal("full", exportEntry.ExportScope);
+            Assert.NotEmpty(exportEntry.IncludedSectionIds);
+            Assert.NotEmpty(exportEntry.IncludedSectionNames);
+        }
+        
+        [Fact]
+        public void ExportPdf_WithSelectedSections_ShouldRecordPartialScope()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockPdfService.Setup(x => x.GeneratePdf(It.IsAny<GeneratedReport>(), It.IsAny<PdfExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockPdfService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.pdf");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+            
+            // Get some section IDs
+            var sections = store.GetSections(periodId);
+            var selectedSectionIds = sections.Take(2).Select(s => s.Id).ToList();
+
+            // Act - Export with specific section IDs
+            var request = new ExportPdfRequest 
+            { 
+                GeneratedBy = "user-2",
+                SectionIds = selectedSectionIds
+            };
+            controller.ExportPdf(periodId, request);
+
+            // Assert - Check export history has partial scope
+            var history = store.GetExportHistory(periodId);
+            Assert.NotEmpty(history);
+            
+            var exportEntry = history.First();
+            Assert.Equal("partial", exportEntry.ExportScope);
+            Assert.NotEmpty(exportEntry.IncludedSectionIds);
+            Assert.NotEmpty(exportEntry.IncludedSectionNames);
+            // The actual sections in the generated report should match what was requested
+            Assert.All(exportEntry.IncludedSectionIds, id => Assert.Contains(id, selectedSectionIds));
+        }
+        
+        [Fact]
+        public void ExportDocx_WithFullReport_ShouldRecordFullScope()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockDocxService.Setup(x => x.GenerateDocx(It.IsAny<GeneratedReport>(), It.IsAny<DocxExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockDocxService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.docx");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Export without specifying section IDs (full report)
+            var request = new ExportDocxRequest { GeneratedBy = "user-2" };
+            controller.ExportDocx(periodId, request);
+
+            // Assert - Check export history has full scope
+            var history = store.GetExportHistory(periodId);
+            Assert.NotEmpty(history);
+            
+            var exportEntry = history.First();
+            Assert.Equal("full", exportEntry.ExportScope);
+            Assert.NotEmpty(exportEntry.IncludedSectionIds);
+            Assert.NotEmpty(exportEntry.IncludedSectionNames);
+        }
+        
+        [Fact]
+        public void GetExportHistory_ShouldIncludeScopeInformation()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockPdfService.Setup(x => x.GeneratePdf(It.IsAny<GeneratedReport>(), It.IsAny<PdfExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockPdfService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.pdf");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Create multiple exports
+            controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-2" });
+            controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-1", VariantName = "Internal" });
+
+            // Get export history
+            var result = controller.GetExportHistory(periodId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var history = Assert.IsAssignableFrom<IReadOnlyList<ExportHistoryEntry>>(okResult.Value);
+            
+            Assert.Equal(2, history.Count);
+            Assert.All(history, entry =>
+            {
+                Assert.NotNull(entry.ExportScope);
+                Assert.NotNull(entry.IncludedSectionIds);
+                Assert.NotNull(entry.IncludedSectionNames);
+                Assert.NotEmpty(entry.ExportedBy);
+                Assert.NotEmpty(entry.ExportedByName);
+                Assert.NotEmpty(entry.ExportedAt);
+            });
+        }
+
+        #endregion
     }
 }

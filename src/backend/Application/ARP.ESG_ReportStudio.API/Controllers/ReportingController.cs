@@ -552,7 +552,10 @@ public sealed class ReportingController : ControllerBase
             IncludedTitlePage = options.IncludeTitlePage,
             IncludedTableOfContents = options.IncludeTableOfContents,
             IncludedAttachments = options.IncludeAttachments,
-            DownloadCount = 0
+            DownloadCount = 0,
+            ExportScope = request.SectionIds == null || request.SectionIds.Count == 0 ? "full" : "partial",
+            IncludedSectionIds = report.Sections.Select(s => s.Section.Id).ToList(),
+            IncludedSectionNames = report.Sections.Select(s => s.Section.Title).ToList()
         };
         _store.RecordExport(exportEntry);
         
@@ -677,7 +680,10 @@ public sealed class ReportingController : ControllerBase
             IncludedTitlePage = options.IncludeTitlePage,
             IncludedTableOfContents = options.IncludeTableOfContents,
             IncludedAttachments = options.IncludeAttachments,
-            DownloadCount = 0
+            DownloadCount = 0,
+            ExportScope = request.SectionIds == null || request.SectionIds.Count == 0 ? "full" : "partial",
+            IncludedSectionIds = report.Sections.Select(s => s.Section.Id).ToList(),
+            IncludedSectionNames = report.Sections.Select(s => s.Section.Title).ToList()
         };
         _store.RecordExport(exportEntry);
         
