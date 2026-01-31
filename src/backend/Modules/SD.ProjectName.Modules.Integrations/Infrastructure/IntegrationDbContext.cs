@@ -15,6 +15,7 @@ public class IntegrationDbContext : DbContext
 
     public DbSet<Connector> Connectors { get; set; } = null!;
     public DbSet<IntegrationLog> IntegrationLogs { get; set; } = null!;
+    public DbSet<IntegrationJobMetadata> IntegrationJobMetadata { get; set; } = null!;
     public DbSet<HREntity> HREntities { get; set; } = null!;
     public DbSet<HRSyncRecord> HRSyncRecords { get; set; } = null!;
     public DbSet<FinanceEntity> FinanceEntities { get; set; } = null!;
@@ -74,6 +75,33 @@ public class IntegrationDbContext : DbContext
             entity.HasOne(l => l.Connector)
                 .WithMany()
                 .HasForeignKey(l => l.ConnectorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // IntegrationJobMetadata configuration
+        modelBuilder.Entity<IntegrationJobMetadata>(entity =>
+        {
+            entity.ToTable("IntegrationJobMetadata");
+            entity.HasKey(j => j.Id);
+            entity.Property(j => j.JobId).IsRequired().HasMaxLength(100);
+            entity.Property(j => j.CorrelationId).IsRequired().HasMaxLength(100);
+            entity.Property(j => j.JobType).IsRequired().HasMaxLength(100);
+            entity.Property(j => j.Status).IsRequired();
+            entity.Property(j => j.ErrorSummary).HasColumnType("nvarchar(max)");
+            entity.Property(j => j.InitiatedBy).IsRequired().HasMaxLength(200);
+            entity.Property(j => j.Notes).HasMaxLength(2000);
+            
+            entity.HasIndex(j => j.JobId).IsUnique();
+            entity.HasIndex(j => j.ConnectorId);
+            entity.HasIndex(j => j.CorrelationId);
+            entity.HasIndex(j => j.Status);
+            entity.HasIndex(j => j.StartedAt);
+            entity.HasIndex(j => j.JobType);
+            
+            // Foreign key relationship
+            entity.HasOne(j => j.Connector)
+                .WithMany()
+                .HasForeignKey(j => j.ConnectorId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

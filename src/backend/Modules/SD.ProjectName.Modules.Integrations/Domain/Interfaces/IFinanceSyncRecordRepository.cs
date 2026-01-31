@@ -46,4 +46,17 @@ public interface IFinanceSyncRecordRepository
     /// Save changes to the database
     /// </summary>
     Task SaveChangesAsync();
+    
+    /// <summary>
+    /// Search sync records with filtering
+    /// </summary>
+    Task<List<FinanceSyncRecord>> SearchRecordsAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        FinanceSyncStatus? status = null,
+        int? connectorId = null,
+        bool? conflictDetected = null,
+        string? approvedOverrideBy = null,
+        int skip = 0,
+        int take = 50);
 }

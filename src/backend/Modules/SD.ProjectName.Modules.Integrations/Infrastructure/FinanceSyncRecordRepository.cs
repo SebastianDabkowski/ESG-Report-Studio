@@ -83,4 +83,44 @@ public class FinanceSyncRecordRepository : IFinanceSyncRecordRepository
     {
         await _context.SaveChangesAsync();
     }
+    
+    public async Task<List<FinanceSyncRecord>> SearchRecordsAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        FinanceSyncStatus? status = null,
+        int? connectorId = null,
+        bool? conflictDetected = null,
+        string? approvedOverrideBy = null,
+        int skip = 0,
+        int take = 50)
+    {
+        var query = _context.FinanceSyncRecords
+            .Include(r => r.Connector)
+            .Include(r => r.FinanceEntity)
+            .AsQueryable();
+        
+        if (startDate.HasValue)
+            query = query.Where(r => r.SyncedAt >= startDate.Value);
+        
+        if (endDate.HasValue)
+            query = query.Where(r => r.SyncedAt <= endDate.Value);
+        
+        if (status.HasValue)
+            query = query.Where(r => r.Status == status.Value);
+        
+        if (connectorId.HasValue)
+            query = query.Where(r => r.ConnectorId == connectorId.Value);
+        
+        if (conflictDetected.HasValue)
+            query = query.Where(r => r.ConflictDetected == conflictDetected.Value);
+        
+        if (!string.IsNullOrEmpty(approvedOverrideBy))
+            query = query.Where(r => r.ApprovedOverrideBy == approvedOverrideBy);
+        
+        return await query
+            .OrderByDescending(r => r.SyncedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+    }
 }
