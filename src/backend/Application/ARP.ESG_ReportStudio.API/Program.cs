@@ -1,7 +1,12 @@
 using ARP.ESG_ReportStudio.API.Models;
 using ARP.ESG_ReportStudio.API.Services;
+using ARP.ESG_ReportStudio.API.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
+using SD.ProjectName.Modules.Integrations.Application;
+using SD.ProjectName.Modules.Integrations.Domain.Interfaces;
+using SD.ProjectName.Modules.Integrations.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -169,6 +174,16 @@ builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.IDocxExportService,
 // Add localization service
 builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Services.ILocalizationService, ARP.ESG_ReportStudio.API.Services.LocalizationService>();
 
+// Add Integrations module services
+builder.Services.AddDbContext<IntegrationDbContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection") ?? "Server=(localdb)\\mssqllocaldb;Database=ESGReportStudio;Trusted_Connection=True;MultipleActiveResultSets=true",
+        sqlOptions => sqlOptions.MigrationsAssembly("SD.ProjectName.Modules.Integrations")));
+builder.Services.AddScoped<IConnectorRepository, ConnectorRepository>();
+builder.Services.AddScoped<IIntegrationLogRepository, IntegrationLogRepository>();
+builder.Services.AddScoped<ConnectorService>();
+builder.Services.AddScoped<IntegrationExecutionService>();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("DevCors", policy =>
@@ -192,6 +207,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseCors("DevCors");
+
+// Add correlation ID middleware early in the pipeline
+app.UseCorrelationId();
 
 app.UseAuthentication();
 app.UseMiddleware<ARP.ESG_ReportStudio.API.Middleware.SessionActivityMiddleware>();
