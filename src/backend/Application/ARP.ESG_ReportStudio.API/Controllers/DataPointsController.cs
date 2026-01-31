@@ -23,6 +23,56 @@ public sealed class DataPointsController : ControllerBase
         return Ok(_store.GetDataPoints(sectionId, assignedUserId));
     }
 
+    /// <summary>
+    /// Get data points accessible to a specific user.
+    /// Filters by sections the user owns or has explicit access to.
+    /// </summary>
+    /// <param name="userId">User ID to filter data points for</param>
+    /// <param name="sectionId">Optional section ID to filter by</param>
+    /// <response code="200">Returns accessible data points</response>
+    /// <response code="400">Invalid user ID</response>
+    /// <response code="403">User does not have access to the specified section</response>
+    [HttpGet("accessible")]
+    [ProducesResponseType(typeof(IReadOnlyList<DataPoint>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public ActionResult<IReadOnlyList<DataPoint>> GetAccessibleDataPoints(
+        [FromQuery] string userId, 
+        [FromQuery] string? sectionId = null)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "User ID is required." });
+        }
+
+        // If a specific section is requested, check access first
+        if (!string.IsNullOrWhiteSpace(sectionId))
+        {
+            if (!_store.HasSectionAccess(userId, sectionId))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new 
+                { 
+                    error = "Access denied. You do not have permission to view this section.",
+                    sectionId 
+                });
+            }
+            
+            return Ok(_store.GetDataPoints(sectionId, null));
+        }
+
+        // Get all accessible sections for the user
+        var accessibleSections = _store.GetAccessibleSections(userId, null);
+        var accessibleSectionIds = accessibleSections.Select(s => s.Id).ToHashSet();
+
+        // Get all data points and filter to accessible sections
+        var allDataPoints = _store.GetDataPoints(null, null);
+        var accessibleDataPoints = allDataPoints
+            .Where(dp => accessibleSectionIds.Contains(dp.SectionId))
+            .ToList();
+
+        return Ok(accessibleDataPoints);
+    }
+
     [HttpGet("{id}")]
     public ActionResult<DataPoint> GetDataPoint(string id)
     {

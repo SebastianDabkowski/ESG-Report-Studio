@@ -7385,3 +7385,175 @@ public sealed class PermissionCheckRequest
     /// </summary>
     public string Action { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Represents a granular access grant to a specific section for a user.
+/// </summary>
+public sealed class SectionAccessGrant
+{
+    /// <summary>
+    /// Unique identifier for the access grant.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section ID this grant applies to.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who is granted access.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name for display purposes.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who granted the access.
+    /// </summary>
+    public string GrantedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user who granted the access.
+    /// </summary>
+    public string GrantedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when access was granted (ISO 8601 format).
+    /// </summary>
+    public string GrantedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional reason for granting access.
+    /// </summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Request to grant section access to one or more users.
+/// </summary>
+public sealed class GrantSectionAccessRequest
+{
+    /// <summary>
+    /// Section ID to grant access to.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User IDs to grant access to.
+    /// </summary>
+    public List<string> UserIds { get; set; } = new();
+    
+    /// <summary>
+    /// User ID performing the grant operation (for audit).
+    /// </summary>
+    public string GrantedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional reason for granting access.
+    /// </summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Request to revoke section access from one or more users.
+/// </summary>
+public sealed class RevokeSectionAccessRequest
+{
+    /// <summary>
+    /// Section ID to revoke access from.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User IDs to revoke access from.
+    /// </summary>
+    public List<string> UserIds { get; set; } = new();
+    
+    /// <summary>
+    /// User ID performing the revoke operation (for audit).
+    /// </summary>
+    public string RevokedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional reason for revoking access.
+    /// </summary>
+    public string? Reason { get; set; }
+}
+
+/// <summary>
+/// Result of granting section access.
+/// </summary>
+public sealed class GrantSectionAccessResult
+{
+    /// <summary>
+    /// Access grants that were successfully created.
+    /// </summary>
+    public List<SectionAccessGrant> GrantedAccess { get; set; } = new();
+    
+    /// <summary>
+    /// User IDs that were skipped (e.g., already have access, invalid user).
+    /// </summary>
+    public List<AccessGrantFailure> Failures { get; set; } = new();
+}
+
+/// <summary>
+/// Result of revoking section access.
+/// </summary>
+public sealed class RevokeSectionAccessResult
+{
+    /// <summary>
+    /// User IDs that had access revoked.
+    /// </summary>
+    public List<string> RevokedUserIds { get; set; } = new();
+    
+    /// <summary>
+    /// User IDs that were skipped (e.g., didn't have access).
+    /// </summary>
+    public List<AccessGrantFailure> Failures { get; set; } = new();
+}
+
+/// <summary>
+/// Details about a failed access grant/revoke operation.
+/// </summary>
+public sealed class AccessGrantFailure
+{
+    /// <summary>
+    /// User ID that failed.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason for failure.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Summary of section access for a user or section.
+/// </summary>
+public sealed class SectionAccessSummary
+{
+    /// <summary>
+    /// Section ID.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section title.
+    /// </summary>
+    public string SectionTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Users with explicit access grants to this section.
+    /// </summary>
+    public List<SectionAccessGrant> AccessGrants { get; set; } = new();
+    
+    /// <summary>
+    /// Section owner (has implicit access).
+    /// </summary>
+    public User? Owner { get; set; }
+}
