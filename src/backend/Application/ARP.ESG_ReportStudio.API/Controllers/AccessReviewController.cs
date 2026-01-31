@@ -14,6 +14,12 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 [Route("api/access-reviews")]
 public sealed class AccessReviewController : ControllerBase
 {
+    /// <summary>
+    /// UTF-8 Byte Order Mark (BOM) character for Excel compatibility.
+    /// Adding this character at the start of CSV files helps Excel properly detect UTF-8 encoding.
+    /// </summary>
+    private const char UTF8_BOM = '\ufeff';
+    
     private readonly InMemoryReportStore _store;
 
     public AccessReviewController(InMemoryReportStore store)
@@ -198,7 +204,7 @@ public sealed class AccessReviewController : ControllerBase
 
         var csv = new StringBuilder();
         // Add UTF-8 BOM for better Excel compatibility
-        csv.Append('\ufeff');
+        csv.Append(UTF8_BOM);
         csv.AppendLine("\"User ID\",\"User Name\",\"User Email\",\"Is Active\",\"Roles\",\"Section Count\",\"Owned Periods\",\"Decision\",\"Decision At\",\"Decision By\",\"Decision Note\"");
         
         foreach (var entry in review.Entries)

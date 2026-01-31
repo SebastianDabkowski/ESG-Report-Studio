@@ -158,7 +158,7 @@ public sealed class InMemoryReportStore
     {
         _users.AddRange(new[]
         {
-            new User { Id = "user-no-roles", Name = "No Roles User", Email = "noroles@company.com", Role = "", CanExport = false, RoleIds = new List<string>() },
+            new User { Id = "user-0", Name = "No Roles User", Email = "noroles@company.com", Role = "", CanExport = false, RoleIds = new List<string>() },
             new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner", CanExport = true, RoleIds = new List<string> { "role-data-owner" } },
             new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin", CanExport = true, RoleIds = new List<string> { "role-admin" } },
             new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor", CanExport = false, RoleIds = new List<string> { "role-contributor" } },
