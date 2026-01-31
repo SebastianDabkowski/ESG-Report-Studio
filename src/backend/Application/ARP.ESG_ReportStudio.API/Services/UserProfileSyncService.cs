@@ -45,9 +45,9 @@ public sealed class UserProfileSyncService : IUserProfileSyncService
 
         // Get claim type mappings from configuration
         var oidcSettings = configuration.GetSection("Authentication:Oidc");
-        _nameClaimType = oidcSettings.GetValue<string>("NameClaimType") ?? "preferred_username";
-        _emailClaimType = oidcSettings.GetValue<string>("EmailClaimType") ?? "email";
-        _displayNameClaimType = oidcSettings.GetValue<string>("DisplayNameClaimType") ?? "name";
+        _nameClaimType = oidcSettings["NameClaimType"] ?? "preferred_username";
+        _emailClaimType = oidcSettings["EmailClaimType"] ?? "email";
+        _displayNameClaimType = oidcSettings["DisplayNameClaimType"] ?? "name";
     }
 
     public Task<User> SyncUserFromClaimsAsync(IEnumerable<Claim> claims)
