@@ -5526,7 +5526,8 @@ public sealed class InMemoryReportStore
         string? startDate = null, 
         string? endDate = null,
         string? sectionId = null,
-        string? ownerId = null)
+        string? ownerId = null,
+        bool? breakGlassOnly = null)
     {
         lock (_lock)
         {
@@ -5560,6 +5561,12 @@ public sealed class InMemoryReportStore
             if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
             {
                 query = query.Where(e => DateTime.Parse(e.Timestamp) <= end);
+            }
+            
+            // Filter by break-glass actions if specified
+            if (breakGlassOnly.HasValue)
+            {
+                query = query.Where(e => e.IsBreakGlassAction == breakGlassOnly.Value);
             }
 
             // Filter by section if provided
