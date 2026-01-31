@@ -21,6 +21,7 @@ import MaturityModelsView from '@/components/MaturityModelsView'
 import { MaturityAssessmentView } from '@/components/MaturityAssessmentView'
 import RoleManagement from '@/components/RoleManagement'
 import UserRoleAssignment from '@/components/UserRoleAssignment'
+import PermissionMatrixView from '@/components/PermissionMatrixView'
 import { useKV } from '@github/spark/hooks'
 import type { User } from '@/lib/types'
 
@@ -89,6 +90,7 @@ function App() {
             <TabsTrigger value="assessment">Maturity Assessment</TabsTrigger>
             <TabsTrigger value="roles">Roles</TabsTrigger>
             <TabsTrigger value="user-roles">User Roles</TabsTrigger>
+            <TabsTrigger value="permissions">Permissions</TabsTrigger>
           </TabsList>
 
           <TabsContent value="dashboard" className="space-y-6">
@@ -169,6 +171,10 @@ function App() {
 
           <TabsContent value="user-roles" className="space-y-6">
             <UserRoleAssignment />
+          </TabsContent>
+
+          <TabsContent value="permissions" className="space-y-6">
+            <PermissionMatrixView />
           </TabsContent>
         </Tabs>
       </main>

@@ -1715,3 +1715,36 @@ export interface EffectivePermissionsResponse {
   roleDetails: RolePermissionDetail[]
 }
 
+export interface PermissionMatrixEntry {
+  roleId: string
+  roleName: string
+  isPredefined: boolean
+  resourceActions: Record<string, string[]>
+}
+
+export interface PermissionMatrix {
+  entries: PermissionMatrixEntry[]
+  resourceTypes: string[]
+  allActions: string[]
+  generatedAt: string
+}
+
+export interface PermissionCheckResult {
+  userId: string
+  userName: string
+  resourceType: string
+  resourceId?: string
+  action: string
+  allowed: boolean
+  denialReason?: string
+  checkedAt: string
+  evaluatedRoles: string[]
+}
+
+export interface PermissionCheckRequest {
+  userId: string
+  resourceType: string
+  resourceId?: string
+  action: string
+}
+

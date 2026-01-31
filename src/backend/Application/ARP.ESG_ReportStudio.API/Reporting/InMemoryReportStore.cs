@@ -15688,6 +15688,370 @@ public sealed class InMemoryReportStore
         }
     }
     
+    /// <summary>
+    /// Generate a comprehensive permission matrix showing all roles and their permissions across resources.
+    /// Maps generic permission codes to specific resource-action pairs for clarity.
+    /// </summary>
+    public PermissionMatrix GetPermissionMatrix()
+    {
+        lock (_lock)
+        {
+            var resourceTypes = new List<string>
+            {
+                "report-structure",
+                "section-content",
+                "esg-data-items",
+                "attachments",
+                "exports",
+                "users"
+            };
+            
+            var allActions = new List<string>
+            {
+                "view",
+                "edit",
+                "comment",
+                "submit",
+                "approve",
+                "reject",
+                "export",
+                "manage"
+            };
+            
+            var entries = new List<PermissionMatrixEntry>();
+            
+            foreach (var role in _roles.OrderBy(r => r.Name))
+            {
+                var resourceActions = new Dictionary<string, List<string>>();
+                
+                // Map permissions to resource-action pairs
+                foreach (var resourceType in resourceTypes)
+                {
+                    var actions = new List<string>();
+                    
+                    // Admin has all permissions
+                    if (role.Permissions.Contains("all"))
+                    {
+                        actions.AddRange(allActions);
+                    }
+                    else
+                    {
+                        // Map specific permissions to actions based on resource type
+                        switch (resourceType)
+                        {
+                            case "report-structure":
+                                if (role.Permissions.Contains("view-all-reports") || role.Permissions.Contains("view-reports"))
+                                    actions.Add("view");
+                                if (role.Permissions.Contains("all"))
+                                    actions.AddRange(new[] { "edit", "manage" });
+                                break;
+                                
+                            case "section-content":
+                                if (role.Permissions.Contains("view-all-reports") || role.Permissions.Contains("view-reports") || 
+                                    role.Permissions.Contains("view-assigned-sections") || role.Permissions.Contains("view-public-sections"))
+                                    actions.Add("view");
+                                if (role.Permissions.Contains("edit-assigned-sections"))
+                                    actions.Add("edit");
+                                if (role.Permissions.Contains("add-comments"))
+                                    actions.Add("comment");
+                                if (role.Permissions.Contains("approve-section-data") || role.Permissions.Contains("approve-sections"))
+                                    actions.Add("approve");
+                                if (role.Permissions.Contains("reject-sections"))
+                                    actions.Add("reject");
+                                break;
+                                
+                            case "esg-data-items":
+                                if (role.Permissions.Contains("view-all-reports") || role.Permissions.Contains("view-reports") || 
+                                    role.Permissions.Contains("view-assigned-sections"))
+                                    actions.Add("view");
+                                if (role.Permissions.Contains("edit-assigned-sections"))
+                                    actions.Add("edit");
+                                if (role.Permissions.Contains("add-comments") || role.Permissions.Contains("add-recommendations"))
+                                    actions.Add("comment");
+                                if (role.Permissions.Contains("add-assumptions"))
+                                    actions.Add("edit"); // assumptions are part of editing
+                                if (role.Permissions.Contains("add-gaps"))
+                                    actions.Add("edit"); // gaps are part of editing
+                                break;
+                                
+                            case "attachments":
+                                if (role.Permissions.Contains("view-all-reports") || role.Permissions.Contains("view-reports") || 
+                                    role.Permissions.Contains("view-assigned-sections"))
+                                    actions.Add("view");
+                                if (role.Permissions.Contains("upload-evidence"))
+                                    actions.Add("edit");
+                                break;
+                                
+                            case "exports":
+                                if (role.Permissions.Contains("export-reports") || role.Permissions.Contains("export-audit-packages"))
+                                    actions.Add("export");
+                                if (role.Permissions.Contains("view-all-reports") || role.Permissions.Contains("view-reports"))
+                                    actions.Add("view");
+                                break;
+                                
+                            case "users":
+                                if (role.Permissions.Contains("all"))
+                                    actions.AddRange(new[] { "view", "manage" });
+                                if (role.Permissions.Contains("assign-contributors"))
+                                    actions.Add("manage");
+                                break;
+                        }
+                    }
+                    
+                    // Remove duplicates and sort
+                    resourceActions[resourceType] = actions.Distinct().OrderBy(a => a).ToList();
+                }
+                
+                entries.Add(new PermissionMatrixEntry
+                {
+                    RoleId = role.Id,
+                    RoleName = role.Name,
+                    IsPredefined = role.IsPredefined,
+                    ResourceActions = resourceActions
+                });
+            }
+            
+            return new PermissionMatrix
+            {
+                Entries = entries,
+                ResourceTypes = resourceTypes,
+                AllActions = allActions,
+                GeneratedAt = DateTime.UtcNow.ToString("O")
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Get permission change history from audit log.
+    /// Returns audit entries for role creation, updates, and deletions.
+    /// </summary>
+    public IReadOnlyList<AuditLogEntry> GetPermissionChangeHistory(int? limit = null)
+    {
+        lock (_lock)
+        {
+            var permissionActions = new[] 
+            { 
+                "create-role", 
+                "update-role-description", 
+                "delete-role",
+                "assign-user-roles",
+                "remove-user-role"
+            };
+            
+            var entries = _auditLog
+                .Where(e => e.EntityType == "SystemRole" || 
+                           (e.EntityType == "User" && permissionActions.Contains(e.Action)))
+                .OrderByDescending(e => e.Timestamp)
+                .AsEnumerable();
+            
+            if (limit.HasValue)
+            {
+                entries = entries.Take(limit.Value);
+            }
+            
+            return entries.ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Check if a user has permission to perform an action on a resource.
+    /// Logs all permission checks (both allowed and denied) for audit purposes.
+    /// </summary>
+    public PermissionCheckResult CheckPermission(PermissionCheckRequest request, string userName)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == request.UserId);
+            var timestamp = DateTime.UtcNow.ToString("O");
+            
+            if (user == null)
+            {
+                var deniedResult = new PermissionCheckResult
+                {
+                    UserId = request.UserId,
+                    UserName = userName,
+                    ResourceType = request.ResourceType,
+                    ResourceId = request.ResourceId,
+                    Action = request.Action,
+                    Allowed = false,
+                    DenialReason = "User not found",
+                    CheckedAt = timestamp,
+                    EvaluatedRoles = new List<string>()
+                };
+                
+                // Log the denied attempt
+                LogPermissionCheck(deniedResult);
+                
+                return deniedResult;
+            }
+            
+            // Get user's effective permissions
+            var effectivePerms = GetEffectivePermissions(request.UserId);
+            
+            // Check if user has the required permission
+            bool allowed = false;
+            string? denialReason = null;
+            
+            // Admin has all permissions
+            if (effectivePerms.EffectivePermissions.Contains("all"))
+            {
+                allowed = true;
+            }
+            else
+            {
+                // Map action and resource to required permission
+                var requiredPermissions = MapActionToPermissions(request.ResourceType, request.Action);
+                
+                // User has permission if they have ANY of the required permissions
+                allowed = requiredPermissions.Any(p => effectivePerms.EffectivePermissions.Contains(p));
+                
+                if (!allowed)
+                {
+                    denialReason = $"Missing required permission(s): {string.Join(" or ", requiredPermissions)}";
+                }
+            }
+            
+            var result = new PermissionCheckResult
+            {
+                UserId = request.UserId,
+                UserName = userName,
+                ResourceType = request.ResourceType,
+                ResourceId = request.ResourceId,
+                Action = request.Action,
+                Allowed = allowed,
+                DenialReason = denialReason,
+                CheckedAt = timestamp,
+                EvaluatedRoles = effectivePerms.RoleDetails.Select(r => r.RoleName).ToList()
+            };
+            
+            // Log the permission check
+            LogPermissionCheck(result);
+            
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Map a resource-action pair to required permission codes.
+    /// </summary>
+    private List<string> MapActionToPermissions(string resourceType, string action)
+    {
+        var permissions = new List<string>();
+        var normalizedAction = action.ToLowerInvariant();
+        
+        switch (resourceType.ToLowerInvariant())
+        {
+            case "report-structure":
+                if (normalizedAction == "view")
+                    permissions.AddRange(new[] { "view-all-reports", "view-reports" });
+                else if (normalizedAction == "edit" || normalizedAction == "manage")
+                    permissions.Add("all");
+                break;
+                
+            case "section-content":
+                if (normalizedAction == "view")
+                    permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections", "view-public-sections" });
+                else if (normalizedAction == "edit")
+                    permissions.Add("edit-assigned-sections");
+                else if (normalizedAction == "comment")
+                    permissions.AddRange(new[] { "add-comments", "add-recommendations" });
+                else if (normalizedAction == "approve")
+                    permissions.AddRange(new[] { "approve-section-data", "approve-sections" });
+                else if (normalizedAction == "reject")
+                    permissions.Add("reject-sections");
+                break;
+                
+            case "esg-data-items":
+                if (normalizedAction == "view")
+                    permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections" });
+                else if (normalizedAction == "edit")
+                    permissions.AddRange(new[] { "edit-assigned-sections", "add-assumptions", "add-gaps" });
+                else if (normalizedAction == "comment")
+                    permissions.AddRange(new[] { "add-comments", "add-recommendations" });
+                break;
+                
+            case "attachments":
+                if (normalizedAction == "view")
+                    permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections" });
+                else if (normalizedAction == "edit")
+                    permissions.Add("upload-evidence");
+                break;
+                
+            case "exports":
+                if (normalizedAction == "export")
+                    permissions.AddRange(new[] { "export-reports", "export-audit-packages" });
+                else if (normalizedAction == "view")
+                    permissions.AddRange(new[] { "view-all-reports", "view-reports" });
+                break;
+                
+            case "users":
+                if (normalizedAction == "view" || normalizedAction == "manage")
+                    permissions.Add("all");
+                break;
+        }
+        
+        return permissions;
+    }
+    
+    /// <summary>
+    /// Log a permission check to the audit log.
+    /// </summary>
+    private void LogPermissionCheck(PermissionCheckResult result)
+    {
+        var changes = new List<FieldChange>
+        {
+            new FieldChange
+            {
+                Field = "ResourceType",
+                OldValue = null,
+                NewValue = result.ResourceType
+            },
+            new FieldChange
+            {
+                Field = "Action",
+                OldValue = null,
+                NewValue = result.Action
+            },
+            new FieldChange
+            {
+                Field = "Allowed",
+                OldValue = null,
+                NewValue = result.Allowed.ToString()
+            }
+        };
+        
+        if (!string.IsNullOrEmpty(result.ResourceId))
+        {
+            changes.Add(new FieldChange
+            {
+                Field = "ResourceId",
+                OldValue = null,
+                NewValue = result.ResourceId
+            });
+        }
+        
+        if (!string.IsNullOrEmpty(result.DenialReason))
+        {
+            changes.Add(new FieldChange
+            {
+                Field = "DenialReason",
+                OldValue = null,
+                NewValue = result.DenialReason
+            });
+        }
+        
+        CreateAuditLogEntry(
+            result.UserId,
+            result.UserName,
+            result.Allowed ? "permission-check-allowed" : "permission-check-denied",
+            "Permission",
+            result.ResourceType + (result.ResourceId != null ? $":{result.ResourceId}" : ""),
+            changes,
+            result.Allowed 
+                ? $"User '{result.UserName}' allowed to {result.Action} {result.ResourceType}"
+                : $"User '{result.UserName}' denied to {result.Action} {result.ResourceType}: {result.DenialReason}");
+    }
+    
     #endregion
     
     #endregion
