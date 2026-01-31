@@ -21,6 +21,20 @@ public sealed class DocxExportService : IDocxExportService
     {
         options ??= new DocxExportOptions();
         
+        // Get schema version (use provided or default to current)
+        var schemaVersion = options.SchemaVersion ?? ExportSchemaRegistry.GetCurrentVersion("docx");
+        
+        // Create export metadata
+        var exportMetadata = ExportMetadata.FromSchemaVersion(
+            schemaVersion,
+            options.UserId,
+            options.UserName
+        );
+        exportMetadata.PeriodId = report.Period.Id;
+        exportMetadata.PeriodName = report.Period.Name;
+        exportMetadata.GenerationId = report.Id;
+        exportMetadata.VariantName = options.VariantName;
+        
         using var memStream = new MemoryStream();
         using (var document = WordprocessingDocument.Create(memStream, WordprocessingDocumentType.Document))
         {
@@ -31,7 +45,7 @@ public sealed class DocxExportService : IDocxExportService
             // Title page
             if (options.IncludeTitlePage)
             {
-                AddTitlePage(body, report, options);
+                AddTitlePage(body, report, options, exportMetadata);
                 AddPageBreak(body);
             }
             
@@ -58,7 +72,7 @@ public sealed class DocxExportService : IDocxExportService
             // Add page numbering to footer if requested
             if (options.IncludePageNumbers)
             {
-                AddPageNumbering(mainPart);
+                AddPageNumbering(mainPart, exportMetadata);
             }
             
             mainPart.Document.Save();
@@ -72,7 +86,7 @@ public sealed class DocxExportService : IDocxExportService
         return ExportUtilities.GenerateFilename(report, variantName, ".docx");
     }
 
-    private void AddTitlePage(Body body, GeneratedReport report, DocxExportOptions options)
+    private void AddTitlePage(Body body, GeneratedReport report, DocxExportOptions options, ExportMetadata exportMetadata)
     {
         // Organization name - Heading 1
         AddParagraph(body, report.Organization?.Name ?? "ESG Responsibility Report", "Heading1", true);
@@ -110,6 +124,34 @@ public sealed class DocxExportService : IDocxExportService
         // Metadata table
         var table = CreateMetadataTable(report, options.Language);
         body.AppendChild(table);
+        
+        AddEmptyParagraph(body);
+        AddEmptyParagraph(body);
+        
+        // Export metadata section
+        AddParagraph(body, "Export Metadata", "Heading3");
+        var exportMetaTable = new Table();
+        
+        // Table properties
+        var tblProp = new TableProperties(
+            new TableBorders(
+                new TopBorder { Val = BorderValues.Single, Size = 4 },
+                new BottomBorder { Val = BorderValues.Single, Size = 4 },
+                new LeftBorder { Val = BorderValues.Single, Size = 4 },
+                new RightBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideHorizontalBorder { Val = BorderValues.Single, Size = 4 },
+                new InsideVerticalBorder { Val = BorderValues.Single, Size = 4 }
+            ),
+            new TableWidth { Width = "5000", Type = TableWidthUnitValues.Pct }
+        );
+        exportMetaTable.AppendChild(tblProp);
+        
+        AddTableRow(exportMetaTable, "Schema", exportMetadata.SchemaIdentifier);
+        AddTableRow(exportMetaTable, "Version", exportMetadata.SchemaVersion);
+        AddTableRow(exportMetaTable, "Export ID", exportMetadata.ExportId);
+        AddTableRow(exportMetaTable, "Exported At", exportMetadata.ExportedAt);
+        
+        body.AppendChild(exportMetaTable);
     }
 
     private void AddTableOfContents(Body body, GeneratedReport report, string? language = null)
@@ -417,12 +459,24 @@ public sealed class DocxExportService : IDocxExportService
         }
     }
 
-    private void AddPageNumbering(MainDocumentPart mainPart)
+    private void AddPageNumbering(MainDocumentPart mainPart, ExportMetadata exportMetadata)
     {
         // Create footer part
         var footerPart = mainPart.AddNewPart<FooterPart>();
         footerPart.Footer = new Footer();
         
+        // Export metadata line
+        var metaPara = footerPart.Footer.AppendChild(new Paragraph());
+        var metaParaProps = new ParagraphProperties(
+            new Justification { Val = JustificationValues.Center }
+        );
+        metaPara.AppendChild(metaParaProps);
+        var metaRun = metaPara.AppendChild(new Run());
+        var metaRunProps = new RunProperties(new FontSize { Val = "14" }); // 7pt (half of 14)
+        metaRun.AppendChild(metaRunProps);
+        metaRun.AppendChild(new Text($"Export Schema: {exportMetadata.SchemaIdentifier} (v{exportMetadata.SchemaVersion}) | Export ID: {exportMetadata.ExportId}"));
+        
+        // Page numbers
         var para = footerPart.Footer.AppendChild(new Paragraph());
         var paraProps = new ParagraphProperties(
             new Justification { Val = JustificationValues.Center }
