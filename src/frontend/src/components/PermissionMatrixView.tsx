@@ -20,7 +20,7 @@ export default function PermissionMatrixView() {
 
   const fetchMatrix = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/permissions/matrix')
+      const response = await fetch('/api/permissions/matrix')
       const data = await response.json()
       setMatrix(data)
     } catch (error) {
@@ -32,7 +32,7 @@ export default function PermissionMatrixView() {
 
   const fetchHistory = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/permissions/history?limit=50')
+      const response = await fetch('/api/permissions/history?limit=50')
       const data = await response.json()
       setHistory(data)
     } catch (error) {
