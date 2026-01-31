@@ -183,9 +183,12 @@ builder.Services.AddScoped<IConnectorRepository, ConnectorRepository>();
 builder.Services.AddScoped<IIntegrationLogRepository, IntegrationLogRepository>();
 builder.Services.AddScoped<IHREntityRepository, HREntityRepository>();
 builder.Services.AddScoped<IHRSyncRecordRepository, HRSyncRecordRepository>();
+builder.Services.AddScoped<IFinanceEntityRepository, FinanceEntityRepository>();
+builder.Services.AddScoped<IFinanceSyncRecordRepository, FinanceSyncRecordRepository>();
 builder.Services.AddScoped<ConnectorService>();
 builder.Services.AddScoped<IntegrationExecutionService>();
 builder.Services.AddScoped<HRSyncService>();
+builder.Services.AddScoped<FinanceSyncService>();
 
 builder.Services.AddCors(options =>
 {
