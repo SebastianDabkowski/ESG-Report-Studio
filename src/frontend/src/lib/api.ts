@@ -35,7 +35,10 @@ import type {
   ExportHistoryEntry,
   MarkGenerationFinalRequest,
   CompareGenerationsRequest,
-  GenerationComparison
+  GenerationComparison,
+  AccessRequest,
+  CreateAccessRequestRequest,
+  ReviewAccessRequestRequest
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1711,3 +1714,53 @@ export async function getExportHistory(periodId: string): Promise<import('@/lib/
 }
 
 
+
+// Access Request API
+export async function createAccessRequest(
+  payload: import('@/lib/types').CreateAccessRequestRequest
+): Promise<import('@/lib/types').AccessRequest> {
+  return requestJson<import('@/lib/types').AccessRequest>('/access-requests', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function getAccessRequests(
+  status?: string,
+  requestedBy?: string,
+  resourceId?: string
+): Promise<import('@/lib/types').AccessRequest[]> {
+  const params = new URLSearchParams()
+  if (status) params.append('status', status)
+  if (requestedBy) params.append('requestedBy', requestedBy)
+  if (resourceId) params.append('resourceId', resourceId)
+  
+  const queryString = params.toString()
+  return requestJson<import('@/lib/types').AccessRequest[]>(
+    `/access-requests${queryString ? `?${queryString}` : ''}`
+  )
+}
+
+export async function getAccessRequest(id: string): Promise<import('@/lib/types').AccessRequest> {
+  return requestJson<import('@/lib/types').AccessRequest>(`/access-requests/${id}`)
+}
+
+export async function approveAccessRequest(
+  id: string,
+  payload: import('@/lib/types').ReviewAccessRequestRequest
+): Promise<import('@/lib/types').AccessRequest> {
+  return requestJson<import('@/lib/types').AccessRequest>(`/access-requests/${id}/approve`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+export async function rejectAccessRequest(
+  id: string,
+  payload: import('@/lib/types').ReviewAccessRequestRequest
+): Promise<import('@/lib/types').AccessRequest> {
+  return requestJson<import('@/lib/types').AccessRequest>(`/access-requests/${id}/reject`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
