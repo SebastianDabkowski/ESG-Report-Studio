@@ -91,6 +91,56 @@ public sealed class ReportingController : ControllerBase
         return Ok(_store.GetSectionSummaries(periodId));
     }
 
+    /// <summary>
+    /// Get sections accessible to a specific user.
+    /// Returns sections the user owns or has been granted explicit access to.
+    /// Admins see all sections.
+    /// </summary>
+    /// <param name="userId">User ID to filter sections for</param>
+    /// <param name="periodId">Optional period ID to filter by</param>
+    /// <response code="200">Returns accessible sections</response>
+    /// <response code="400">Invalid user ID</response>
+    [HttpGet("sections/accessible")]
+    [ProducesResponseType(typeof(IReadOnlyList<ReportSection>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<IReadOnlyList<ReportSection>> GetAccessibleSections(
+        [FromQuery] string userId, 
+        [FromQuery] string? periodId = null)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "User ID is required." });
+        }
+
+        var sections = _store.GetAccessibleSections(userId, periodId);
+        return Ok(sections);
+    }
+
+    /// <summary>
+    /// Get section summaries accessible to a specific user.
+    /// Returns sections the user owns or has been granted explicit access to.
+    /// Admins see all sections.
+    /// </summary>
+    /// <param name="userId">User ID to filter section summaries for</param>
+    /// <param name="periodId">Optional period ID to filter by</param>
+    /// <response code="200">Returns accessible section summaries</response>
+    /// <response code="400">Invalid user ID</response>
+    [HttpGet("section-summaries/accessible")]
+    [ProducesResponseType(typeof(IReadOnlyList<SectionSummary>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<IReadOnlyList<SectionSummary>> GetAccessibleSectionSummaries(
+        [FromQuery] string userId, 
+        [FromQuery] string? periodId = null)
+    {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "User ID is required." });
+        }
+
+        var summaries = _store.GetAccessibleSectionSummaries(userId, periodId);
+        return Ok(summaries);
+    }
+
     [HttpGet("reporting-data")]
     public ActionResult<ReportingDataSnapshot> GetReportingData()
     {

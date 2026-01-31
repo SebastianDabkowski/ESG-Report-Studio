@@ -55,6 +55,7 @@ public sealed class InMemoryReportStore
     private readonly List<GenerationHistoryEntry> _generationHistory = new(); // Report generation history
     private readonly List<ExportHistoryEntry> _exportHistory = new(); // Export history (PDF/DOCX)
     private readonly List<SystemRole> _roles = new(); // System roles catalog
+    private readonly List<SectionAccessGrant> _sectionAccessGrants = new(); // Section-level access grants
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -16050,6 +16051,379 @@ public sealed class InMemoryReportStore
             result.Allowed 
                 ? $"User '{result.UserName}' allowed to {result.Action} {result.ResourceType}"
                 : $"User '{result.UserName}' denied to {result.Action} {result.ResourceType}: {result.DenialReason}");
+    }
+    
+    #endregion
+    
+    #region Section Access Control
+    
+    /// <summary>
+    /// Grant section access to one or more users.
+    /// Creates access grants and logs the operation to audit trail.
+    /// </summary>
+    public GrantSectionAccessResult GrantSectionAccess(GrantSectionAccessRequest request)
+    {
+        lock (_lock)
+        {
+            var result = new GrantSectionAccessResult();
+            
+            // Validate section exists
+            var section = _sections.FirstOrDefault(s => s.Id == request.SectionId);
+            if (section == null)
+            {
+                result.Failures.Add(new AccessGrantFailure
+                {
+                    UserId = "N/A",
+                    Reason = $"Section '{request.SectionId}' not found"
+                });
+                return result;
+            }
+            
+            var grantor = _users.FirstOrDefault(u => u.Id == request.GrantedBy);
+            if (grantor == null)
+            {
+                result.Failures.Add(new AccessGrantFailure
+                {
+                    UserId = "N/A",
+                    Reason = $"Grantor user '{request.GrantedBy}' not found"
+                });
+                return result;
+            }
+            
+            var timestamp = DateTime.UtcNow.ToString("O");
+            
+            foreach (var userId in request.UserIds)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == userId);
+                if (user == null)
+                {
+                    result.Failures.Add(new AccessGrantFailure
+                    {
+                        UserId = userId,
+                        Reason = "User not found"
+                    });
+                    continue;
+                }
+                
+                // Check if access already exists
+                var existingGrant = _sectionAccessGrants.FirstOrDefault(g => 
+                    g.SectionId == request.SectionId && g.UserId == userId);
+                
+                if (existingGrant != null)
+                {
+                    result.Failures.Add(new AccessGrantFailure
+                    {
+                        UserId = userId,
+                        Reason = "User already has access to this section"
+                    });
+                    continue;
+                }
+                
+                // Create new access grant
+                var grant = new SectionAccessGrant
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    SectionId = request.SectionId,
+                    UserId = userId,
+                    UserName = user.Name,
+                    GrantedBy = request.GrantedBy,
+                    GrantedByName = grantor.Name,
+                    GrantedAt = timestamp,
+                    Reason = request.Reason
+                };
+                
+                _sectionAccessGrants.Add(grant);
+                result.GrantedAccess.Add(grant);
+                
+                // Log to audit trail
+                var changes = new List<FieldChange>
+                {
+                    new() { Field = "SectionId", OldValue = "", NewValue = request.SectionId },
+                    new() { Field = "UserId", OldValue = "", NewValue = userId },
+                    new() { Field = "UserName", OldValue = "", NewValue = user.Name },
+                    new() { Field = "GrantedBy", OldValue = "", NewValue = request.GrantedBy },
+                    new() { Field = "GrantedByName", OldValue = "", NewValue = grantor.Name },
+                    new() { Field = "Reason", OldValue = "", NewValue = request.Reason ?? "" }
+                };
+                
+                CreateAuditLogEntry(
+                    userId: request.GrantedBy,
+                    userName: grantor.Name,
+                    action: "grant-section-access",
+                    entityType: "SectionAccessGrant",
+                    entityId: grant.Id,
+                    changes: changes,
+                    changeNote: $"Granted section access to user '{user.Name}' for section '{section.Title}'" + 
+                               (string.IsNullOrWhiteSpace(request.Reason) ? "" : $" - Reason: {request.Reason}"));
+            }
+            
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Revoke section access from one or more users.
+    /// Removes access grants and logs the operation to audit trail.
+    /// </summary>
+    public RevokeSectionAccessResult RevokeSectionAccess(RevokeSectionAccessRequest request)
+    {
+        lock (_lock)
+        {
+            var result = new RevokeSectionAccessResult();
+            
+            // Validate section exists
+            var section = _sections.FirstOrDefault(s => s.Id == request.SectionId);
+            if (section == null)
+            {
+                result.Failures.Add(new AccessGrantFailure
+                {
+                    UserId = "N/A",
+                    Reason = $"Section '{request.SectionId}' not found"
+                });
+                return result;
+            }
+            
+            var revoker = _users.FirstOrDefault(u => u.Id == request.RevokedBy);
+            if (revoker == null)
+            {
+                result.Failures.Add(new AccessGrantFailure
+                {
+                    UserId = "N/A",
+                    Reason = $"Revoker user '{request.RevokedBy}' not found"
+                });
+                return result;
+            }
+            
+            var timestamp = DateTime.UtcNow.ToString("O");
+            
+            foreach (var userId in request.UserIds)
+            {
+                var user = _users.FirstOrDefault(u => u.Id == userId);
+                if (user == null)
+                {
+                    result.Failures.Add(new AccessGrantFailure
+                    {
+                        UserId = userId,
+                        Reason = "User not found"
+                    });
+                    continue;
+                }
+                
+                // Find existing grant
+                var existingGrant = _sectionAccessGrants.FirstOrDefault(g => 
+                    g.SectionId == request.SectionId && g.UserId == userId);
+                
+                if (existingGrant == null)
+                {
+                    result.Failures.Add(new AccessGrantFailure
+                    {
+                        UserId = userId,
+                        Reason = "User does not have explicit access grant to this section"
+                    });
+                    continue;
+                }
+                
+                // Remove access grant
+                _sectionAccessGrants.Remove(existingGrant);
+                result.RevokedUserIds.Add(userId);
+                
+                // Log to audit trail
+                var changes = new List<FieldChange>
+                {
+                    new() { Field = "SectionId", OldValue = request.SectionId, NewValue = "" },
+                    new() { Field = "UserId", OldValue = userId, NewValue = "" },
+                    new() { Field = "UserName", OldValue = user.Name, NewValue = "" },
+                    new() { Field = "RevokedBy", OldValue = "", NewValue = request.RevokedBy },
+                    new() { Field = "RevokedByName", OldValue = "", NewValue = revoker.Name },
+                    new() { Field = "Reason", OldValue = "", NewValue = request.Reason ?? "" }
+                };
+                
+                CreateAuditLogEntry(
+                    userId: request.RevokedBy,
+                    userName: revoker.Name,
+                    action: "revoke-section-access",
+                    entityType: "SectionAccessGrant",
+                    entityId: existingGrant.Id,
+                    changes: changes,
+                    changeNote: $"Revoked section access from user '{user.Name}' for section '{section.Title}'" + 
+                               (string.IsNullOrWhiteSpace(request.Reason) ? "" : $" - Reason: {request.Reason}"));
+            }
+            
+            return result;
+        }
+    }
+    
+    /// <summary>
+    /// Get all sections a user has explicit access to.
+    /// Does not include sections the user owns.
+    /// </summary>
+    public List<SectionAccessGrant> GetUserSectionAccess(string userId)
+    {
+        lock (_lock)
+        {
+            return _sectionAccessGrants
+                .Where(g => g.UserId == userId)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get all users who have explicit access to a section.
+    /// Does not include the section owner.
+    /// </summary>
+    public SectionAccessSummary GetSectionAccessSummary(string sectionId)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return new SectionAccessSummary
+                {
+                    SectionId = sectionId,
+                    SectionTitle = "Unknown Section"
+                };
+            }
+            
+            var owner = _users.FirstOrDefault(u => u.Id == section.OwnerId);
+            var grants = _sectionAccessGrants
+                .Where(g => g.SectionId == sectionId)
+                .ToList();
+            
+            return new SectionAccessSummary
+            {
+                SectionId = sectionId,
+                SectionTitle = section.Title,
+                AccessGrants = grants,
+                Owner = owner
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Check if a user has access to a specific section.
+    /// Returns true if:
+    /// - User is an admin
+    /// - User is the section owner
+    /// - User has an explicit access grant
+    /// </summary>
+    public bool HasSectionAccess(string userId, string sectionId)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return false;
+            }
+            
+            // Check if user is admin
+            var effectivePerms = GetEffectivePermissions(userId);
+            if (effectivePerms.EffectivePermissions.Contains("all"))
+            {
+                return true;
+            }
+            
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return false;
+            }
+            
+            // Check if user is section owner
+            if (section.OwnerId == userId)
+            {
+                return true;
+            }
+            
+            // Check for explicit access grant
+            var hasGrant = _sectionAccessGrants.Any(g => 
+                g.SectionId == sectionId && g.UserId == userId);
+            
+            return hasGrant;
+        }
+    }
+    
+    /// <summary>
+    /// Get sections filtered by user access.
+    /// Returns only sections the user can view (owned or explicitly granted access).
+    /// Admins see all sections.
+    /// </summary>
+    public IReadOnlyList<ReportSection> GetAccessibleSections(string userId, string? periodId = null)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return new List<ReportSection>();
+            }
+            
+            // Check if user is admin
+            var effectivePerms = GetEffectivePermissions(userId);
+            var isAdmin = effectivePerms.EffectivePermissions.Contains("all");
+            
+            // Start with all sections for the period (or all sections if no period specified)
+            var sections = periodId == null 
+                ? _sections.AsEnumerable()
+                : _sections.Where(s => s.PeriodId == periodId);
+            
+            // If not admin, filter to only accessible sections
+            if (!isAdmin)
+            {
+                var accessibleSectionIds = _sectionAccessGrants
+                    .Where(g => g.UserId == userId)
+                    .Select(g => g.SectionId)
+                    .ToHashSet();
+                
+                sections = sections.Where(s => 
+                    s.OwnerId == userId || // User owns the section
+                    accessibleSectionIds.Contains(s.Id)); // User has explicit grant
+            }
+            
+            return sections.OrderBy(s => s.Order).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get section summaries filtered by user access.
+    /// Returns only sections the user can view (owned or explicitly granted access).
+    /// Admins see all sections.
+    /// </summary>
+    public IReadOnlyList<SectionSummary> GetAccessibleSectionSummaries(string userId, string? periodId = null)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null)
+            {
+                return new List<SectionSummary>();
+            }
+            
+            // Check if user is admin
+            var effectivePerms = GetEffectivePermissions(userId);
+            var isAdmin = effectivePerms.EffectivePermissions.Contains("all");
+            
+            // Start with all summaries for the period (or all summaries if no period specified)
+            var summaries = periodId == null 
+                ? _summaries.AsEnumerable()
+                : _summaries.Where(s => s.PeriodId == periodId);
+            
+            // If not admin, filter to only accessible sections
+            if (!isAdmin)
+            {
+                var accessibleSectionIds = _sectionAccessGrants
+                    .Where(g => g.UserId == userId)
+                    .Select(g => g.SectionId)
+                    .ToHashSet();
+                
+                summaries = summaries.Where(s => 
+                    s.OwnerId == userId || // User owns the section
+                    accessibleSectionIds.Contains(s.Id)); // User has explicit grant
+            }
+            
+            return summaries.OrderBy(s => s.Order).ToList();
+        }
     }
     
     #endregion
