@@ -17,6 +17,10 @@ public sealed class InMemoryReportStore
     private readonly List<SectionCatalogItem> _sectionCatalog = new();
     private readonly List<StandardsCatalogItem> _standardsCatalog = new(); // Reporting standards catalogue
     private readonly List<StandardSectionMapping> _standardMappings = new(); // Standard-to-section mappings
+    private readonly List<StandardDisclosure> _standardDisclosures = new(); // Individual disclosures within standards
+    private readonly List<SectionDisclosureMapping> _sectionDisclosureMappings = new(); // Section-to-disclosure mappings (many-to-many)
+    private readonly List<DataPointDisclosureMapping> _dataPointDisclosureMappings = new(); // DataPoint-to-disclosure mappings (many-to-many)
+    private readonly List<MappingVersion> _mappingVersions = new(); // Versioned snapshots of mappings for export consistency
     private readonly List<DataPoint> _dataPoints = new();
     private readonly List<Evidence> _evidence = new();
     private readonly List<Assumption> _assumptions = new();
@@ -2198,6 +2202,590 @@ public sealed class InMemoryReportStore
 
             _standardMappings.Remove(mapping);
             return true;
+        }
+    }
+
+    // StandardDisclosure Management (for many-to-many mapping)
+    public IReadOnlyList<StandardDisclosure> GetStandardDisclosures(string? standardId = null, string? category = null, string? topic = null, bool? mandatoryOnly = null)
+    {
+        lock (_lock)
+        {
+            var query = _standardDisclosures.AsEnumerable();
+
+            if (standardId != null)
+            {
+                query = query.Where(d => d.StandardId == standardId);
+            }
+
+            if (category != null)
+            {
+                query = query.Where(d => d.Category == category);
+            }
+
+            if (topic != null)
+            {
+                query = query.Where(d => d.Topic == topic);
+            }
+
+            if (mandatoryOnly.HasValue && mandatoryOnly.Value)
+            {
+                query = query.Where(d => d.IsMandatory);
+            }
+
+            return query.ToList();
+        }
+    }
+
+    public StandardDisclosure? GetStandardDisclosure(string id)
+    {
+        lock (_lock)
+        {
+            return _standardDisclosures.FirstOrDefault(d => d.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, StandardDisclosure? Disclosure) CreateStandardDisclosure(CreateStandardDisclosureRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate that the standard exists
+            var standard = _standardsCatalog.FirstOrDefault(s => s.Id == request.StandardId);
+            if (standard == null)
+            {
+                return (false, "Standard not found.", null);
+            }
+
+            // Validate that the disclosure code is unique within the standard
+            var existingDisclosure = _standardDisclosures.FirstOrDefault(d => 
+                d.StandardId == request.StandardId && 
+                d.DisclosureCode == request.DisclosureCode);
+            if (existingDisclosure != null)
+            {
+                return (false, $"Disclosure with code '{request.DisclosureCode}' already exists in this standard.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            var disclosure = new StandardDisclosure
+            {
+                Id = Guid.NewGuid().ToString(),
+                StandardId = request.StandardId,
+                DisclosureCode = request.DisclosureCode,
+                Title = request.Title,
+                Description = request.Description,
+                Category = request.Category,
+                Topic = request.Topic,
+                IsMandatory = request.IsMandatory,
+                CreatedAt = now,
+                CreatedBy = userId
+            };
+
+            _standardDisclosures.Add(disclosure);
+            return (true, null, disclosure);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, StandardDisclosure? Disclosure) UpdateStandardDisclosure(string id, UpdateStandardDisclosureRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            var disclosure = _standardDisclosures.FirstOrDefault(d => d.Id == id);
+            if (disclosure == null)
+            {
+                return (false, "Disclosure not found.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            disclosure.Title = request.Title;
+            disclosure.Description = request.Description;
+            disclosure.Category = request.Category;
+            disclosure.Topic = request.Topic;
+            disclosure.IsMandatory = request.IsMandatory;
+            disclosure.UpdatedAt = now;
+            disclosure.UpdatedBy = userId;
+
+            return (true, null, disclosure);
+        }
+    }
+
+    public bool DeleteStandardDisclosure(string id)
+    {
+        lock (_lock)
+        {
+            var disclosure = _standardDisclosures.FirstOrDefault(d => d.Id == id);
+            if (disclosure == null)
+            {
+                return false;
+            }
+
+            // Also delete all mappings that reference this disclosure
+            _sectionDisclosureMappings.RemoveAll(m => m.DisclosureId == id);
+            _dataPointDisclosureMappings.RemoveAll(m => m.DisclosureId == id);
+
+            _standardDisclosures.Remove(disclosure);
+            return true;
+        }
+    }
+
+    // SectionDisclosureMapping Management
+    public IReadOnlyList<SectionDisclosureMapping> GetSectionDisclosureMappings(string? sectionId = null, string? disclosureId = null)
+    {
+        lock (_lock)
+        {
+            var query = _sectionDisclosureMappings.AsEnumerable();
+
+            if (sectionId != null)
+            {
+                query = query.Where(m => m.SectionId == sectionId);
+            }
+
+            if (disclosureId != null)
+            {
+                query = query.Where(m => m.DisclosureId == disclosureId);
+            }
+
+            return query.ToList();
+        }
+    }
+
+    public SectionDisclosureMapping? GetSectionDisclosureMapping(string id)
+    {
+        lock (_lock)
+        {
+            return _sectionDisclosureMappings.FirstOrDefault(m => m.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, SectionDisclosureMapping? Mapping) CreateSectionDisclosureMapping(CreateSectionDisclosureMappingRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate that the section exists
+            var section = _sections.FirstOrDefault(s => s.Id == request.SectionId);
+            if (section == null)
+            {
+                return (false, "Section not found.", null);
+            }
+
+            // Validate that the disclosure exists
+            var disclosure = _standardDisclosures.FirstOrDefault(d => d.Id == request.DisclosureId);
+            if (disclosure == null)
+            {
+                return (false, "Disclosure not found.", null);
+            }
+
+            // Check if this mapping already exists
+            var existingMapping = _sectionDisclosureMappings.FirstOrDefault(m => 
+                m.SectionId == request.SectionId && 
+                m.DisclosureId == request.DisclosureId);
+            if (existingMapping != null)
+            {
+                return (false, "Mapping already exists between this section and disclosure.", null);
+            }
+
+            // Validate coverage level
+            if (request.CoverageLevel != "full" && request.CoverageLevel != "partial" && request.CoverageLevel != "reference")
+            {
+                return (false, "Coverage level must be 'full', 'partial', or 'reference'.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            var mapping = new SectionDisclosureMapping
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = request.SectionId,
+                DisclosureId = request.DisclosureId,
+                CoverageLevel = request.CoverageLevel,
+                Notes = request.Notes,
+                CreatedAt = now,
+                CreatedBy = userId
+            };
+
+            _sectionDisclosureMappings.Add(mapping);
+            return (true, null, mapping);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, SectionDisclosureMapping? Mapping) UpdateSectionDisclosureMapping(string id, UpdateSectionDisclosureMappingRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            var mapping = _sectionDisclosureMappings.FirstOrDefault(m => m.Id == id);
+            if (mapping == null)
+            {
+                return (false, "Mapping not found.", null);
+            }
+
+            // Validate coverage level
+            if (request.CoverageLevel != "full" && request.CoverageLevel != "partial" && request.CoverageLevel != "reference")
+            {
+                return (false, "Coverage level must be 'full', 'partial', or 'reference'.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            mapping.CoverageLevel = request.CoverageLevel;
+            mapping.Notes = request.Notes;
+            mapping.UpdatedAt = now;
+            mapping.UpdatedBy = userId;
+
+            return (true, null, mapping);
+        }
+    }
+
+    public bool DeleteSectionDisclosureMapping(string id)
+    {
+        lock (_lock)
+        {
+            var mapping = _sectionDisclosureMappings.FirstOrDefault(m => m.Id == id);
+            if (mapping == null)
+            {
+                return false;
+            }
+
+            _sectionDisclosureMappings.Remove(mapping);
+            return true;
+        }
+    }
+
+    // DataPointDisclosureMapping Management
+    public IReadOnlyList<DataPointDisclosureMapping> GetDataPointDisclosureMappings(string? dataPointId = null, string? disclosureId = null)
+    {
+        lock (_lock)
+        {
+            var query = _dataPointDisclosureMappings.AsEnumerable();
+
+            if (dataPointId != null)
+            {
+                query = query.Where(m => m.DataPointId == dataPointId);
+            }
+
+            if (disclosureId != null)
+            {
+                query = query.Where(m => m.DisclosureId == disclosureId);
+            }
+
+            return query.ToList();
+        }
+    }
+
+    public DataPointDisclosureMapping? GetDataPointDisclosureMapping(string id)
+    {
+        lock (_lock)
+        {
+            return _dataPointDisclosureMappings.FirstOrDefault(m => m.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPointDisclosureMapping? Mapping) CreateDataPointDisclosureMapping(CreateDataPointDisclosureMappingRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate that the data point exists
+            var dataPoint = _dataPoints.FirstOrDefault(d => d.Id == request.DataPointId);
+            if (dataPoint == null)
+            {
+                return (false, "Data point not found.", null);
+            }
+
+            // Validate that the disclosure exists
+            var disclosure = _standardDisclosures.FirstOrDefault(d => d.Id == request.DisclosureId);
+            if (disclosure == null)
+            {
+                return (false, "Disclosure not found.", null);
+            }
+
+            // Check if this mapping already exists
+            var existingMapping = _dataPointDisclosureMappings.FirstOrDefault(m => 
+                m.DataPointId == request.DataPointId && 
+                m.DisclosureId == request.DisclosureId);
+            if (existingMapping != null)
+            {
+                return (false, "Mapping already exists between this data point and disclosure.", null);
+            }
+
+            // Validate coverage level
+            if (request.CoverageLevel != "full" && request.CoverageLevel != "partial" && request.CoverageLevel != "reference")
+            {
+                return (false, "Coverage level must be 'full', 'partial', or 'reference'.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            var mapping = new DataPointDisclosureMapping
+            {
+                Id = Guid.NewGuid().ToString(),
+                DataPointId = request.DataPointId,
+                DisclosureId = request.DisclosureId,
+                CoverageLevel = request.CoverageLevel,
+                Notes = request.Notes,
+                CreatedAt = now,
+                CreatedBy = userId
+            };
+
+            _dataPointDisclosureMappings.Add(mapping);
+            return (true, null, mapping);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, DataPointDisclosureMapping? Mapping) UpdateDataPointDisclosureMapping(string id, UpdateDataPointDisclosureMappingRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            var mapping = _dataPointDisclosureMappings.FirstOrDefault(m => m.Id == id);
+            if (mapping == null)
+            {
+                return (false, "Mapping not found.", null);
+            }
+
+            // Validate coverage level
+            if (request.CoverageLevel != "full" && request.CoverageLevel != "partial" && request.CoverageLevel != "reference")
+            {
+                return (false, "Coverage level must be 'full', 'partial', or 'reference'.", null);
+            }
+
+            var now = DateTime.UtcNow.ToString("o");
+            mapping.CoverageLevel = request.CoverageLevel;
+            mapping.Notes = request.Notes;
+            mapping.UpdatedAt = now;
+            mapping.UpdatedBy = userId;
+
+            return (true, null, mapping);
+        }
+    }
+
+    public bool DeleteDataPointDisclosureMapping(string id)
+    {
+        lock (_lock)
+        {
+            var mapping = _dataPointDisclosureMappings.FirstOrDefault(m => m.Id == id);
+            if (mapping == null)
+            {
+                return false;
+            }
+
+            _dataPointDisclosureMappings.Remove(mapping);
+            return true;
+        }
+    }
+
+    // MappingVersion Management
+    public IReadOnlyList<MappingVersion> GetMappingVersions(string periodId)
+    {
+        lock (_lock)
+        {
+            return _mappingVersions.Where(v => v.PeriodId == periodId).ToList();
+        }
+    }
+
+    public MappingVersion? GetMappingVersion(string id)
+    {
+        lock (_lock)
+        {
+            return _mappingVersions.FirstOrDefault(v => v.Id == id);
+        }
+    }
+
+    public (bool IsValid, string? ErrorMessage, MappingVersion? Version) CreateMappingVersion(CreateMappingVersionRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate that the period exists
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, "Reporting period not found.", null);
+            }
+
+            // Get all sections for this period
+            var periodSections = _sections.Where(s => s.PeriodId == request.PeriodId).ToList();
+            
+            // Get all section mappings for these sections
+            var sectionMappings = _sectionDisclosureMappings.Where(m => 
+                periodSections.Any(s => s.Id == m.SectionId)).ToList();
+            
+            // Get all data points for these sections
+            var periodDataPoints = _dataPoints.Where(d => 
+                periodSections.Any(s => s.Id == d.SectionId)).ToList();
+            
+            // Get all data point mappings for these data points
+            var dataPointMappings = _dataPointDisclosureMappings.Where(m => 
+                periodDataPoints.Any(d => d.Id == m.DataPointId)).ToList();
+
+            // Create a snapshot object
+            var snapshot = new
+            {
+                SectionMappings = sectionMappings,
+                DataPointMappings = dataPointMappings,
+                Timestamp = DateTime.UtcNow.ToString("o")
+            };
+
+            // Serialize to JSON
+            var snapshotJson = System.Text.Json.JsonSerializer.Serialize(snapshot);
+
+            // Get the next version number
+            var existingVersions = _mappingVersions.Where(v => v.PeriodId == request.PeriodId).ToList();
+            var versionNumber = existingVersions.Any() ? existingVersions.Max(v => v.VersionNumber) + 1 : 1;
+
+            var now = DateTime.UtcNow.ToString("o");
+            var version = new MappingVersion
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = request.PeriodId,
+                VersionNumber = versionNumber,
+                MappingsSnapshot = snapshotJson,
+                Reason = request.Reason,
+                CreatedAt = now,
+                CreatedBy = userId
+            };
+
+            _mappingVersions.Add(version);
+            return (true, null, version);
+        }
+    }
+
+    // Standards Coverage Analysis
+    public StandardCoverageAnalysis GetStandardCoverageAnalysis(string standardId, string periodId, string? category = null, string? topic = null)
+    {
+        lock (_lock)
+        {
+            var standard = _standardsCatalog.FirstOrDefault(s => s.Id == standardId);
+            if (standard == null)
+            {
+                throw new ArgumentException("Standard not found", nameof(standardId));
+            }
+
+            var period = _periods.FirstOrDefault(p => p.Id == periodId);
+            if (period == null)
+            {
+                throw new ArgumentException("Reporting period not found", nameof(periodId));
+            }
+
+            // Get all disclosures for this standard
+            var disclosures = _standardDisclosures.Where(d => d.StandardId == standardId);
+
+            // Apply filters
+            if (category != null)
+            {
+                disclosures = disclosures.Where(d => d.Category == category);
+            }
+
+            if (topic != null)
+            {
+                disclosures = disclosures.Where(d => d.Topic == topic);
+            }
+
+            var disclosureList = disclosures.ToList();
+
+            // Get all sections for this period
+            var periodSections = _sections.Where(s => s.PeriodId == periodId).ToList();
+
+            // Get all data points for this period
+            var periodDataPoints = _dataPoints.Where(d => 
+                periodSections.Any(s => s.Id == d.SectionId)).ToList();
+
+            // Build coverage details for each disclosure
+            var coverageDetails = new List<DisclosureCoverageDetail>();
+            var fullyCovered = 0;
+            var partiallyCovered = 0;
+            var notCovered = 0;
+
+            foreach (var disclosure in disclosureList)
+            {
+                // Get section mappings for this disclosure
+                var sectionMappings = _sectionDisclosureMappings
+                    .Where(m => m.DisclosureId == disclosure.Id && 
+                                periodSections.Any(s => s.Id == m.SectionId))
+                    .ToList();
+
+                // Get data point mappings for this disclosure
+                var dataPointMappings = _dataPointDisclosureMappings
+                    .Where(m => m.DisclosureId == disclosure.Id && 
+                                periodDataPoints.Any(d => d.Id == m.DataPointId))
+                    .ToList();
+
+                // Determine coverage status
+                var hasFull = sectionMappings.Any(m => m.CoverageLevel == "full") || 
+                              dataPointMappings.Any(m => m.CoverageLevel == "full");
+                var hasPartial = sectionMappings.Any(m => m.CoverageLevel == "partial") || 
+                                 dataPointMappings.Any(m => m.CoverageLevel == "partial");
+                var hasAny = sectionMappings.Any() || dataPointMappings.Any();
+
+                string coverageStatus;
+                if (hasFull)
+                {
+                    coverageStatus = "full";
+                    fullyCovered++;
+                }
+                else if (hasPartial || hasAny)
+                {
+                    coverageStatus = "partial";
+                    partiallyCovered++;
+                }
+                else
+                {
+                    coverageStatus = "missing";
+                    notCovered++;
+                }
+
+                // Build mapped section info
+                var mappedSections = sectionMappings.Select(m =>
+                {
+                    var section = periodSections.First(s => s.Id == m.SectionId);
+                    return new MappedSectionInfo
+                    {
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        CoverageLevel = m.CoverageLevel,
+                        CompletenessStatus = section.Completeness,
+                        Notes = m.Notes
+                    };
+                }).ToList();
+
+                // Build mapped data point info
+                var mappedDataPoints = dataPointMappings.Select(m =>
+                {
+                    var dataPoint = periodDataPoints.First(d => d.Id == m.DataPointId);
+                    return new MappedDataPointInfo
+                    {
+                        DataPointId = dataPoint.Id,
+                        DataPointTitle = dataPoint.Title,
+                        CoverageLevel = m.CoverageLevel,
+                        CompletenessStatus = dataPoint.CompletenessStatus,
+                        Notes = m.Notes
+                    };
+                }).ToList();
+
+                coverageDetails.Add(new DisclosureCoverageDetail
+                {
+                    DisclosureId = disclosure.Id,
+                    DisclosureCode = disclosure.DisclosureCode,
+                    Title = disclosure.Title,
+                    Category = disclosure.Category,
+                    Topic = disclosure.Topic,
+                    IsMandatory = disclosure.IsMandatory,
+                    CoverageStatus = coverageStatus,
+                    MappedSections = mappedSections,
+                    MappedDataPoints = mappedDataPoints
+                });
+            }
+
+            // Calculate coverage percentage
+            var totalDisclosures = disclosureList.Count;
+            var coveragePercentage = totalDisclosures > 0
+                ? (decimal)(fullyCovered + (partiallyCovered * 0.5)) / totalDisclosures * 100
+                : 0;
+
+            return new StandardCoverageAnalysis
+            {
+                StandardId = standardId,
+                StandardTitle = standard.Title,
+                PeriodId = periodId,
+                TotalDisclosures = totalDisclosures,
+                FullyCovered = fullyCovered,
+                PartiallyCovered = partiallyCovered,
+                NotCovered = notCovered,
+                CoveragePercentage = Math.Round(coveragePercentage, 2),
+                DisclosureDetails = coverageDetails,
+                AnalyzedAt = DateTime.UtcNow.ToString("o")
+            };
         }
     }
 
