@@ -741,6 +741,25 @@ namespace SD.ProjectName.Tests.Products
             // Assert
             Assert.IsType<BadRequestObjectResult>(result.Result);
         }
+        
+        [Fact]
+        public void GetExportHistory_WithNonExistentUser_ShouldReturn404()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Request with non-existent userId
+            var result = controller.GetExportHistory(periodId, "non-existent-user");
+
+            // Assert
+            Assert.IsType<NotFoundObjectResult>(result.Result);
+        }
 
         #endregion
     }

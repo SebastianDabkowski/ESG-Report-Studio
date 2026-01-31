@@ -7228,7 +7228,7 @@ public sealed class ExportHistoryEntry
     public string ExportScope { get; set; } = "full";
     
     /// <summary>
-    /// List of section IDs included in the export. Empty if all sections were exported.
+    /// List of section IDs included in the export.
     /// </summary>
     public List<string> IncludedSectionIds { get; set; } = new();
     

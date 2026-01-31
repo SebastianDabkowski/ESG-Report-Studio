@@ -806,7 +806,7 @@ public sealed class ReportingController : ControllerBase
         var user = _store.GetUser(userId);
         if (user == null)
         {
-            return StatusCode(403, new { error = "User not found." });
+            return NotFound(new { error = "User not found." });
         }
         
         // Allow if user can export OR is the period owner
