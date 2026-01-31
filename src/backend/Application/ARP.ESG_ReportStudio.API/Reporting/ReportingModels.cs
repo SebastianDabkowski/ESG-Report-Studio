@@ -7886,3 +7886,351 @@ public sealed class SectionAccessSummary
     /// </summary>
     public User? Owner { get; set; }
 }
+
+// ============================================================================
+// Access Review Models
+// ============================================================================
+
+/// <summary>
+/// Represents a periodic access review session.
+/// Used by Compliance Officers to review and verify that role assignments remain appropriate.
+/// </summary>
+public sealed class AccessReview
+{
+    /// <summary>
+    /// Unique identifier for the access review.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Title/name of the review (e.g., "Q1 2024 Access Review").
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional description or purpose of the review.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// Review status: "in-progress", "completed", "exported".
+    /// </summary>
+    public string Status { get; set; } = "in-progress";
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the review was started.
+    /// </summary>
+    public string StartedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the person who started the review.
+    /// </summary>
+    public string StartedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person who started the review.
+    /// </summary>
+    public string StartedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the review was completed (optional).
+    /// </summary>
+    public string? CompletedAt { get; set; }
+    
+    /// <summary>
+    /// User ID of the person who completed the review.
+    /// </summary>
+    public string? CompletedBy { get; set; }
+    
+    /// <summary>
+    /// User name of the person who completed the review.
+    /// </summary>
+    public string? CompletedByName { get; set; }
+    
+    /// <summary>
+    /// List of access review entries (user/role/scope assignments).
+    /// </summary>
+    public List<AccessReviewEntry> Entries { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics for the review.
+    /// </summary>
+    public AccessReviewSummary? Summary { get; set; }
+}
+
+/// <summary>
+/// Represents a single user's access assignment in an access review.
+/// </summary>
+public sealed class AccessReviewEntry
+{
+    /// <summary>
+    /// Unique identifier for this review entry.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Access review ID this entry belongs to.
+    /// </summary>
+    public string ReviewId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID being reviewed.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User email.
+    /// </summary>
+    public string UserEmail { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the user is active.
+    /// </summary>
+    public bool IsActive { get; set; }
+    
+    /// <summary>
+    /// List of role IDs assigned to this user.
+    /// </summary>
+    public List<string> RoleIds { get; set; } = new();
+    
+    /// <summary>
+    /// List of role names (for display).
+    /// </summary>
+    public List<string> RoleNames { get; set; } = new();
+    
+    /// <summary>
+    /// List of sections the user has explicit access to.
+    /// </summary>
+    public List<AccessReviewSectionScope> SectionScopes { get; set; } = new();
+    
+    /// <summary>
+    /// List of reporting periods the user is owner of.
+    /// </summary>
+    public List<string> OwnedPeriodIds { get; set; } = new();
+    
+    /// <summary>
+    /// Decision made during review: "pending", "retain", "revoke".
+    /// </summary>
+    public string Decision { get; set; } = "pending";
+    
+    /// <summary>
+    /// ISO 8601 timestamp when decision was made (optional).
+    /// </summary>
+    public string? DecisionAt { get; set; }
+    
+    /// <summary>
+    /// User ID of the reviewer who made the decision.
+    /// </summary>
+    public string? DecisionBy { get; set; }
+    
+    /// <summary>
+    /// User name of the reviewer who made the decision.
+    /// </summary>
+    public string? DecisionByName { get; set; }
+    
+    /// <summary>
+    /// Optional note/justification for the decision.
+    /// </summary>
+    public string? DecisionNote { get; set; }
+}
+
+/// <summary>
+/// Represents section-level access scope in an access review.
+/// </summary>
+public sealed class AccessReviewSectionScope
+{
+    /// <summary>
+    /// Section ID.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section title.
+    /// </summary>
+    public string SectionTitle { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Access type: "owner", "explicit-grant".
+    /// </summary>
+    public string AccessType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when access was granted.
+    /// </summary>
+    public string? GrantedAt { get; set; }
+}
+
+/// <summary>
+/// Summary statistics for an access review.
+/// </summary>
+public sealed class AccessReviewSummary
+{
+    /// <summary>
+    /// Total number of users reviewed.
+    /// </summary>
+    public int TotalUsers { get; set; }
+    
+    /// <summary>
+    /// Number of active users.
+    /// </summary>
+    public int ActiveUsers { get; set; }
+    
+    /// <summary>
+    /// Number of inactive users.
+    /// </summary>
+    public int InactiveUsers { get; set; }
+    
+    /// <summary>
+    /// Number of entries with pending decisions.
+    /// </summary>
+    public int PendingDecisions { get; set; }
+    
+    /// <summary>
+    /// Number of entries with retain decisions.
+    /// </summary>
+    public int RetainDecisions { get; set; }
+    
+    /// <summary>
+    /// Number of entries with revoke decisions.
+    /// </summary>
+    public int RevokeDecisions { get; set; }
+    
+    /// <summary>
+    /// Number of accesses actually revoked.
+    /// </summary>
+    public int AccessesRevoked { get; set; }
+}
+
+/// <summary>
+/// Request to start a new access review.
+/// </summary>
+public sealed class StartAccessReviewRequest
+{
+    /// <summary>
+    /// Title/name of the review.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional description or purpose.
+    /// </summary>
+    public string? Description { get; set; }
+    
+    /// <summary>
+    /// User ID starting the review.
+    /// </summary>
+    public string StartedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name starting the review.
+    /// </summary>
+    public string StartedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to record a review decision for a user.
+/// </summary>
+public sealed class RecordReviewDecisionRequest
+{
+    /// <summary>
+    /// Access review entry ID.
+    /// </summary>
+    public string EntryId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Decision: "retain" or "revoke".
+    /// </summary>
+    public string Decision { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note/justification for the decision.
+    /// </summary>
+    public string? DecisionNote { get; set; }
+    
+    /// <summary>
+    /// User ID of the reviewer making the decision.
+    /// </summary>
+    public string DecisionBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the reviewer making the decision.
+    /// </summary>
+    public string DecisionByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to complete an access review.
+/// </summary>
+public sealed class CompleteAccessReviewRequest
+{
+    /// <summary>
+    /// User ID completing the review.
+    /// </summary>
+    public string CompletedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name completing the review.
+    /// </summary>
+    public string CompletedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Log entry for access review audit trail.
+/// </summary>
+public sealed class AccessReviewLogEntry
+{
+    /// <summary>
+    /// Unique identifier for the log entry.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Access review ID.
+    /// </summary>
+    public string ReviewId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp of the action.
+    /// </summary>
+    public string Timestamp { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who performed the action.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who performed the action.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Action type: "review-started", "decision-recorded", "access-revoked", "review-completed".
+    /// </summary>
+    public string Action { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Details about what changed.
+    /// </summary>
+    public string Details { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Related user ID (for decisions/revocations).
+    /// </summary>
+    public string? RelatedUserId { get; set; }
+    
+    /// <summary>
+    /// Decision made (for decision actions).
+    /// </summary>
+    public string? Decision { get; set; }
+    
+    /// <summary>
+    /// Optional note associated with the action.
+    /// </summary>
+    public string? Note { get; set; }
+}

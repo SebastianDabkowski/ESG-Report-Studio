@@ -58,6 +58,8 @@ public sealed class InMemoryReportStore
     private readonly List<SystemRole> _roles = new(); // System roles catalog
     private readonly List<SectionAccessGrant> _sectionAccessGrants = new(); // Section-level access grants
     private readonly List<AccessRequest> _accessRequests = new(); // Access request workflow
+    private readonly List<AccessReview> _accessReviews = new(); // Periodic access reviews
+    private readonly List<AccessReviewLogEntry> _accessReviewLog = new(); // Access review audit trail
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -156,13 +158,14 @@ public sealed class InMemoryReportStore
     {
         _users.AddRange(new[]
         {
-            new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner", CanExport = true },
-            new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin", CanExport = true },
-            new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor", CanExport = false },
-            new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor", CanExport = false },
-            new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor", CanExport = false },
-            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor", CanExport = true },
-            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner", CanExport = true }
+            new User { Id = "user-0", Name = "No Roles User", Email = "noroles@company.com", Role = "", CanExport = false, RoleIds = new List<string>() },
+            new User { Id = "user-1", Name = "Sarah Chen", Email = "sarah.chen@company.com", Role = "report-owner", CanExport = true, RoleIds = new List<string> { "role-data-owner" } },
+            new User { Id = "user-2", Name = "Admin User", Email = "admin@company.com", Role = "admin", CanExport = true, RoleIds = new List<string> { "role-admin" } },
+            new User { Id = "user-3", Name = "John Smith", Email = "john.smith@company.com", Role = "contributor", CanExport = false, RoleIds = new List<string> { "role-contributor" } },
+            new User { Id = "user-4", Name = "Emily Johnson", Email = "emily.johnson@company.com", Role = "contributor", CanExport = false, RoleIds = new List<string> { "role-contributor" } },
+            new User { Id = "user-5", Name = "Michael Brown", Email = "michael.brown@company.com", Role = "contributor", CanExport = false, RoleIds = new List<string> { "role-contributor" } },
+            new User { Id = "user-6", Name = "Lisa Anderson", Email = "lisa.anderson@company.com", Role = "auditor", CanExport = true, RoleIds = new List<string> { "role-compliance-officer" } },
+            new User { Id = "owner-1", Name = "Test Owner", Email = "owner@company.com", Role = "report-owner", CanExport = true, RoleIds = new List<string> { "role-data-owner" } }
         });
     }
 
@@ -17205,6 +17208,324 @@ public sealed class InMemoryReportStore
             
             return summaries.OrderBy(s => s.Order).ToList();
         }
+    }
+    
+    #endregion
+    
+    #region Access Review Methods
+    
+    /// <summary>
+    /// Start a new access review.
+    /// Lists all active users with their roles and section scopes.
+    /// </summary>
+    public AccessReview StartAccessReview(StartAccessReviewRequest request)
+    {
+        lock (_lock)
+        {
+            var reviewId = Guid.NewGuid().ToString();
+            var now = DateTime.UtcNow.ToString("o");
+            
+            // Create review entries for all users
+            var entries = new List<AccessReviewEntry>();
+            foreach (var user in _users)
+            {
+                var roles = _roles.Where(r => user.RoleIds.Contains(r.Id)).ToList();
+                
+                // Get section scopes
+                var sectionScopes = new List<AccessReviewSectionScope>();
+                
+                // Add owned sections
+                var ownedSections = _sections.Where(s => s.OwnerId == user.Id).ToList();
+                foreach (var section in ownedSections)
+                {
+                    sectionScopes.Add(new AccessReviewSectionScope
+                    {
+                        SectionId = section.Id,
+                        SectionTitle = section.Title,
+                        AccessType = "owner",
+                        GrantedAt = null // Owner from creation
+                    });
+                }
+                
+                // Add explicit grants
+                var grants = _sectionAccessGrants.Where(g => g.UserId == user.Id).ToList();
+                foreach (var grant in grants)
+                {
+                    var section = _sections.FirstOrDefault(s => s.Id == grant.SectionId);
+                    if (section != null)
+                    {
+                        sectionScopes.Add(new AccessReviewSectionScope
+                        {
+                            SectionId = section.Id,
+                            SectionTitle = section.Title,
+                            AccessType = "explicit-grant",
+                            GrantedAt = grant.GrantedAt
+                        });
+                    }
+                }
+                
+                // Get owned periods
+                var ownedPeriods = _periods.Where(p => p.OwnerId == user.Id)
+                    .Select(p => p.Id)
+                    .ToList();
+                
+                var entry = new AccessReviewEntry
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ReviewId = reviewId,
+                    UserId = user.Id,
+                    UserName = user.Name,
+                    UserEmail = user.Email,
+                    IsActive = user.IsActive,
+                    RoleIds = new List<string>(user.RoleIds),
+                    RoleNames = roles.Select(r => r.Name).ToList(),
+                    SectionScopes = sectionScopes,
+                    OwnedPeriodIds = ownedPeriods,
+                    Decision = "pending"
+                };
+                
+                entries.Add(entry);
+            }
+            
+            var review = new AccessReview
+            {
+                Id = reviewId,
+                Title = request.Title,
+                Description = request.Description,
+                Status = "in-progress",
+                StartedAt = now,
+                StartedBy = request.StartedBy,
+                StartedByName = request.StartedByName,
+                Entries = entries,
+                Summary = CalculateReviewSummary(entries)
+            };
+            
+            _accessReviews.Add(review);
+            
+            // Log review start
+            var logEntry = new AccessReviewLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                ReviewId = reviewId,
+                Timestamp = now,
+                UserId = request.StartedBy,
+                UserName = request.StartedByName,
+                Action = "review-started",
+                Details = $"Access review '{request.Title}' started with {entries.Count} users"
+            };
+            _accessReviewLog.Add(logEntry);
+            
+            return review;
+        }
+    }
+    
+    /// <summary>
+    /// Get an access review by ID.
+    /// </summary>
+    public AccessReview? GetAccessReview(string reviewId)
+    {
+        lock (_lock)
+        {
+            return _accessReviews.FirstOrDefault(r => r.Id == reviewId);
+        }
+    }
+    
+    /// <summary>
+    /// Get all access reviews.
+    /// </summary>
+    public IReadOnlyList<AccessReview> GetAccessReviews()
+    {
+        lock (_lock)
+        {
+            return _accessReviews.OrderByDescending(r => r.StartedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Record a review decision for a user.
+    /// If decision is "revoke", removes the user's roles and section access.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) RecordReviewDecision(
+        string reviewId, 
+        RecordReviewDecisionRequest request)
+    {
+        lock (_lock)
+        {
+            var review = _accessReviews.FirstOrDefault(r => r.Id == reviewId);
+            if (review == null)
+            {
+                return (false, "Access review not found.");
+            }
+            
+            if (review.Status != "in-progress")
+            {
+                return (false, "Cannot record decision for completed review.");
+            }
+            
+            var entry = review.Entries.FirstOrDefault(e => e.Id == request.EntryId);
+            if (entry == null)
+            {
+                return (false, "Review entry not found.");
+            }
+            
+            if (request.Decision != "retain" && request.Decision != "revoke")
+            {
+                return (false, "Decision must be 'retain' or 'revoke'.");
+            }
+            
+            var now = DateTime.UtcNow.ToString("o");
+            
+            // Update entry
+            entry.Decision = request.Decision;
+            entry.DecisionAt = now;
+            entry.DecisionBy = request.DecisionBy;
+            entry.DecisionByName = request.DecisionByName;
+            entry.DecisionNote = request.DecisionNote;
+            
+            // Log decision
+            var logEntry = new AccessReviewLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                ReviewId = reviewId,
+                Timestamp = now,
+                UserId = request.DecisionBy,
+                UserName = request.DecisionByName,
+                Action = "decision-recorded",
+                Details = $"Decision '{request.Decision}' recorded for user {entry.UserName}",
+                RelatedUserId = entry.UserId,
+                Decision = request.Decision,
+                Note = request.DecisionNote
+            };
+            _accessReviewLog.Add(logEntry);
+            
+            // If revoke, remove access immediately
+            if (request.Decision == "revoke")
+            {
+                var user = _users.FirstOrDefault(u => u.Id == entry.UserId);
+                if (user != null)
+                {
+                    // Remove all roles
+                    var removedRoles = new List<string>(user.RoleIds);
+                    user.RoleIds.Clear();
+                    
+                    // Remove all section access grants
+                    var removedGrants = _sectionAccessGrants
+                        .Where(g => g.UserId == entry.UserId)
+                        .ToList();
+                    foreach (var grant in removedGrants)
+                    {
+                        _sectionAccessGrants.Remove(grant);
+                    }
+                    
+                    // Deactivate user
+                    user.IsActive = false;
+                    
+                    // Log revocation
+                    var revokeLogEntry = new AccessReviewLogEntry
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        ReviewId = reviewId,
+                        Timestamp = now,
+                        UserId = request.DecisionBy,
+                        UserName = request.DecisionByName,
+                        Action = "access-revoked",
+                        Details = $"Revoked {removedRoles.Count} roles and {removedGrants.Count} section grants for user {entry.UserName}",
+                        RelatedUserId = entry.UserId,
+                        Note = request.DecisionNote
+                    };
+                    _accessReviewLog.Add(revokeLogEntry);
+                    
+                    // Update summary
+                    if (review.Summary != null)
+                    {
+                        review.Summary.AccessesRevoked++;
+                    }
+                }
+            }
+            
+            // Update summary
+            var revokedCount = review.Summary?.AccessesRevoked ?? 0;
+            review.Summary = CalculateReviewSummary(review.Entries);
+            review.Summary.AccessesRevoked = revokedCount;
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Complete an access review.
+    /// Marks the review as completed and prevents further changes.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) CompleteAccessReview(
+        string reviewId, 
+        CompleteAccessReviewRequest request)
+    {
+        lock (_lock)
+        {
+            var review = _accessReviews.FirstOrDefault(r => r.Id == reviewId);
+            if (review == null)
+            {
+                return (false, "Access review not found.");
+            }
+            
+            if (review.Status != "in-progress")
+            {
+                return (false, "Review is already completed.");
+            }
+            
+            var now = DateTime.UtcNow.ToString("o");
+            
+            review.Status = "completed";
+            review.CompletedAt = now;
+            review.CompletedBy = request.CompletedBy;
+            review.CompletedByName = request.CompletedByName;
+            
+            // Log completion
+            var logEntry = new AccessReviewLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                ReviewId = reviewId,
+                Timestamp = now,
+                UserId = request.CompletedBy,
+                UserName = request.CompletedByName,
+                Action = "review-completed",
+                Details = $"Access review '{review.Title}' completed"
+            };
+            _accessReviewLog.Add(logEntry);
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Get access review log entries for a specific review.
+    /// </summary>
+    public IReadOnlyList<AccessReviewLogEntry> GetAccessReviewLog(string reviewId)
+    {
+        lock (_lock)
+        {
+            return _accessReviewLog
+                .Where(l => l.ReviewId == reviewId)
+                .OrderByDescending(l => l.Timestamp)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Calculate summary statistics for a review.
+    /// </summary>
+    private AccessReviewSummary CalculateReviewSummary(List<AccessReviewEntry> entries)
+    {
+        return new AccessReviewSummary
+        {
+            TotalUsers = entries.Count,
+            ActiveUsers = entries.Count(e => e.IsActive),
+            InactiveUsers = entries.Count(e => !e.IsActive),
+            PendingDecisions = entries.Count(e => e.Decision == "pending"),
+            RetainDecisions = entries.Count(e => e.Decision == "retain"),
+            RevokeDecisions = entries.Count(e => e.Decision == "revoke"),
+            AccessesRevoked = 0 // Updated when revocations occur
+        };
     }
     
     #endregion
