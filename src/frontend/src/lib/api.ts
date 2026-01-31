@@ -43,7 +43,10 @@ import type {
   CreateStandardRequest,
   UpdateStandardRequest,
   StandardSectionMapping,
-  CreateStandardMappingRequest
+  CreateStandardMappingRequest,
+  TenantSettings,
+  TenantSettingsHistory,
+  UpdateTenantSettingsRequest
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -2052,3 +2055,56 @@ export async function getStandardCoverageAnalysis(
   return requestJson<StandardCoverageAnalysis>(`/coverage?${params.toString()}`)
 }
 
+
+// Tenant Settings API
+
+/**
+ * Gets tenant settings for an organization.
+ */
+export async function getTenantSettings(organizationId: string): Promise<TenantSettings> {
+  return requestJson<TenantSettings>(`/v1/tenant-settings/${organizationId}`)
+}
+
+/**
+ * Updates tenant settings for an organization.
+ */
+export async function updateTenantSettings(
+  organizationId: string,
+  payload: UpdateTenantSettingsRequest
+): Promise<TenantSettings> {
+  return requestJson<TenantSettings>(`/v1/tenant-settings/${organizationId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Gets tenant settings history for an organization.
+ */
+export async function getTenantSettingsHistory(organizationId: string): Promise<TenantSettingsHistory[]> {
+  return requestJson<TenantSettingsHistory[]>(`/v1/tenant-settings/${organizationId}/history`)
+}
+
+/**
+ * Checks if a specific integration is enabled for a tenant.
+ */
+export async function isIntegrationEnabled(
+  organizationId: string,
+  integrationType: string
+): Promise<{ enabled: boolean }> {
+  return requestJson<{ enabled: boolean }>(
+    `/v1/tenant-settings/${organizationId}/integrations/${integrationType}/enabled`
+  )
+}
+
+/**
+ * Checks if a specific reporting standard is enabled for a tenant.
+ */
+export async function isStandardEnabled(
+  organizationId: string,
+  standardId: string
+): Promise<{ enabled: boolean }> {
+  return requestJson<{ enabled: boolean }>(
+    `/v1/tenant-settings/${organizationId}/standards/${standardId}/enabled`
+  )
+}

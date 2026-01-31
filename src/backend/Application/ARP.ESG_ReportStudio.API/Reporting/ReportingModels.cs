@@ -9361,3 +9361,180 @@ public sealed class EnablePackageForPeriodRequest
     public string EnabledBy { get; set; } = string.Empty;
     public string EnabledByName { get; set; } = string.Empty;
 }
+
+/// <summary>
+/// Represents tenant-level configuration for integrations and reporting standards.
+/// Controls which integrations and standards are enabled for a specific organization/tenant.
+/// All changes are audited and versioned with effective dates.
+/// </summary>
+public sealed class TenantSettings
+{
+    /// <summary>
+    /// Unique identifier for the tenant settings.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Organization/Tenant ID these settings apply to.
+    /// </summary>
+    public string OrganizationId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// List of enabled integration types (e.g., "HR", "Finance", "Utilities").
+    /// Controls which external systems can be connected.
+    /// </summary>
+    public List<string> EnabledIntegrations { get; set; } = new();
+    
+    /// <summary>
+    /// List of enabled reporting standards (references to StandardsCatalogItem.Id).
+    /// Controls which reporting frameworks are available for this tenant.
+    /// </summary>
+    public List<string> EnabledStandards { get; set; } = new();
+    
+    /// <summary>
+    /// Version number for the settings, incremented with each update.
+    /// Used for optimistic concurrency and audit trail.
+    /// </summary>
+    public int Version { get; set; } = 1;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the current settings version became effective.
+    /// Can be immediate or set to a future date (e.g., next reporting period start).
+    /// </summary>
+    public string EffectiveDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// When true, changes take effect immediately.
+    /// When false, changes take effect at the start of the next reporting period.
+    /// </summary>
+    public bool ApplyImmediately { get; set; } = false;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when settings were created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who created these settings.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who created these settings.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when settings were last updated.
+    /// </summary>
+    public string UpdatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who last updated these settings.
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who last updated these settings.
+    /// </summary>
+    public string UpdatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Historical record of tenant settings changes for audit and rollback purposes.
+/// Each entry represents a snapshot of settings at a specific point in time.
+/// </summary>
+public sealed class TenantSettingsHistory
+{
+    /// <summary>
+    /// Unique identifier for this history entry.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the TenantSettings this history entry belongs to.
+    /// </summary>
+    public string TenantSettingsId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Organization/Tenant ID.
+    /// </summary>
+    public string OrganizationId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Version number at the time of this snapshot.
+    /// </summary>
+    public int Version { get; set; }
+    
+    /// <summary>
+    /// Snapshot of enabled integrations at this point in time.
+    /// </summary>
+    public List<string> EnabledIntegrations { get; set; } = new();
+    
+    /// <summary>
+    /// Snapshot of enabled standards at this point in time.
+    /// </summary>
+    public List<string> EnabledStandards { get; set; } = new();
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this version became effective.
+    /// </summary>
+    public string EffectiveDate { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when this change was made.
+    /// </summary>
+    public string ChangedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who made this change.
+    /// </summary>
+    public string ChangedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who made this change.
+    /// </summary>
+    public string ChangedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for this change.
+    /// </summary>
+    public string? ChangeReason { get; set; }
+}
+
+/// <summary>
+/// Request to create or update tenant settings.
+/// </summary>
+public sealed class UpdateTenantSettingsRequest
+{
+    /// <summary>
+    /// List of integration types to enable (e.g., "HR", "Finance").
+    /// </summary>
+    public List<string> EnabledIntegrations { get; set; } = new();
+    
+    /// <summary>
+    /// List of standard IDs to enable (references StandardsCatalogItem.Id).
+    /// </summary>
+    public List<string> EnabledStandards { get; set; } = new();
+    
+    /// <summary>
+    /// When true, changes take effect immediately.
+    /// When false, changes take effect at the start of the next reporting period.
+    /// </summary>
+    public bool ApplyImmediately { get; set; } = false;
+    
+    /// <summary>
+    /// Optional note explaining the reason for this change.
+    /// </summary>
+    public string? ChangeReason { get; set; }
+    
+    /// <summary>
+    /// User ID making the change.
+    /// </summary>
+    public string UpdatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name making the change.
+    /// </summary>
+    public string UpdatedByName { get; set; } = string.Empty;
+}

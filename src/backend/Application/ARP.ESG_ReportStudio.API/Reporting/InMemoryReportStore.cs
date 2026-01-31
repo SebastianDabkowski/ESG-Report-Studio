@@ -70,6 +70,8 @@ public sealed class InMemoryReportStore
     private readonly List<RegulatoryPackage> _regulatoryPackages = new(); // Regulatory compliance packages
     private readonly List<TenantRegulatoryConfig> _tenantRegulatoryConfigs = new(); // Tenant-level package configurations
     private readonly List<PeriodRegulatoryConfig> _periodRegulatoryConfigs = new(); // Period-level package configurations
+    private readonly List<TenantSettings> _tenantSettings = new(); // Tenant-level integration and standards settings
+    private readonly List<TenantSettingsHistory> _tenantSettingsHistory = new(); // Historical record of settings changes
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -17097,6 +17099,18 @@ public sealed class InMemoryReportStore
                 CreatedAt = now,
                 CreatedBy = systemUser,
                 Version = 1
+            },
+            new SystemRole
+            {
+                Id = "role-tenant-admin",
+                Name = "Tenant Admin",
+                Description = "Configure tenant-level settings including integrations and reporting standards",
+                Permissions = new List<string> { "view-tenant-config", "edit-tenant-config", "view-audit-logs", "manage-integrations", "manage-standards" },
+                IsPredefined = true,
+                RequiresMfa = true,
+                CreatedAt = now,
+                CreatedBy = systemUser,
+                Version = 1
             }
         });
     }
@@ -19276,6 +19290,267 @@ public sealed class InMemoryReportStore
             return _validationRules
                 .Where(r => validationRuleIds.Contains(r.Id) && r.IsActive)
                 .ToList();
+        }
+    }
+    
+    #endregion
+    
+    #region Tenant Settings Management
+    
+    /// <summary>
+    /// Get tenant settings for an organization. Creates default settings if none exist.
+    /// </summary>
+    public TenantSettings GetTenantSettings(string organizationId)
+    {
+        lock (_lock)
+        {
+            var settings = _tenantSettings.FirstOrDefault(s => s.OrganizationId == organizationId);
+            
+            // Create default settings if none exist
+            if (settings == null)
+            {
+                settings = new TenantSettings
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    OrganizationId = organizationId,
+                    EnabledIntegrations = new List<string>(),
+                    EnabledStandards = new List<string>(),
+                    Version = 1,
+                    EffectiveDate = DateTime.UtcNow.ToString("o"),
+                    ApplyImmediately = true,
+                    CreatedAt = DateTime.UtcNow.ToString("o"),
+                    CreatedBy = "system",
+                    CreatedByName = "System",
+                    UpdatedAt = DateTime.UtcNow.ToString("o"),
+                    UpdatedBy = "system",
+                    UpdatedByName = "System"
+                };
+                
+                _tenantSettings.Add(settings);
+            }
+            
+            return settings;
+        }
+    }
+    
+    /// <summary>
+    /// Update tenant settings with versioning and audit trail.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, TenantSettings? Settings) UpdateTenantSettings(
+        string organizationId, 
+        UpdateTenantSettingsRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate organization exists
+            if (_organization == null || _organization.Id != organizationId)
+            {
+                return (false, "Organization not found", null);
+            }
+            
+            // Validate enabled standards exist
+            foreach (var standardId in request.EnabledStandards)
+            {
+                if (!_standardsCatalog.Any(s => s.Id == standardId))
+                {
+                    return (false, $"Standard with ID '{standardId}' not found", null);
+                }
+            }
+            
+            // Valid integration types
+            var validIntegrations = new[] { "HR", "Finance", "Utilities", "Webhooks" };
+            foreach (var integration in request.EnabledIntegrations)
+            {
+                if (!validIntegrations.Contains(integration))
+                {
+                    return (false, $"Invalid integration type '{integration}'. Valid types: {string.Join(", ", validIntegrations)}", null);
+                }
+            }
+            
+            var settings = _tenantSettings.FirstOrDefault(s => s.OrganizationId == organizationId);
+            var isNewSettings = settings == null;
+            
+            TenantSettingsHistory? historyEntry = null;
+            
+            if (isNewSettings)
+            {
+                settings = new TenantSettings
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    OrganizationId = organizationId,
+                    Version = 1,
+                    CreatedAt = DateTime.UtcNow.ToString("o"),
+                    CreatedBy = request.UpdatedBy,
+                    CreatedByName = request.UpdatedByName
+                };
+                
+                _tenantSettings.Add(settings);
+            }
+            else
+            {
+                // Create history entry before updating
+                historyEntry = new TenantSettingsHistory
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    TenantSettingsId = settings.Id,
+                    OrganizationId = settings.OrganizationId,
+                    Version = settings.Version,
+                    EnabledIntegrations = new List<string>(settings.EnabledIntegrations),
+                    EnabledStandards = new List<string>(settings.EnabledStandards),
+                    EffectiveDate = settings.EffectiveDate,
+                    ChangedAt = DateTime.UtcNow.ToString("o"),
+                    ChangedBy = request.UpdatedBy,
+                    ChangedByName = request.UpdatedByName,
+                    ChangeReason = request.ChangeReason
+                };
+                
+                _tenantSettingsHistory.Add(historyEntry);
+                
+                // Increment version
+                settings.Version++;
+            }
+            
+            // Update settings
+            settings.EnabledIntegrations = new List<string>(request.EnabledIntegrations);
+            settings.EnabledStandards = new List<string>(request.EnabledStandards);
+            settings.ApplyImmediately = request.ApplyImmediately;
+            
+            // Calculate effective date
+            if (request.ApplyImmediately)
+            {
+                settings.EffectiveDate = DateTime.UtcNow.ToString("o");
+            }
+            else
+            {
+                // Find the next reporting period start date
+                var nextPeriod = _periods
+                    .Where(p => p.OrganizationId == organizationId && 
+                               DateTime.Parse(p.StartDate) > DateTime.UtcNow)
+                    .OrderBy(p => DateTime.Parse(p.StartDate))
+                    .FirstOrDefault();
+                
+                settings.EffectiveDate = nextPeriod != null 
+                    ? nextPeriod.StartDate 
+                    : DateTime.UtcNow.ToString("o"); // Fallback to immediate if no future period
+            }
+            
+            settings.UpdatedAt = DateTime.UtcNow.ToString("o");
+            settings.UpdatedBy = request.UpdatedBy;
+            settings.UpdatedByName = request.UpdatedByName;
+            
+            // Create audit log entry
+            var auditEntry = new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.UpdatedBy,
+                UserName = request.UpdatedByName,
+                Action = isNewSettings ? "create" : "update",
+                EntityType = "tenant-settings",
+                EntityId = settings.Id,
+                Changes = new List<FieldChange>
+                {
+                    new FieldChange 
+                    { 
+                        Field = "EnabledIntegrations",
+                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry!.EnabledIntegrations),
+                        NewValue = string.Join(", ", settings.EnabledIntegrations)
+                    },
+                    new FieldChange 
+                    { 
+                        Field = "EnabledStandards",
+                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry!.EnabledStandards),
+                        NewValue = string.Join(", ", settings.EnabledStandards)
+                    },
+                    new FieldChange 
+                    { 
+                        Field = "EffectiveDate",
+                        OldValue = isNewSettings ? "" : historyEntry!.EffectiveDate,
+                        NewValue = settings.EffectiveDate
+                    }
+                },
+                ChangeNote = request.ChangeReason ?? (isNewSettings ? "Initial tenant settings created" : "Tenant settings updated")
+            };
+            
+            _auditLog.Add(auditEntry);
+            
+            return (true, null, settings);
+        }
+    }
+    
+    /// <summary>
+    /// Get tenant settings history for audit purposes.
+    /// </summary>
+    public IReadOnlyList<TenantSettingsHistory> GetTenantSettingsHistory(string organizationId)
+    {
+        lock (_lock)
+        {
+            return _tenantSettingsHistory
+                .Where(h => h.OrganizationId == organizationId)
+                .OrderByDescending(h => h.ChangedAt)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Check if a specific integration is enabled for a tenant.
+    /// </summary>
+    public bool IsIntegrationEnabled(string organizationId, string integrationType)
+    {
+        lock (_lock)
+        {
+            var settings = GetTenantSettings(organizationId);
+            
+            // Check if effective date has passed
+            var effectiveDate = DateTime.Parse(settings.EffectiveDate);
+            if (effectiveDate > DateTime.UtcNow)
+            {
+                // Settings not yet effective, check previous version
+                var previousHistory = _tenantSettingsHistory
+                    .Where(h => h.OrganizationId == organizationId)
+                    .OrderByDescending(h => h.Version)
+                    .FirstOrDefault();
+                
+                if (previousHistory != null)
+                {
+                    return previousHistory.EnabledIntegrations.Contains(integrationType);
+                }
+                
+                return false; // No previous version, integration not enabled
+            }
+            
+            return settings.EnabledIntegrations.Contains(integrationType);
+        }
+    }
+    
+    /// <summary>
+    /// Check if a specific standard is enabled for a tenant.
+    /// </summary>
+    public bool IsStandardEnabled(string organizationId, string standardId)
+    {
+        lock (_lock)
+        {
+            var settings = GetTenantSettings(organizationId);
+            
+            // Check if effective date has passed
+            var effectiveDate = DateTime.Parse(settings.EffectiveDate);
+            if (effectiveDate > DateTime.UtcNow)
+            {
+                // Settings not yet effective, check previous version
+                var previousHistory = _tenantSettingsHistory
+                    .Where(h => h.OrganizationId == organizationId)
+                    .OrderByDescending(h => h.Version)
+                    .FirstOrDefault();
+                
+                if (previousHistory != null)
+                {
+                    return previousHistory.EnabledStandards.Contains(standardId);
+                }
+                
+                return false; // No previous version, standard not enabled
+            }
+            
+            return settings.EnabledStandards.Contains(standardId);
         }
     }
     
