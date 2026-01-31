@@ -803,6 +803,430 @@ public sealed class CreateStandardMappingRequest
 }
 
 /// <summary>
+/// Represents an individual disclosure within a reporting standard.
+/// A disclosure is a specific requirement or data point that must be reported (e.g., ESRS E1-1, GRI 305-1).
+/// </summary>
+public sealed class StandardDisclosure
+{
+    /// <summary>
+    /// Unique identifier for the disclosure.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the standard this disclosure belongs to.
+    /// </summary>
+    public string StandardId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// External reference code for the disclosure (e.g., "ESRS E1-1", "GRI 305-1").
+    /// </summary>
+    public string DisclosureCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display title of the disclosure.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Detailed description of what the disclosure requires.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Category/topic of the disclosure (e.g., "environmental", "social", "governance").
+    /// Used for filtering in coverage views.
+    /// </summary>
+    public string Category { get; set; } = "environmental";
+
+    /// <summary>
+    /// Sub-category or topic area (e.g., "climate change", "emissions", "workforce").
+    /// Provides more granular filtering capability.
+    /// </summary>
+    public string? Topic { get; set; }
+
+    /// <summary>
+    /// Indicates whether this disclosure is mandatory for compliance.
+    /// Non-mandatory disclosures may be optional or conditional.
+    /// </summary>
+    public bool IsMandatory { get; set; } = true;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the disclosure was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the disclosure.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the disclosure was last updated (optional).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// User ID who last updated the disclosure (optional).
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Request to create a new standard disclosure.
+/// </summary>
+public sealed class CreateStandardDisclosureRequest
+{
+    public string StandardId { get; set; } = string.Empty;
+    public string DisclosureCode { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = "environmental";
+    public string? Topic { get; set; }
+    public bool IsMandatory { get; set; } = true;
+}
+
+/// <summary>
+/// Request to update an existing standard disclosure.
+/// </summary>
+public sealed class UpdateStandardDisclosureRequest
+{
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = "environmental";
+    public string? Topic { get; set; }
+    public bool IsMandatory { get; set; } = true;
+}
+
+/// <summary>
+/// Maps a report section to one or more standard disclosures (many-to-many).
+/// Enables tracking which standard disclosures are addressed by each section.
+/// </summary>
+public sealed class SectionDisclosureMapping
+{
+    /// <summary>
+    /// Unique identifier for the mapping.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the report section.
+    /// </summary>
+    public string SectionId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the standard disclosure.
+    /// </summary>
+    public string DisclosureId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Coverage level: "full" (completely addresses the disclosure), "partial" (partially addresses), or "reference" (only mentions).
+    /// </summary>
+    public string CoverageLevel { get; set; } = "full";
+
+    /// <summary>
+    /// Optional notes about how this section addresses the disclosure.
+    /// </summary>
+    public string? Notes { get; set; }
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the mapping was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the mapping.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the mapping was last updated (optional).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// User ID who last updated the mapping (optional).
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Request to create a section-to-disclosure mapping.
+/// </summary>
+public sealed class CreateSectionDisclosureMappingRequest
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string DisclosureId { get; set; } = string.Empty;
+    public string CoverageLevel { get; set; } = "full";
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// Request to update a section-to-disclosure mapping.
+/// </summary>
+public sealed class UpdateSectionDisclosureMappingRequest
+{
+    public string CoverageLevel { get; set; } = "full";
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// Maps a data point to one or more standard disclosures (many-to-many).
+/// Provides more granular mapping than section-level for specific data requirements.
+/// </summary>
+public sealed class DataPointDisclosureMapping
+{
+    /// <summary>
+    /// Unique identifier for the mapping.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the data point.
+    /// </summary>
+    public string DataPointId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the standard disclosure.
+    /// </summary>
+    public string DisclosureId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Coverage level: "full" (completely addresses the disclosure), "partial" (partially addresses), or "reference" (only mentions).
+    /// </summary>
+    public string CoverageLevel { get; set; } = "full";
+
+    /// <summary>
+    /// Optional notes about how this data point addresses the disclosure.
+    /// </summary>
+    public string? Notes { get; set; }
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the mapping was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the mapping.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the mapping was last updated (optional).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// User ID who last updated the mapping (optional).
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+}
+
+/// <summary>
+/// Request to create a data-point-to-disclosure mapping.
+/// </summary>
+public sealed class CreateDataPointDisclosureMappingRequest
+{
+    public string DataPointId { get; set; } = string.Empty;
+    public string DisclosureId { get; set; } = string.Empty;
+    public string CoverageLevel { get; set; } = "full";
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// Request to update a data-point-to-disclosure mapping.
+/// </summary>
+public sealed class UpdateDataPointDisclosureMappingRequest
+{
+    public string CoverageLevel { get; set; } = "full";
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// Represents a versioned snapshot of mappings for export consistency.
+/// Captures the state of all mappings at the time of report approval/export.
+/// </summary>
+public sealed class MappingVersion
+{
+    /// <summary>
+    /// Unique identifier for the mapping version.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the reporting period this version belongs to.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Version number (increments with each snapshot).
+    /// </summary>
+    public int VersionNumber { get; set; }
+
+    /// <summary>
+    /// Serialized JSON snapshot of all section and data point mappings at this point in time.
+    /// </summary>
+    public string MappingsSnapshot { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Reason for creating this version (e.g., "Report approved", "Export generated").
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the version was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the version.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a mapping version snapshot.
+/// </summary>
+public sealed class CreateMappingVersionRequest
+{
+    public string PeriodId { get; set; } = string.Empty;
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Coverage analysis result for a specific standard.
+/// Shows which disclosures are covered, partially covered, or missing.
+/// </summary>
+public sealed class StandardCoverageAnalysis
+{
+    /// <summary>
+    /// ID of the standard being analyzed.
+    /// </summary>
+    public string StandardId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Title of the standard.
+    /// </summary>
+    public string StandardTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the reporting period being analyzed.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Total number of disclosures in the standard.
+    /// </summary>
+    public int TotalDisclosures { get; set; }
+
+    /// <summary>
+    /// Number of disclosures that are fully covered.
+    /// </summary>
+    public int FullyCovered { get; set; }
+
+    /// <summary>
+    /// Number of disclosures that are partially covered.
+    /// </summary>
+    public int PartiallyCovered { get; set; }
+
+    /// <summary>
+    /// Number of disclosures that are not covered (missing).
+    /// </summary>
+    public int NotCovered { get; set; }
+
+    /// <summary>
+    /// Overall coverage percentage (0-100).
+    /// Calculated as: (FullyCovered + (PartiallyCovered * 0.5)) / TotalDisclosures * 100
+    /// </summary>
+    public decimal CoveragePercentage { get; set; }
+
+    /// <summary>
+    /// List of individual disclosure coverage details.
+    /// </summary>
+    public List<DisclosureCoverageDetail> DisclosureDetails { get; set; } = new();
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the analysis was performed.
+    /// </summary>
+    public string AnalyzedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Detailed coverage information for a single disclosure.
+/// </summary>
+public sealed class DisclosureCoverageDetail
+{
+    /// <summary>
+    /// ID of the disclosure.
+    /// </summary>
+    public string DisclosureId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// External reference code (e.g., "ESRS E1-1").
+    /// </summary>
+    public string DisclosureCode { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Title of the disclosure.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Category of the disclosure.
+    /// </summary>
+    public string Category { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Topic of the disclosure.
+    /// </summary>
+    public string? Topic { get; set; }
+
+    /// <summary>
+    /// Whether the disclosure is mandatory.
+    /// </summary>
+    public bool IsMandatory { get; set; }
+
+    /// <summary>
+    /// Coverage status: "full", "partial", or "missing".
+    /// </summary>
+    public string CoverageStatus { get; set; } = "missing";
+
+    /// <summary>
+    /// List of sections that map to this disclosure.
+    /// </summary>
+    public List<MappedSectionInfo> MappedSections { get; set; } = new();
+
+    /// <summary>
+    /// List of data points that map to this disclosure.
+    /// </summary>
+    public List<MappedDataPointInfo> MappedDataPoints { get; set; } = new();
+}
+
+/// <summary>
+/// Information about a section mapped to a disclosure.
+/// </summary>
+public sealed class MappedSectionInfo
+{
+    public string SectionId { get; set; } = string.Empty;
+    public string SectionTitle { get; set; } = string.Empty;
+    public string CoverageLevel { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// Information about a data point mapped to a disclosure.
+/// </summary>
+public sealed class MappedDataPointInfo
+{
+    public string DataPointId { get; set; } = string.Empty;
+    public string DataPointTitle { get; set; } = string.Empty;
+    public string CoverageLevel { get; set; } = string.Empty;
+    public string CompletenessStatus { get; set; } = string.Empty;
+    public string? Notes { get; set; }
+}
+
+/// <summary>
 /// Represents a source of input data used in an estimate calculation.
 /// Supports both internal documents and external evidence references.
 /// </summary>
