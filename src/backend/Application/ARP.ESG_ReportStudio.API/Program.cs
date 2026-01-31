@@ -203,11 +203,22 @@ builder.Services.AddScoped<ICanonicalEntityRepository, CanonicalEntityRepository
 builder.Services.AddScoped<ICanonicalEntityVersionRepository, CanonicalEntityVersionRepository>();
 builder.Services.AddScoped<ICanonicalAttributeRepository, CanonicalAttributeRepository>();
 builder.Services.AddScoped<ICanonicalMappingRepository, CanonicalMappingRepository>();
+builder.Services.AddScoped<IWebhookSubscriptionRepository, WebhookSubscriptionRepository>();
+builder.Services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
 builder.Services.AddScoped<ConnectorService>();
 builder.Services.AddScoped<IntegrationExecutionService>();
 builder.Services.AddScoped<HRSyncService>();
 builder.Services.AddScoped<FinanceSyncService>();
 builder.Services.AddScoped<CanonicalMappingService>();
+builder.Services.AddSingleton<WebhookSignatureService>();
+builder.Services.AddScoped<WebhookSubscriptionService>();
+builder.Services.AddScoped<WebhookDeliveryService>();
+
+// Add HttpClient for webhooks
+builder.Services.AddHttpClient("WebhookClient", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+});
 
 builder.Services.AddCors(options =>
 {
