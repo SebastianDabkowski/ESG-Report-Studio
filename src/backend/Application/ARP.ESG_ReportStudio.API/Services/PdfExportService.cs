@@ -24,6 +24,20 @@ public sealed class PdfExportService : IPdfExportService
     {
         options ??= new PdfExportOptions();
         
+        // Get schema version (use provided or default to current)
+        var schemaVersion = options.SchemaVersion ?? ExportSchemaRegistry.GetCurrentVersion("pdf");
+        
+        // Create export metadata
+        var exportMetadata = ExportMetadata.FromSchemaVersion(
+            schemaVersion,
+            options.UserId,
+            options.UserName
+        );
+        exportMetadata.PeriodId = report.Period.Id;
+        exportMetadata.PeriodName = report.Period.Name;
+        exportMetadata.GenerationId = report.Id;
+        exportMetadata.VariantName = options.VariantName;
+        
         var document = Document.Create(container =>
         {
             container.Page(page =>
@@ -38,7 +52,7 @@ public sealed class PdfExportService : IPdfExportService
                     if (options.IncludeTitlePage)
                     {
                         column.Item().PageBreak();
-                        column.Item().Element(c => ComposeTitlePage(c, report, options));
+                        column.Item().Element(c => ComposeTitlePage(c, report, options, exportMetadata));
                     }
                     
                     // Table of contents
@@ -68,6 +82,14 @@ public sealed class PdfExportService : IPdfExportService
                 {
                     page.Footer().Column(footer =>
                     {
+                        // Export metadata - schema version and identifier
+                        footer.Item().AlignCenter().DefaultTextStyle(x => x.FontSize(7)).Text(text =>
+                        {
+                            text.Span($"Export Schema: {exportMetadata.SchemaIdentifier} (v{exportMetadata.SchemaVersion})");
+                            text.Span(" | ");
+                            text.Span($"Export ID: {exportMetadata.ExportId}");
+                        });
+                        
                         // Custom footer text from branding if available
                         if (!string.IsNullOrWhiteSpace(options.BrandingProfile?.FooterText))
                         {
@@ -97,7 +119,7 @@ public sealed class PdfExportService : IPdfExportService
         return ExportUtilities.GenerateFilename(report, variantName, ".pdf");
     }
 
-    private void ComposeTitlePage(IContainer container, GeneratedReport report, PdfExportOptions options)
+    private void ComposeTitlePage(IContainer container, GeneratedReport report, PdfExportOptions options, ExportMetadata exportMetadata)
     {
         container.Column(column =>
         {
@@ -185,6 +207,17 @@ public sealed class PdfExportService : IPdfExportService
                 
                 table.Cell().Text(totalSectionsLabel).SemiBold();
                 table.Cell().Text(report.Sections.Count.ToString());
+            });
+            
+            // Export metadata section
+            column.Item().PaddingTop(30);
+            column.Item().Background(Colors.Grey.Lighten4).Padding(10).Column(metaColumn =>
+            {
+                metaColumn.Item().Text("Export Metadata").FontSize(10).SemiBold();
+                metaColumn.Item().PaddingTop(5).Text($"Schema: {exportMetadata.SchemaIdentifier}").FontSize(9);
+                metaColumn.Item().Text($"Version: {exportMetadata.SchemaVersion}").FontSize(9);
+                metaColumn.Item().Text($"Export ID: {exportMetadata.ExportId}").FontSize(9);
+                metaColumn.Item().Text($"Exported: {exportMetadata.ExportedAt}").FontSize(9);
             });
         });
     }

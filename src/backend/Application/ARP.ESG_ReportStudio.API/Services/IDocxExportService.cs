@@ -78,4 +78,15 @@ public sealed class DocxExportOptions
     /// Defaults to "en-US" if not specified.
     /// </summary>
     public string? Language { get; set; }
+    
+    /// <summary>
+    /// Export schema version to use. If not specified, uses the current active version.
+    /// This enables backward compatibility by allowing exports with older schema versions.
+    /// </summary>
+    public ExportSchemaVersion? SchemaVersion { get; set; }
+    
+    /// <summary>
+    /// User name requesting the export (used for export metadata).
+    /// </summary>
+    public string? UserName { get; set; }
 }
