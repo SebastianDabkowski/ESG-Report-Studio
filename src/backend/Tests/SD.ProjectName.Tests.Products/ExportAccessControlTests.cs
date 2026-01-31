@@ -626,8 +626,8 @@ namespace SD.ProjectName.Tests.Products
             controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-2" });
             controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-1", VariantName = "Internal" });
 
-            // Get export history
-            var result = controller.GetExportHistory(periodId);
+            // Get export history as admin (user-2)
+            var result = controller.GetExportHistory(periodId, "user-2");
 
             // Assert
             var okResult = Assert.IsType<OkObjectResult>(result.Result);
@@ -643,6 +643,103 @@ namespace SD.ProjectName.Tests.Products
                 Assert.NotEmpty(entry.ExportedByName);
                 Assert.NotEmpty(entry.ExportedAt);
             });
+        }
+        
+        [Fact]
+        public void GetExportHistory_WithAuthorizedUser_ShouldSucceed()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockPdfService.Setup(x => x.GeneratePdf(It.IsAny<GeneratedReport>(), It.IsAny<PdfExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockPdfService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.pdf");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+            
+            controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-2" });
+
+            // Act - Admin user (user-2) with CanExport=true views history
+            var result = controller.GetExportHistory(periodId, "user-2");
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var history = Assert.IsAssignableFrom<IReadOnlyList<ExportHistoryEntry>>(okResult.Value);
+            Assert.NotEmpty(history);
+        }
+        
+        [Fact]
+        public void GetExportHistory_WithPeriodOwner_ShouldSucceed()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            mockPdfService.Setup(x => x.GeneratePdf(It.IsAny<GeneratedReport>(), It.IsAny<PdfExportOptions>()))
+                .Returns(new byte[] { 1, 2, 3 });
+            mockPdfService.Setup(x => x.GenerateFilename(It.IsAny<GeneratedReport>(), It.IsAny<string?>()))
+                .Returns("test-report.pdf");
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+            var period = store.GetPeriods().First();
+            
+            controller.ExportPdf(periodId, new ExportPdfRequest { GeneratedBy = "user-2" });
+
+            // Act - Period owner (user-1) views their own period's history
+            var result = controller.GetExportHistory(periodId, period.OwnerId);
+
+            // Assert
+            var okResult = Assert.IsType<OkObjectResult>(result.Result);
+            var history = Assert.IsAssignableFrom<IReadOnlyList<ExportHistoryEntry>>(okResult.Value);
+            Assert.NotEmpty(history);
+        }
+        
+        [Fact]
+        public void GetExportHistory_WithUnauthorizedUser_ShouldReturn403()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Contributor (user-3) with CanExport=false tries to view history
+            var result = controller.GetExportHistory(periodId, "user-3");
+
+            // Assert
+            Assert.IsType<ObjectResult>(result.Result);
+            var objectResult = result.Result as ObjectResult;
+            Assert.Equal(403, objectResult!.StatusCode);
+        }
+        
+        [Fact]
+        public void GetExportHistory_WithoutUserId_ShouldReturn400()
+        {
+            // Arrange
+            var store = CreateStoreWithTestData();
+            var mockPdfService = new Mock<IPdfExportService>();
+            var mockDocxService = new Mock<IDocxExportService>();
+            var mockNotificationService = new Mock<INotificationService>();
+            
+            var controller = new ReportingController(store, mockNotificationService.Object, mockPdfService.Object, mockDocxService.Object);
+            var periodId = store.GetPeriods().First().Id;
+
+            // Act - Request without userId parameter
+            var result = controller.GetExportHistory(periodId, null);
+
+            // Assert
+            Assert.IsType<BadRequestObjectResult>(result.Result);
         }
 
         #endregion

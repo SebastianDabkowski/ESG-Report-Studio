@@ -784,14 +784,36 @@ public sealed class ReportingController : ControllerBase
     
     /// <summary>
     /// Get export history for a reporting period.
+    /// Requires either CanExport permission or being the period owner.
     /// </summary>
     [HttpGet("periods/{periodId}/export-history")]
-    public ActionResult<IReadOnlyList<ExportHistoryEntry>> GetExportHistory(string periodId)
+    public ActionResult<IReadOnlyList<ExportHistoryEntry>> GetExportHistory(
+        string periodId,
+        [FromQuery] string? userId)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return BadRequest(new { error = "userId query parameter is required." });
+        }
+        
         var period = _store.GetPeriods().FirstOrDefault(p => p.Id == periodId);
         if (period == null)
         {
             return NotFound(new { error = $"Period with ID '{periodId}' not found." });
+        }
+        
+        // Check if user has permission to view export history
+        var user = _store.GetUser(userId);
+        if (user == null)
+        {
+            return StatusCode(403, new { error = "User not found." });
+        }
+        
+        // Allow if user can export OR is the period owner
+        var canViewHistory = user.CanExport || period.OwnerId == userId;
+        if (!canViewHistory)
+        {
+            return StatusCode(403, new { error = "You do not have permission to view export history. Contact an administrator to request access." });
         }
         
         var history = _store.GetExportHistory(periodId);
