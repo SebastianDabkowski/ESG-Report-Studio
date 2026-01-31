@@ -17,6 +17,8 @@ public class IntegrationDbContext : DbContext
     public DbSet<IntegrationLog> IntegrationLogs { get; set; } = null!;
     public DbSet<HREntity> HREntities { get; set; } = null!;
     public DbSet<HRSyncRecord> HRSyncRecords { get; set; } = null!;
+    public DbSet<FinanceEntity> FinanceEntities { get; set; } = null!;
+    public DbSet<FinanceSyncRecord> FinanceSyncRecords { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -118,6 +120,64 @@ public class IntegrationDbContext : DbContext
             entity.HasOne(r => r.HREntity)
                 .WithMany()
                 .HasForeignKey(r => r.HREntityId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // FinanceEntity configuration
+        modelBuilder.Entity<FinanceEntity>(entity =>
+        {
+            entity.ToTable("FinanceEntities");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ExternalId).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.EntityType).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Data).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.MappedData).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.IsApproved).IsRequired();
+            entity.Property(e => e.SourceSystem).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.ImportJobId).IsRequired().HasMaxLength(200);
+            
+            entity.HasIndex(e => e.ConnectorId);
+            entity.HasIndex(e => new { e.ConnectorId, e.ExternalId }).IsUnique();
+            entity.HasIndex(e => e.EntityType);
+            entity.HasIndex(e => e.IsApproved);
+            entity.HasIndex(e => e.ImportJobId);
+            
+            // Foreign key relationship
+            entity.HasOne(e => e.Connector)
+                .WithMany()
+                .HasForeignKey(e => e.ConnectorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // FinanceSyncRecord configuration
+        modelBuilder.Entity<FinanceSyncRecord>(entity =>
+        {
+            entity.ToTable("FinanceSyncRecords");
+            entity.HasKey(r => r.Id);
+            entity.Property(r => r.CorrelationId).IsRequired().HasMaxLength(100);
+            entity.Property(r => r.Status).IsRequired();
+            entity.Property(r => r.ExternalId).HasMaxLength(200);
+            entity.Property(r => r.RawData).HasColumnType("nvarchar(max)");
+            entity.Property(r => r.RejectionReason).HasMaxLength(2000);
+            entity.Property(r => r.ConflictResolution).HasMaxLength(100);
+            entity.Property(r => r.ApprovedOverrideBy).HasMaxLength(200);
+            entity.Property(r => r.InitiatedBy).IsRequired().HasMaxLength(200);
+            
+            entity.HasIndex(r => r.ConnectorId);
+            entity.HasIndex(r => r.CorrelationId);
+            entity.HasIndex(r => r.Status);
+            entity.HasIndex(r => r.SyncedAt);
+            entity.HasIndex(r => r.ConflictDetected);
+            
+            // Foreign key relationships
+            entity.HasOne(r => r.Connector)
+                .WithMany()
+                .HasForeignKey(r => r.ConnectorId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.HasOne(r => r.FinanceEntity)
+                .WithMany()
+                .HasForeignKey(r => r.FinanceEntityId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }
