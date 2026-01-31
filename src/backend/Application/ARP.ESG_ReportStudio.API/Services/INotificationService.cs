@@ -82,4 +82,26 @@ public interface INotificationService
         ReportingPeriod period,
         User approver,
         User requester);
+
+    /// <summary>
+    /// Sends a notification to admins when an access request is created.
+    /// </summary>
+    /// <param name="accessRequest">The access request</param>
+    /// <param name="requester">The user requesting access</param>
+    /// <param name="admins">List of admin users who can review</param>
+    Task SendAccessRequestNotificationAsync(
+        AccessRequest accessRequest,
+        User requester,
+        List<User> admins);
+
+    /// <summary>
+    /// Sends a notification when an access request is reviewed.
+    /// </summary>
+    /// <param name="accessRequest">The access request that was reviewed</param>
+    /// <param name="reviewer">The user who reviewed the request</param>
+    /// <param name="requester">The user who requested access</param>
+    Task SendAccessRequestDecisionNotificationAsync(
+        AccessRequest accessRequest,
+        User reviewer,
+        User requester);
 }

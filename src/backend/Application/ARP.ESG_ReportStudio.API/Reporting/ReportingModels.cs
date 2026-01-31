@@ -3733,6 +3733,130 @@ public sealed class SubmitApprovalDecisionRequest
 }
 
 /// <summary>
+/// Represents a request for access to a report or section.
+/// </summary>
+public sealed class AccessRequest
+{
+    /// <summary>
+    /// Unique identifier for this access request.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who is requesting access.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the user requesting access (for display).
+    /// </summary>
+    public string RequestedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Timestamp when access was requested (ISO 8601).
+    /// </summary>
+    public string RequestedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of resource being requested: "section" or "report".
+    /// </summary>
+    public string ResourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the resource (section ID or report period ID).
+    /// </summary>
+    public string ResourceId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the resource (for display).
+    /// </summary>
+    public string ResourceName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason provided by the requester explaining why they need access.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Overall status of the access request.
+    /// Values: pending, approved, rejected
+    /// </summary>
+    public string Status { get; set; } = "pending";
+    
+    /// <summary>
+    /// User ID who reviewed the request.
+    /// </summary>
+    public string? ReviewedBy { get; set; }
+    
+    /// <summary>
+    /// Name of the user who reviewed the request (for display).
+    /// </summary>
+    public string? ReviewedByName { get; set; }
+    
+    /// <summary>
+    /// Timestamp when the request was reviewed (ISO 8601).
+    /// </summary>
+    public string? ReviewedAt { get; set; }
+    
+    /// <summary>
+    /// Comment from the reviewer explaining their decision.
+    /// </summary>
+    public string? ReviewComment { get; set; }
+}
+
+/// <summary>
+/// Request to create a new access request.
+/// </summary>
+public sealed class CreateAccessRequestRequest
+{
+    /// <summary>
+    /// User ID who is requesting access.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Type of resource being requested: "section" or "report".
+    /// </summary>
+    public string ResourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ID of the resource (section ID or report period ID).
+    /// </summary>
+    public string ResourceId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reason explaining why access is needed.
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to approve or reject an access request.
+/// </summary>
+public sealed class ReviewAccessRequestRequest
+{
+    /// <summary>
+    /// ID of the access request being reviewed.
+    /// </summary>
+    public string AccessRequestId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Decision: "approve" or "reject".
+    /// </summary>
+    public string Decision { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID of the reviewer.
+    /// </summary>
+    public string ReviewedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional comment explaining the decision.
+    /// </summary>
+    public string? ReviewComment { get; set; }
+}
+
+/// <summary>
 /// Request to export an audit package for external auditors.
 /// </summary>
 public sealed class ExportAuditPackageRequest
