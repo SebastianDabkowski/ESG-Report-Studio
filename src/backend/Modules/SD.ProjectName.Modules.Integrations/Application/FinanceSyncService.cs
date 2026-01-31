@@ -139,7 +139,7 @@ public class FinanceSyncService
         }
 
         var correlationId = Guid.NewGuid().ToString();
-        var importJobId = $"JOB-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+        var importJobId = $"JOB-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8]}";
         
         var result = new FinanceSyncResult
         {
