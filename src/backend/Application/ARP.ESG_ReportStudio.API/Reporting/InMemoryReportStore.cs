@@ -57,6 +57,7 @@ public sealed class InMemoryReportStore
     private readonly List<ExportHistoryEntry> _exportHistory = new(); // Export history (PDF/DOCX)
     private readonly List<SystemRole> _roles = new(); // System roles catalog
     private readonly List<SectionAccessGrant> _sectionAccessGrants = new(); // Section-level access grants
+    private readonly List<AccessRequest> _accessRequests = new(); // Access request workflow
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -9744,6 +9745,235 @@ public sealed class InMemoryReportStore
         lock (_lock)
         {
             return _approvalRequests.FirstOrDefault(ar => ar.Id == id);
+        }
+    }
+
+    #endregion
+
+    #region Access Requests
+
+    /// <summary>
+    /// Creates a new access request for a section or report.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, AccessRequest? AccessRequest) CreateAccessRequest(CreateAccessRequestRequest request)
+    {
+        lock (_lock)
+        {
+            // Validate requester exists
+            var requester = _users.FirstOrDefault(u => u.Id == request.RequestedBy);
+            if (requester == null)
+            {
+                return (false, $"User with ID '{request.RequestedBy}' not found.", null);
+            }
+
+            // Validate resource type
+            if (request.ResourceType != "section" && request.ResourceType != "report")
+            {
+                return (false, "ResourceType must be 'section' or 'report'.", null);
+            }
+
+            // Validate resource exists
+            string resourceName;
+            if (request.ResourceType == "section")
+            {
+                var section = _sections.FirstOrDefault(s => s.Id == request.ResourceId);
+                if (section == null)
+                {
+                    return (false, $"Section with ID '{request.ResourceId}' not found.", null);
+                }
+                resourceName = section.Title;
+            }
+            else // report
+            {
+                var period = _periods.FirstOrDefault(p => p.Id == request.ResourceId);
+                if (period == null)
+                {
+                    return (false, $"Reporting period with ID '{request.ResourceId}' not found.", null);
+                }
+                resourceName = period.Name;
+            }
+
+            // Validate reason is provided
+            if (string.IsNullOrWhiteSpace(request.Reason))
+            {
+                return (false, "Reason is required.", null);
+            }
+
+            var accessRequest = new AccessRequest
+            {
+                Id = Guid.NewGuid().ToString(),
+                RequestedBy = request.RequestedBy,
+                RequestedByName = requester.Name,
+                RequestedAt = DateTime.UtcNow.ToString("o"),
+                ResourceType = request.ResourceType,
+                ResourceId = request.ResourceId,
+                ResourceName = resourceName,
+                Reason = request.Reason,
+                Status = "pending"
+            };
+
+            _accessRequests.Add(accessRequest);
+
+            // Create audit log entry
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.RequestedBy,
+                UserName = requester.Name,
+                Action = "create-access-request",
+                EntityType = "access-request",
+                EntityId = accessRequest.Id,
+                Changes = new List<FieldChange>
+                {
+                    new FieldChange { Field = "ResourceType", NewValue = request.ResourceType },
+                    new FieldChange { Field = "ResourceId", NewValue = request.ResourceId },
+                    new FieldChange { Field = "Reason", NewValue = request.Reason }
+                }
+            });
+
+            return (true, null, accessRequest);
+        }
+    }
+
+    /// <summary>
+    /// Reviews an access request (approve or reject).
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, AccessRequest? AccessRequest) ReviewAccessRequest(ReviewAccessRequestRequest request)
+    {
+        lock (_lock)
+        {
+            var accessRequest = _accessRequests.FirstOrDefault(ar => ar.Id == request.AccessRequestId);
+            if (accessRequest == null)
+            {
+                return (false, $"Access request with ID '{request.AccessRequestId}' not found.", null);
+            }
+
+            if (accessRequest.Status != "pending")
+            {
+                return (false, $"Access request is already {accessRequest.Status}.", null);
+            }
+
+            var reviewer = _users.FirstOrDefault(u => u.Id == request.ReviewedBy);
+            if (reviewer == null)
+            {
+                return (false, $"Reviewer with ID '{request.ReviewedBy}' not found.", null);
+            }
+
+            if (request.Decision != "approve" && request.Decision != "reject")
+            {
+                return (false, "Decision must be 'approve' or 'reject'.", null);
+            }
+
+            var oldStatus = accessRequest.Status;
+            accessRequest.Status = request.Decision == "approve" ? "approved" : "rejected";
+            accessRequest.ReviewedBy = request.ReviewedBy;
+            accessRequest.ReviewedByName = reviewer.Name;
+            accessRequest.ReviewedAt = DateTime.UtcNow.ToString("o");
+            accessRequest.ReviewComment = request.ReviewComment;
+
+            // If approved, grant the access
+            if (request.Decision == "approve" && accessRequest.ResourceType == "section")
+            {
+                // Check if user already has access
+                var existingGrant = _sectionAccessGrants.FirstOrDefault(g =>
+                    g.SectionId == accessRequest.ResourceId &&
+                    g.UserId == accessRequest.RequestedBy);
+
+                if (existingGrant == null)
+                {
+                    var grant = new SectionAccessGrant
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        SectionId = accessRequest.ResourceId,
+                        UserId = accessRequest.RequestedBy,
+                        UserName = accessRequest.RequestedByName,
+                        GrantedBy = request.ReviewedBy,
+                        GrantedByName = reviewer.Name,
+                        GrantedAt = DateTime.UtcNow.ToString("o"),
+                        Reason = $"Approved via access request: {accessRequest.Reason}"
+                    };
+
+                    _sectionAccessGrants.Add(grant);
+
+                    // Audit log for the grant
+                    _auditLog.Add(new AuditLogEntry
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        Timestamp = DateTime.UtcNow.ToString("o"),
+                        UserId = request.ReviewedBy,
+                        UserName = reviewer.Name,
+                        Action = "grant-section-access",
+                        EntityType = "section-access-grant",
+                        EntityId = grant.Id,
+                        Changes = new List<FieldChange>
+                        {
+                            new FieldChange { Field = "SectionId", NewValue = grant.SectionId },
+                            new FieldChange { Field = "UserId", NewValue = grant.UserId },
+                            new FieldChange { Field = "Reason", NewValue = grant.Reason }
+                        }
+                    });
+                }
+            }
+
+            // Audit log for the review decision
+            _auditLog.Add(new AuditLogEntry
+            {
+                Id = Guid.NewGuid().ToString(),
+                Timestamp = DateTime.UtcNow.ToString("o"),
+                UserId = request.ReviewedBy,
+                UserName = reviewer.Name,
+                Action = "review-access-request",
+                EntityType = "access-request",
+                EntityId = accessRequest.Id,
+                Changes = new List<FieldChange>
+                {
+                    new FieldChange { Field = "Status", OldValue = oldStatus, NewValue = accessRequest.Status },
+                    new FieldChange { Field = "Decision", NewValue = request.Decision },
+                    new FieldChange { Field = "ReviewComment", NewValue = request.ReviewComment ?? "" }
+                }
+            });
+
+            return (true, null, accessRequest);
+        }
+    }
+
+    /// <summary>
+    /// Gets all access requests, optionally filtered by status, requester, or resource.
+    /// </summary>
+    public List<AccessRequest> GetAccessRequests(string? status = null, string? requestedBy = null, string? resourceId = null)
+    {
+        lock (_lock)
+        {
+            var query = _accessRequests.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(status))
+            {
+                query = query.Where(ar => ar.Status == status);
+            }
+
+            if (!string.IsNullOrWhiteSpace(requestedBy))
+            {
+                query = query.Where(ar => ar.RequestedBy == requestedBy);
+            }
+
+            if (!string.IsNullOrWhiteSpace(resourceId))
+            {
+                query = query.Where(ar => ar.ResourceId == resourceId);
+            }
+
+            return query.OrderByDescending(ar => ar.RequestedAt).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets a specific access request by ID.
+    /// </summary>
+    public AccessRequest? GetAccessRequest(string id)
+    {
+        lock (_lock)
+        {
+            return _accessRequests.FirstOrDefault(ar => ar.Id == id);
         }
     }
 

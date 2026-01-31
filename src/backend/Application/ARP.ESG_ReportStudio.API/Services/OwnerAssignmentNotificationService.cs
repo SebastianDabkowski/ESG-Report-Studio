@@ -375,4 +375,109 @@ ESG Report Studio";
             "Sent approval decision notification for approval {ApprovalRequestId} to requester {UserId} (email sent: {EmailSent})",
             approvalRequest.Id, requester.Id, emailSent);
     }
+
+    public async Task SendAccessRequestNotificationAsync(
+        AccessRequest accessRequest,
+        User requester,
+        List<User> admins)
+    {
+        foreach (var admin in admins)
+        {
+            var notification = new OwnerNotification
+            {
+                Id = Guid.NewGuid().ToString(),
+                RecipientUserId = admin.Id,
+                NotificationType = "access-requested",
+                EntityId = accessRequest.Id,
+                EntityType = "AccessRequest",
+                EntityTitle = $"Access request for {accessRequest.ResourceName}",
+                Message = $"{requester.Name} has requested access to {accessRequest.ResourceType} '{accessRequest.ResourceName}'",
+                ChangedBy = requester.Id,
+                ChangedByName = requester.Name,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                IsRead = false
+            };
+
+            var subject = $"ESG Report Studio: Access Request - {accessRequest.ResourceName}";
+            var body = $@"Hello {admin.Name},
+
+{requester.Name} has requested access to the following resource:
+
+Resource Type: {accessRequest.ResourceType}
+Resource Name: {accessRequest.ResourceName}
+Requested by: {requester.Name}
+Requested at: {accessRequest.RequestedAt}
+
+Reason:
+{accessRequest.Reason}
+
+Please log in to ESG Report Studio to review and approve or reject this access request.
+
+Best regards,
+ESG Report Studio";
+
+            var emailSent = await _emailService.SendEmailAsync(admin.Email, admin.Name, subject, body);
+            notification.EmailSent = emailSent;
+
+            _store.RecordNotification(notification);
+
+            _logger.LogInformation(
+                "Sent access request notification for access request {AccessRequestId} to admin {UserId} (email sent: {EmailSent})",
+                accessRequest.Id, admin.Id, emailSent);
+        }
+    }
+
+    public async Task SendAccessRequestDecisionNotificationAsync(
+        AccessRequest accessRequest,
+        User reviewer,
+        User requester)
+    {
+        var decision = accessRequest.Status == "approved" ? "approved" : "rejected";
+        var commentInfo = !string.IsNullOrWhiteSpace(accessRequest.ReviewComment)
+            ? $"\n\nComment from {reviewer.Name}:\n{accessRequest.ReviewComment}"
+            : "";
+
+        var notification = new OwnerNotification
+        {
+            Id = Guid.NewGuid().ToString(),
+            RecipientUserId = requester.Id,
+            NotificationType = $"access-{decision}",
+            EntityId = accessRequest.Id,
+            EntityType = "AccessRequest",
+            EntityTitle = $"Access request for {accessRequest.ResourceName}",
+            Message = $"Your access request for {accessRequest.ResourceType} '{accessRequest.ResourceName}' has been {decision}",
+            ChangedBy = reviewer.Id,
+            ChangedByName = reviewer.Name,
+            CreatedAt = DateTime.UtcNow.ToString("O"),
+            IsRead = false
+        };
+
+        var grantedInfo = decision == "approved"
+            ? "\n\nYou now have access to this resource."
+            : "";
+
+        var subject = $"ESG Report Studio: Access Request {decision.ToUpper()} - {accessRequest.ResourceName}";
+        var body = $@"Hello {requester.Name},
+
+{reviewer.Name} has {decision} your access request for:
+
+Resource Type: {accessRequest.ResourceType}
+Resource Name: {accessRequest.ResourceName}
+Decision: {decision.ToUpper()}
+Reviewed at: {accessRequest.ReviewedAt}{commentInfo}{grantedInfo}
+
+Please log in to ESG Report Studio for more details.
+
+Best regards,
+ESG Report Studio";
+
+        var emailSent = await _emailService.SendEmailAsync(requester.Email, requester.Name, subject, body);
+        notification.EmailSent = emailSent;
+
+        _store.RecordNotification(notification);
+
+        _logger.LogInformation(
+            "Sent access request decision notification for access request {AccessRequestId} to requester {UserId} (email sent: {EmailSent})",
+            accessRequest.Id, requester.Id, emailSent);
+    }
 }

@@ -1796,3 +1796,36 @@ export interface InviteExternalAdvisorResponse {
   sectionGrants: SectionAccessGrant[]
 }
 
+// Access Request Types
+export type AccessRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface AccessRequest {
+  id: string
+  requestedBy: string
+  requestedByName: string
+  requestedAt: string
+  resourceType: 'section' | 'report'
+  resourceId: string
+  resourceName: string
+  reason: string
+  status: AccessRequestStatus
+  reviewedBy?: string
+  reviewedByName?: string
+  reviewedAt?: string
+  reviewComment?: string
+}
+
+export interface CreateAccessRequestRequest {
+  requestedBy: string
+  resourceType: 'section' | 'report'
+  resourceId: string
+  reason: string
+}
+
+export interface ReviewAccessRequestRequest {
+  accessRequestId: string
+  decision: 'approve' | 'reject'
+  reviewedBy: string
+  reviewComment?: string
+}
+
