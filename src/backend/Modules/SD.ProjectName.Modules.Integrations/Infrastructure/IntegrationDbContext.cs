@@ -15,6 +15,8 @@ public class IntegrationDbContext : DbContext
 
     public DbSet<Connector> Connectors { get; set; } = null!;
     public DbSet<IntegrationLog> IntegrationLogs { get; set; } = null!;
+    public DbSet<HREntity> HREntities { get; set; } = null!;
+    public DbSet<HRSyncRecord> HRSyncRecords { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -65,6 +67,58 @@ public class IntegrationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(l => l.ConnectorId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // HREntity configuration
+        modelBuilder.Entity<HREntity>(entity =>
+        {
+            entity.ToTable("HREntities");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.ExternalId).IsRequired().HasMaxLength(200);
+            entity.Property(e => e.EntityType).IsRequired().HasMaxLength(100);
+            entity.Property(e => e.Data).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.MappedData).HasColumnType("nvarchar(max)");
+            entity.Property(e => e.IsApproved).IsRequired();
+            
+            entity.HasIndex(e => e.ConnectorId);
+            entity.HasIndex(e => new { e.ConnectorId, e.ExternalId }).IsUnique();
+            entity.HasIndex(e => e.EntityType);
+            entity.HasIndex(e => e.IsApproved);
+            
+            // Foreign key relationship
+            entity.HasOne(e => e.Connector)
+                .WithMany()
+                .HasForeignKey(e => e.ConnectorId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // HRSyncRecord configuration
+        modelBuilder.Entity<HRSyncRecord>(entity =>
+        {
+            entity.ToTable("HRSyncRecords");
+            entity.HasKey(r => r.Id);
+            entity.Property(r => r.CorrelationId).IsRequired().HasMaxLength(100);
+            entity.Property(r => r.Status).IsRequired();
+            entity.Property(r => r.ExternalId).HasMaxLength(200);
+            entity.Property(r => r.RawData).HasColumnType("nvarchar(max)");
+            entity.Property(r => r.RejectionReason).HasMaxLength(2000);
+            entity.Property(r => r.InitiatedBy).IsRequired().HasMaxLength(200);
+            
+            entity.HasIndex(r => r.ConnectorId);
+            entity.HasIndex(r => r.CorrelationId);
+            entity.HasIndex(r => r.Status);
+            entity.HasIndex(r => r.SyncedAt);
+            
+            // Foreign key relationships
+            entity.HasOne(r => r.Connector)
+                .WithMany()
+                .HasForeignKey(r => r.ConnectorId)
+                .OnDelete(DeleteBehavior.Restrict);
+            
+            entity.HasOne(r => r.HREntity)
+                .WithMany()
+                .HasForeignKey(r => r.HREntityId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
