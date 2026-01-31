@@ -157,6 +157,57 @@ public sealed class AuditLogController : ControllerBase
     }
 
     /// <summary>
+    /// Export audit log with tamper-evident hash chain and cryptographic signature.
+    /// This endpoint provides the highest level of integrity verification for audit trails.
+    /// Each entry includes a hash, and entries are linked in a chain for tamper detection.
+    /// Requires admin or auditor role.
+    /// </summary>
+    /// <param name="requestingUserId">User ID requesting the export</param>
+    /// <param name="entityType">Filter by entity type (optional)</param>
+    /// <param name="entityId">Filter by specific entity ID (optional)</param>
+    /// <param name="userId">Filter by user who made changes (optional)</param>
+    /// <param name="action">Filter by action type (optional)</param>
+    /// <param name="startDate">Filter by start date (ISO 8601 format, optional)</param>
+    /// <param name="endDate">Filter by end date (ISO 8601 format, optional)</param>
+    /// <response code="200">Returns tamper-evident audit export with hash chain and signature</response>
+    /// <response code="403">Insufficient permissions</response>
+    [HttpGet("export/tamper-evident")]
+    [ProducesResponseType(typeof(TamperEvidentExportResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public ActionResult<TamperEvidentExportResponse> ExportTamperEvident(
+        [FromHeader(Name = "X-User-Id")] string requestingUserId,
+        [FromQuery] string? entityType = null,
+        [FromQuery] string? entityId = null,
+        [FromQuery] string? userId = null,
+        [FromQuery] string? action = null,
+        [FromQuery] string? startDate = null,
+        [FromQuery] string? endDate = null)
+    {
+        // Check access permission - export requires admin or auditor role
+        var accessResult = CheckAuditLogAccess(requestingUserId, requireExportRole: true);
+        if (!accessResult.HasAccess)
+        {
+            return StatusCode(403, new { error = accessResult.ErrorMessage });
+        }
+
+        var user = _store.GetUser(requestingUserId);
+        var userName = user?.Name ?? requestingUserId;
+
+        var response = _store.GenerateTamperEvidentExport(
+            requestingUserId,
+            userName,
+            entityType,
+            entityId,
+            userId,
+            action,
+            startDate,
+            endDate
+        );
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Get chronological timeline of changes for a specific entity.
     /// Returns audit log entries with before/after values for easy comparison.
     /// Includes enriched metadata for report fragments (section name, evidence, comments).

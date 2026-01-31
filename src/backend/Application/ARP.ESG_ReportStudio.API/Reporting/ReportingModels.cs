@@ -1724,6 +1724,18 @@ public sealed class AuditLogEntry
     public string EntityId { get; init; } = string.Empty;
     public string? ChangeNote { get; init; }
     public List<FieldChange> Changes { get; init; } = new();
+    
+    /// <summary>
+    /// SHA-256 hash of this entry's content for integrity verification.
+    /// Computed from Id, Timestamp, UserId, Action, EntityType, EntityId, and Changes.
+    /// </summary>
+    public string? EntryHash { get; init; }
+    
+    /// <summary>
+    /// Hash of the previous entry in the audit log chain for tamper detection.
+    /// Creates a hash chain that makes it evident if entries are modified or removed.
+    /// </summary>
+    public string? PreviousEntryHash { get; init; }
 }
 
 /// <summary>
@@ -8239,4 +8251,126 @@ public sealed class AccessReviewLogEntry
     /// Optional note associated with the action.
     /// </summary>
     public string? Note { get; set; }
+}
+
+/// <summary>
+/// Request for tamper-evident audit log export with integrity verification.
+/// </summary>
+public sealed class TamperEvidentExportRequest
+{
+    /// <summary>
+    /// Filter by entity type (optional).
+    /// </summary>
+    public string? EntityType { get; set; }
+    
+    /// <summary>
+    /// Filter by specific entity ID (optional).
+    /// </summary>
+    public string? EntityId { get; set; }
+    
+    /// <summary>
+    /// Filter by user who made changes (optional).
+    /// </summary>
+    public string? UserId { get; set; }
+    
+    /// <summary>
+    /// Filter by action type (optional).
+    /// </summary>
+    public string? Action { get; set; }
+    
+    /// <summary>
+    /// Filter by start date (ISO 8601 format, optional).
+    /// </summary>
+    public string? StartDate { get; set; }
+    
+    /// <summary>
+    /// Filter by end date (ISO 8601 format, optional).
+    /// </summary>
+    public string? EndDate { get; set; }
+    
+    /// <summary>
+    /// Export format: "json" or "signed-json". Default is "signed-json".
+    /// </summary>
+    public string Format { get; set; } = "signed-json";
+}
+
+/// <summary>
+/// Response for tamper-evident audit log export.
+/// Contains audit entries with hash chain and cryptographic signature.
+/// </summary>
+public sealed class TamperEvidentExportResponse
+{
+    /// <summary>
+    /// List of audit log entries in chronological order.
+    /// Each entry includes a hash and reference to the previous entry's hash.
+    /// </summary>
+    public List<AuditLogEntry> Entries { get; set; } = new();
+    
+    /// <summary>
+    /// Metadata about the export including timestamp, filters, and verification information.
+    /// </summary>
+    public AuditExportMetadata Metadata { get; set; } = new();
+    
+    /// <summary>
+    /// SHA-256 hash of the entire export content for integrity verification.
+    /// Computed from all entries and metadata (excluding the signature itself).
+    /// </summary>
+    public string ContentHash { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Digital signature of the content hash (placeholder for future implementation).
+    /// In production, this would be a cryptographic signature using a private key.
+    /// </summary>
+    public string? Signature { get; set; }
+}
+
+/// <summary>
+/// Metadata about an audit log export for verification and auditability.
+/// </summary>
+public sealed class AuditExportMetadata
+{
+    /// <summary>
+    /// ISO 8601 timestamp when the export was generated.
+    /// </summary>
+    public string ExportedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who requested the export.
+    /// </summary>
+    public string ExportedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who requested the export.
+    /// </summary>
+    public string ExportedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Total number of entries in the export.
+    /// </summary>
+    public int TotalEntries { get; set; }
+    
+    /// <summary>
+    /// Filters applied to the export.
+    /// </summary>
+    public Dictionary<string, string> Filters { get; set; } = new();
+    
+    /// <summary>
+    /// Hash algorithm used (e.g., "SHA-256").
+    /// </summary>
+    public string HashAlgorithm { get; set; } = "SHA-256";
+    
+    /// <summary>
+    /// Version of the export format.
+    /// </summary>
+    public string FormatVersion { get; set; } = "1.0";
+    
+    /// <summary>
+    /// Whether hash chain verification passed.
+    /// </summary>
+    public bool HashChainValid { get; set; }
+    
+    /// <summary>
+    /// Description of any hash chain validation issues.
+    /// </summary>
+    public string? ValidationMessage { get; set; }
 }
