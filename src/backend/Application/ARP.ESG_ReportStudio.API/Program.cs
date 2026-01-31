@@ -181,8 +181,11 @@ builder.Services.AddDbContext<IntegrationDbContext>(options =>
         sqlOptions => sqlOptions.MigrationsAssembly("SD.ProjectName.Modules.Integrations")));
 builder.Services.AddScoped<IConnectorRepository, ConnectorRepository>();
 builder.Services.AddScoped<IIntegrationLogRepository, IntegrationLogRepository>();
+builder.Services.AddScoped<IHREntityRepository, HREntityRepository>();
+builder.Services.AddScoped<IHRSyncRecordRepository, HRSyncRecordRepository>();
 builder.Services.AddScoped<ConnectorService>();
 builder.Services.AddScoped<IntegrationExecutionService>();
+builder.Services.AddScoped<HRSyncService>();
 
 builder.Services.AddCors(options =>
 {
