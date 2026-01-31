@@ -1843,3 +1843,212 @@ export async function deleteStandardMapping(id: string): Promise<void> {
   })
 }
 
+// Standard Disclosures API
+
+/**
+ * Gets all standard disclosures with optional filtering.
+ */
+export async function getStandardDisclosures(
+  standardId?: string,
+  category?: string,
+  topic?: string,
+  mandatoryOnly?: boolean
+): Promise<StandardDisclosure[]> {
+  const params = new URLSearchParams()
+  if (standardId) params.append('standardId', standardId)
+  if (category) params.append('category', category)
+  if (topic) params.append('topic', topic)
+  if (mandatoryOnly !== undefined) params.append('mandatoryOnly', mandatoryOnly.toString())
+  
+  const url = `/standard-disclosures${params.toString() ? `?${params.toString()}` : ''}`
+  return requestJson<StandardDisclosure[]>(url)
+}
+
+/**
+ * Gets a specific standard disclosure by ID.
+ */
+export async function getStandardDisclosure(id: string): Promise<StandardDisclosure> {
+  return requestJson<StandardDisclosure>(`/standard-disclosures/${id}`)
+}
+
+/**
+ * Creates a new standard disclosure.
+ */
+export async function createStandardDisclosure(payload: CreateStandardDisclosureRequest): Promise<StandardDisclosure> {
+  return requestJson<StandardDisclosure>('/standard-disclosures', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Updates an existing standard disclosure.
+ */
+export async function updateStandardDisclosure(id: string, payload: UpdateStandardDisclosureRequest): Promise<StandardDisclosure> {
+  return requestJson<StandardDisclosure>(`/standard-disclosures/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Deletes a standard disclosure.
+ */
+export async function deleteStandardDisclosure(id: string): Promise<void> {
+  return requestJson<void>(`/standard-disclosures/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+// Section Disclosure Mappings API
+
+/**
+ * Gets all section-to-disclosure mappings with optional filtering.
+ */
+export async function getSectionDisclosureMappings(
+  sectionId?: string,
+  disclosureId?: string
+): Promise<SectionDisclosureMapping[]> {
+  const params = new URLSearchParams()
+  if (sectionId) params.append('sectionId', sectionId)
+  if (disclosureId) params.append('disclosureId', disclosureId)
+  
+  const url = `/mappings/section-disclosures${params.toString() ? `?${params.toString()}` : ''}`
+  return requestJson<SectionDisclosureMapping[]>(url)
+}
+
+/**
+ * Gets a specific section disclosure mapping by ID.
+ */
+export async function getSectionDisclosureMapping(id: string): Promise<SectionDisclosureMapping> {
+  return requestJson<SectionDisclosureMapping>(`/mappings/section-disclosures/${id}`)
+}
+
+/**
+ * Creates a new section-to-disclosure mapping.
+ */
+export async function createSectionDisclosureMapping(payload: CreateSectionDisclosureMappingRequest): Promise<SectionDisclosureMapping> {
+  return requestJson<SectionDisclosureMapping>('/mappings/section-disclosures', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Updates an existing section-to-disclosure mapping.
+ */
+export async function updateSectionDisclosureMapping(id: string, payload: UpdateSectionDisclosureMappingRequest): Promise<SectionDisclosureMapping> {
+  return requestJson<SectionDisclosureMapping>(`/mappings/section-disclosures/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Deletes a section disclosure mapping.
+ */
+export async function deleteSectionDisclosureMapping(id: string): Promise<void> {
+  return requestJson<void>(`/mappings/section-disclosures/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+// DataPoint Disclosure Mappings API
+
+/**
+ * Gets all data-point-to-disclosure mappings with optional filtering.
+ */
+export async function getDataPointDisclosureMappings(
+  dataPointId?: string,
+  disclosureId?: string
+): Promise<DataPointDisclosureMapping[]> {
+  const params = new URLSearchParams()
+  if (dataPointId) params.append('dataPointId', dataPointId)
+  if (disclosureId) params.append('disclosureId', disclosureId)
+  
+  const url = `/mappings/datapoint-disclosures${params.toString() ? `?${params.toString()}` : ''}`
+  return requestJson<DataPointDisclosureMapping[]>(url)
+}
+
+/**
+ * Gets a specific data point disclosure mapping by ID.
+ */
+export async function getDataPointDisclosureMapping(id: string): Promise<DataPointDisclosureMapping> {
+  return requestJson<DataPointDisclosureMapping>(`/mappings/datapoint-disclosures/${id}`)
+}
+
+/**
+ * Creates a new data-point-to-disclosure mapping.
+ */
+export async function createDataPointDisclosureMapping(payload: CreateDataPointDisclosureMappingRequest): Promise<DataPointDisclosureMapping> {
+  return requestJson<DataPointDisclosureMapping>('/mappings/datapoint-disclosures', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Updates an existing data-point-to-disclosure mapping.
+ */
+export async function updateDataPointDisclosureMapping(id: string, payload: UpdateDataPointDisclosureMappingRequest): Promise<DataPointDisclosureMapping> {
+  return requestJson<DataPointDisclosureMapping>(`/mappings/datapoint-disclosures/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Deletes a data point disclosure mapping.
+ */
+export async function deleteDataPointDisclosureMapping(id: string): Promise<void> {
+  return requestJson<void>(`/mappings/datapoint-disclosures/${id}`, {
+    method: 'DELETE'
+  })
+}
+
+// Mapping Versions API
+
+/**
+ * Gets all mapping versions for a reporting period.
+ */
+export async function getMappingVersions(periodId: string): Promise<MappingVersion[]> {
+  return requestJson<MappingVersion[]>(`/mappings/versions?periodId=${periodId}`)
+}
+
+/**
+ * Gets a specific mapping version by ID.
+ */
+export async function getMappingVersion(id: string): Promise<MappingVersion> {
+  return requestJson<MappingVersion>(`/mappings/versions/${id}`)
+}
+
+/**
+ * Creates a new mapping version snapshot.
+ */
+export async function createMappingVersion(payload: CreateMappingVersionRequest): Promise<MappingVersion> {
+  return requestJson<MappingVersion>('/mappings/versions', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+// Coverage Analysis API
+
+/**
+ * Gets a coverage analysis for a specific standard and reporting period.
+ */
+export async function getStandardCoverageAnalysis(
+  standardId: string,
+  periodId: string,
+  category?: string,
+  topic?: string
+): Promise<StandardCoverageAnalysis> {
+  const params = new URLSearchParams()
+  params.append('standardId', standardId)
+  params.append('periodId', periodId)
+  if (category) params.append('category', category)
+  if (topic) params.append('topic', topic)
+  
+  return requestJson<StandardCoverageAnalysis>(`/coverage?${params.toString()}`)
+}
+

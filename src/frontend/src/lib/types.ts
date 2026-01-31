@@ -1896,3 +1896,156 @@ export interface CreateStandardMappingRequest {
   sectionCatalogId: string
 }
 
+/**
+ * Represents an individual disclosure within a reporting standard.
+ * A disclosure is a specific requirement or data point that must be reported (e.g., ESRS E1-1, GRI 305-1).
+ */
+export interface StandardDisclosure {
+  id: string
+  standardId: string
+  disclosureCode: string // External reference code (e.g., "ESRS E1-1", "GRI 305-1")
+  title: string
+  description: string
+  category: 'environmental' | 'social' | 'governance'
+  topic?: string // Sub-category or topic area
+  isMandatory: boolean
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface CreateStandardDisclosureRequest {
+  standardId: string
+  disclosureCode: string
+  title: string
+  description: string
+  category: 'environmental' | 'social' | 'governance'
+  topic?: string
+  isMandatory: boolean
+}
+
+export interface UpdateStandardDisclosureRequest {
+  title: string
+  description: string
+  category: 'environmental' | 'social' | 'governance'
+  topic?: string
+  isMandatory: boolean
+}
+
+/**
+ * Maps a report section to one or more standard disclosures (many-to-many).
+ */
+export interface SectionDisclosureMapping {
+  id: string
+  sectionId: string
+  disclosureId: string
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface CreateSectionDisclosureMappingRequest {
+  sectionId: string
+  disclosureId: string
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+}
+
+export interface UpdateSectionDisclosureMappingRequest {
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+}
+
+/**
+ * Maps a data point to one or more standard disclosures (many-to-many).
+ */
+export interface DataPointDisclosureMapping {
+  id: string
+  dataPointId: string
+  disclosureId: string
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+}
+
+export interface CreateDataPointDisclosureMappingRequest {
+  dataPointId: string
+  disclosureId: string
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+}
+
+export interface UpdateDataPointDisclosureMappingRequest {
+  coverageLevel: 'full' | 'partial' | 'reference'
+  notes?: string
+}
+
+/**
+ * Versioned snapshot of mappings for export consistency.
+ */
+export interface MappingVersion {
+  id: string
+  periodId: string
+  versionNumber: number
+  mappingsSnapshot: string // Serialized JSON
+  reason: string
+  createdAt: string
+  createdBy: string
+}
+
+export interface CreateMappingVersionRequest {
+  periodId: string
+  reason: string
+}
+
+/**
+ * Coverage analysis result for a specific standard.
+ */
+export interface StandardCoverageAnalysis {
+  standardId: string
+  standardTitle: string
+  periodId: string
+  totalDisclosures: number
+  fullyCovered: number
+  partiallyCovered: number
+  notCovered: number
+  coveragePercentage: number
+  disclosureDetails: DisclosureCoverageDetail[]
+  analyzedAt: string
+}
+
+export interface DisclosureCoverageDetail {
+  disclosureId: string
+  disclosureCode: string
+  title: string
+  category: string
+  topic?: string
+  isMandatory: boolean
+  coverageStatus: 'full' | 'partial' | 'missing'
+  mappedSections: MappedSectionInfo[]
+  mappedDataPoints: MappedDataPointInfo[]
+}
+
+export interface MappedSectionInfo {
+  sectionId: string
+  sectionTitle: string
+  coverageLevel: string
+  completenessStatus: string
+  notes?: string
+}
+
+export interface MappedDataPointInfo {
+  dataPointId: string
+  dataPointTitle: string
+  coverageLevel: string
+  completenessStatus: string
+  notes?: string
+}
+
