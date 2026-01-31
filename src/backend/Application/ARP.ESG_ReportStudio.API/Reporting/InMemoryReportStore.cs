@@ -5432,20 +5432,76 @@ public sealed class InMemoryReportStore
     // Audit Log Management
     private void CreateAuditLogEntry(string userId, string userName, string action, string entityType, string entityId, List<FieldChange> changes, string? changeNote = null)
     {
+        // Get the hash of the previous entry for chain linking
+        string? previousHash = _auditLog.Count > 0 ? _auditLog[^1].EntryHash : null;
+        
+        var entryId = Guid.NewGuid().ToString();
+        var timestamp = DateTime.UtcNow.ToString("O");
+        
+        // Compute hash for this entry
+        var entryHash = ComputeAuditEntryHash(entryId, timestamp, userId, action, entityType, entityId, changes, previousHash);
+        
         var entry = new AuditLogEntry
         {
-            Id = Guid.NewGuid().ToString(),
-            Timestamp = DateTime.UtcNow.ToString("O"),
+            Id = entryId,
+            Timestamp = timestamp,
             UserId = userId,
             UserName = userName,
             Action = action,
             EntityType = entityType,
             EntityId = entityId,
             ChangeNote = changeNote,
-            Changes = changes
+            Changes = changes,
+            EntryHash = entryHash,
+            PreviousEntryHash = previousHash
         };
         
         _auditLog.Add(entry);
+    }
+    
+    /// <summary>
+    /// Computes SHA-256 hash for an audit log entry to enable tamper detection.
+    /// The hash is computed from entry metadata and changes, excluding userName and changeNote
+    /// to focus on the critical audit trail data.
+    /// </summary>
+    private string ComputeAuditEntryHash(string id, string timestamp, string userId, string action, 
+        string entityType, string entityId, List<FieldChange> changes, string? previousHash)
+    {
+        var sb = new StringBuilder();
+        sb.Append(id);
+        sb.Append('|');
+        sb.Append(timestamp);
+        sb.Append('|');
+        sb.Append(userId);
+        sb.Append('|');
+        sb.Append(action);
+        sb.Append('|');
+        sb.Append(entityType);
+        sb.Append('|');
+        sb.Append(entityId);
+        sb.Append('|');
+        
+        // Include changes in deterministic order
+        foreach (var change in changes.OrderBy(c => c.Field))
+        {
+            sb.Append(change.Field);
+            sb.Append(':');
+            sb.Append(change.OldValue ?? "");
+            sb.Append('>');
+            sb.Append(change.NewValue ?? "");
+            sb.Append(';');
+        }
+        
+        // Include previous hash to create chain
+        if (!string.IsNullOrEmpty(previousHash))
+        {
+            sb.Append('|');
+            sb.Append(previousHash);
+        }
+        
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
     }
 
     public IReadOnlyList<AuditLogEntry> GetAuditLog(
@@ -5554,6 +5610,152 @@ public sealed class InMemoryReportStore
 
             return query.OrderByDescending(e => e.Timestamp).ToList();
         }
+    }
+    
+    /// <summary>
+    /// Generate a tamper-evident export of audit log entries with hash chain verification.
+    /// </summary>
+    public TamperEvidentExportResponse GenerateTamperEvidentExport(
+        string exportedBy,
+        string exportedByName,
+        string? entityType = null,
+        string? entityId = null,
+        string? userId = null,
+        string? action = null,
+        string? startDate = null,
+        string? endDate = null)
+    {
+        lock (_lock)
+        {
+            // Get filtered audit entries in chronological order (oldest first)
+            var entries = GetAuditLog(entityType, entityId, userId, action, startDate, endDate)
+                .OrderBy(e => e.Timestamp)
+                .ToList();
+            
+            // Verify hash chain integrity
+            bool hashChainValid = VerifyHashChain(entries, out string? validationMessage);
+            
+            // Build metadata
+            var metadata = new AuditExportMetadata
+            {
+                ExportedAt = DateTime.UtcNow.ToString("O"),
+                ExportedBy = exportedBy,
+                ExportedByName = exportedByName,
+                TotalEntries = entries.Count,
+                HashAlgorithm = "SHA-256",
+                FormatVersion = "1.0",
+                HashChainValid = hashChainValid,
+                ValidationMessage = validationMessage,
+                Filters = new Dictionary<string, string>()
+            };
+            
+            // Record applied filters
+            if (!string.IsNullOrEmpty(entityType)) metadata.Filters["entityType"] = entityType;
+            if (!string.IsNullOrEmpty(entityId)) metadata.Filters["entityId"] = entityId;
+            if (!string.IsNullOrEmpty(userId)) metadata.Filters["userId"] = userId;
+            if (!string.IsNullOrEmpty(action)) metadata.Filters["action"] = action;
+            if (!string.IsNullOrEmpty(startDate)) metadata.Filters["startDate"] = startDate;
+            if (!string.IsNullOrEmpty(endDate)) metadata.Filters["endDate"] = endDate;
+            
+            // Compute content hash (hash of all entries + metadata, excluding signature)
+            var contentHash = ComputeExportContentHash(entries, metadata);
+            
+            var response = new TamperEvidentExportResponse
+            {
+                Entries = entries,
+                Metadata = metadata,
+                ContentHash = contentHash,
+                // Signature would be computed here in production using a private key
+                Signature = $"SIGNATURE_PLACEHOLDER_{contentHash.Substring(0, 16)}"
+            };
+            
+            return response;
+        }
+    }
+    
+    /// <summary>
+    /// Verifies the integrity of the hash chain in audit log entries.
+    /// </summary>
+    private bool VerifyHashChain(List<AuditLogEntry> entries, out string? validationMessage)
+    {
+        if (entries.Count == 0)
+        {
+            validationMessage = "No entries to verify";
+            return true;
+        }
+        
+        for (int i = 0; i < entries.Count; i++)
+        {
+            var entry = entries[i];
+            
+            // Verify entry hash
+            var expectedHash = ComputeAuditEntryHash(
+                entry.Id,
+                entry.Timestamp,
+                entry.UserId,
+                entry.Action,
+                entry.EntityType,
+                entry.EntityId,
+                entry.Changes.ToList(),
+                entry.PreviousEntryHash
+            );
+            
+            if (entry.EntryHash != expectedHash)
+            {
+                validationMessage = $"Hash mismatch at entry {i} (ID: {entry.Id})";
+                return false;
+            }
+            
+            // Verify chain linkage (except for first entry)
+            if (i > 0)
+            {
+                var previousEntry = entries[i - 1];
+                if (entry.PreviousEntryHash != previousEntry.EntryHash)
+                {
+                    validationMessage = $"Chain break at entry {i} (ID: {entry.Id})";
+                    return false;
+                }
+            }
+            else
+            {
+                // First entry should have null previous hash
+                if (entry.PreviousEntryHash != null)
+                {
+                    // This is OK if filtering - entries might not include the true first entry
+                    // We just verify internal consistency
+                }
+            }
+        }
+        
+        validationMessage = "Hash chain verified successfully";
+        return true;
+    }
+    
+    /// <summary>
+    /// Computes SHA-256 hash of the export content for integrity verification.
+    /// </summary>
+    private string ComputeExportContentHash(List<AuditLogEntry> entries, AuditExportMetadata metadata)
+    {
+        var sb = new StringBuilder();
+        
+        // Include metadata
+        sb.Append(metadata.ExportedAt);
+        sb.Append('|');
+        sb.Append(metadata.ExportedBy);
+        sb.Append('|');
+        sb.Append(metadata.TotalEntries);
+        sb.Append('|');
+        
+        // Include all entry hashes in order
+        foreach (var entry in entries)
+        {
+            sb.Append(entry.EntryHash);
+            sb.Append(';');
+        }
+        
+        var bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
     }
 
     public void LogPublishAction(string periodId, string publishedBy, string action, string changeNote, int errorCount, int warningCount)
