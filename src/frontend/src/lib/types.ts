@@ -2049,3 +2049,51 @@ export interface MappedDataPointInfo {
   notes?: string
 }
 
+
+/**
+ * Tenant-level settings for integrations and reporting standards.
+ */
+export interface TenantSettings {
+  id: string
+  organizationId: string
+  enabledIntegrations: string[]
+  enabledStandards: string[]
+  version: number
+  effectiveDate: string
+  applyImmediately: boolean
+  createdAt: string
+  createdBy: string
+  createdByName: string
+  updatedAt: string
+  updatedBy: string
+  updatedByName: string
+}
+
+/**
+ * Historical record of tenant settings changes.
+ */
+export interface TenantSettingsHistory {
+  id: string
+  tenantSettingsId: string
+  organizationId: string
+  version: number
+  enabledIntegrations: string[]
+  enabledStandards: string[]
+  effectiveDate: string
+  changedAt: string
+  changedBy: string
+  changedByName: string
+  changeReason?: string
+}
+
+/**
+ * Request to update tenant settings.
+ */
+export interface UpdateTenantSettingsRequest {
+  enabledIntegrations: string[]
+  enabledStandards: string[]
+  applyImmediately: boolean
+  changeReason?: string
+  updatedBy: string
+  updatedByName: string
+}
