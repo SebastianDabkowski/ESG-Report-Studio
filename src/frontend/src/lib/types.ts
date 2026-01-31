@@ -402,16 +402,6 @@ export type MissingReasonCategory =
   | 'system-limitation'
   | 'other'
 
-export interface SectionSummary extends ReportSection {
-  dataPointCount: number
-  evidenceCount: number
-  gapCount: number
-  assumptionCount: number
-  completenessPercentage: number
-  ownerName: string
-  progressStatus: ProgressStatus
-}
-
 export interface OrganizationalUnit {
   id: string
   name: string

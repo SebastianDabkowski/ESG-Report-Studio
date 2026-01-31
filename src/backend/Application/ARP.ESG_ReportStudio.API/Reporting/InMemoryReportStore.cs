@@ -1271,8 +1271,11 @@ public sealed class InMemoryReportStore
             };
             _sectionVersions.Add(version);
 
-            // Update section status
+            // Capture old values for audit log
             var oldStatus = section.Status;
+            var oldApprovedBy = section.ApprovedBy;
+            
+            // Update section status
             section.Status = "approved";
             section.ApprovedAt = DateTime.UtcNow.ToString("o");
             section.ApprovedBy = request.ApprovedBy;
@@ -1296,7 +1299,7 @@ public sealed class InMemoryReportStore
                 changes: new List<FieldChange>
                 {
                     new() { Field = "Status", OldValue = oldStatus, NewValue = "approved" },
-                    new() { Field = "ApprovedBy", OldValue = section.ApprovedBy ?? "", NewValue = request.ApprovedBy }
+                    new() { Field = "ApprovedBy", OldValue = oldApprovedBy ?? "", NewValue = request.ApprovedBy }
                 },
                 changeNote: request.ApprovalNote
             );
@@ -1451,7 +1454,11 @@ public sealed class InMemoryReportStore
 
             if (section.Status == "submitted-for-approval")
             {
-                return (false, $"Section is submitted for approval by {section.SubmittedByName ?? section.SubmittedBy} on {section.SubmittedForApprovalAt}. Changes cannot be made until it is approved or changes are requested.");
+                var submittedBy = section.SubmittedByName ?? section.SubmittedBy;
+                var submittedAt = section.SubmittedForApprovalAt != null 
+                    ? DateTime.Parse(section.SubmittedForApprovalAt).ToString("yyyy-MM-dd")
+                    : "unknown date";
+                return (false, $"Section is submitted for approval by {submittedBy} on {submittedAt}. Changes cannot be made until it is approved or changes are requested.");
             }
 
             if (section.Status == "approved")
