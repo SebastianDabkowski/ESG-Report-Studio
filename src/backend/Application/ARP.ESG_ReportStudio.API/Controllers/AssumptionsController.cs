@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/assumptions")]
+[Route("api/v{version:apiVersion}/assumptions")]
 public sealed class AssumptionsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

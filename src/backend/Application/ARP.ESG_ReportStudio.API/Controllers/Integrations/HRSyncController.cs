@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using SD.ProjectName.Modules.Integrations.Application;
 
 namespace ARP.ESG_ReportStudio.API.Controllers.Integrations;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/v1/hr")]
+[Route("api/v{version:apiVersion}/hr")]
 public class HRSyncController : ControllerBase
 {
     private readonly HRSyncService _hrSyncService;

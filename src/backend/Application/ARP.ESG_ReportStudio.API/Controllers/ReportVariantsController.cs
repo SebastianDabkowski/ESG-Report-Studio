@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -6,8 +7,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for managing report variants - audience-specific report configurations.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/variants")]
+[Route("api/v{version:apiVersion}/variants")]
 public sealed class ReportVariantsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

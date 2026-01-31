@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using SD.ProjectName.Modules.Integrations.Application;
 
 namespace ARP.ESG_ReportStudio.API.Controllers.Integrations;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/v1/finance")]
+[Route("api/v{version:apiVersion}/finance")]
 public class FinanceSyncController : ControllerBase
 {
     private readonly FinanceSyncService _financeSyncService;

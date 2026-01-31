@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -7,8 +8,9 @@ using System.Text;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/import")]
+[Route("api/v{version:apiVersion}/import")]
 public sealed class ImportController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

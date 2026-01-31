@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Models;
 using ARP.ESG_ReportStudio.API.Reporting;
 
@@ -9,8 +10,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing break-glass admin access.
 /// Provides emergency access with full audit trail and mandatory justification.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/break-glass")]
+[Route("api/v{version:apiVersion}/break-glass")]
 [Authorize]
 public sealed class BreakGlassController : ControllerBase
 {

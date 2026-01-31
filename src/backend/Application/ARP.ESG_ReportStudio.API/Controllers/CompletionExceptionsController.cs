@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing completion exceptions in ESG reports.
 /// Exceptions allow controlled gaps with explicit justification and approval.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/completion-exceptions")]
+[Route("api/v{version:apiVersion}/completion-exceptions")]
 public sealed class CompletionExceptionsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

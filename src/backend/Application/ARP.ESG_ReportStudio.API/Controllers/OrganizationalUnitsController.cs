@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/organizational-units")]
+[Route("api/v{version:apiVersion}/organizational-units")]
 public sealed class OrganizationalUnitsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

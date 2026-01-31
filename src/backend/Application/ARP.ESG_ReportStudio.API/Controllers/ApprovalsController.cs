@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ARP.ESG_ReportStudio.API.Reporting;
 using ARP.ESG_ReportStudio.API.Services;
+using Asp.Versioning;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
@@ -17,7 +18,8 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// - Additional authorization checks in each method to validate user permissions
 /// </remarks>
 [ApiController]
-[Route("api/approvals")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/approvals")]
 public sealed class ApprovalsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

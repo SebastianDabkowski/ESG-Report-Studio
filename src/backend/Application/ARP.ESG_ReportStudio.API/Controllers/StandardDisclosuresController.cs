@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -6,8 +7,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for managing standard disclosures (individual requirements within reporting standards).
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/standard-disclosures")]
+[Route("api/v{version:apiVersion}/standard-disclosures")]
 public sealed class StandardDisclosuresController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

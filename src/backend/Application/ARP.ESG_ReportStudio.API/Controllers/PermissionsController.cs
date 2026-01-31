@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing permissions and viewing the permission matrix.
 /// Provides endpoints for viewing role-action mappings, permission history, and checking permissions.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/permissions")]
+[Route("api/v{version:apiVersion}/permissions")]
 public sealed class PermissionsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

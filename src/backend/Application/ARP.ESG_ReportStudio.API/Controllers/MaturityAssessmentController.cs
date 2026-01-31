@@ -1,13 +1,15 @@
 using ARP.ESG_ReportStudio.API.Reporting;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
 /// <summary>
 /// API endpoints for maturity assessment calculation and tracking.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/maturity-assessments")]
+[Route("api/v{version:apiVersion}/maturity-assessments")]
 public class MaturityAssessmentController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

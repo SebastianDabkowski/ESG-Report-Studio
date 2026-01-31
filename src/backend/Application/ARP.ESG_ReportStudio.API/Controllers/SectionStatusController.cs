@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -15,8 +16,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 ///   * Users can only create revisions of sections they have access to
 /// - Additional authorization checks in each method to validate user permissions
 /// </remarks>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/sections")]
+[Route("api/v{version:apiVersion}/sections")]
 public sealed class SectionStatusController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

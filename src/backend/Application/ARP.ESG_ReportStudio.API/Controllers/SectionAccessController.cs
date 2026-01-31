@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing granular section-level access control.
 /// Enables Report Managers to grant and revoke access to specific sections.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/section-access")]
+[Route("api/v{version:apiVersion}/section-access")]
 public sealed class SectionAccessController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

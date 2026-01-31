@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="9.0.12" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="Moq" Version="4.20.72" />
     <PackageReference Include="xunit" Version="2.9.2" />
@@ -20,6 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Application\ARP.ESG_ReportStudio.API\ARP.ESG_ReportStudio.API.csproj" />
     <ProjectReference Include="..\..\Modules\SD.ProjectName.Modules.Integrations\SD.ProjectName.Modules.Integrations.csproj" />
   </ItemGroup>
 

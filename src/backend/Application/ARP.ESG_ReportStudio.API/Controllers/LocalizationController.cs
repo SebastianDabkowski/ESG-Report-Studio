@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -6,8 +7,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for localization and language support.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/localization")]
+[Route("api/v{version:apiVersion}/localization")]
 public sealed class LocalizationController : ControllerBase
 {
     private readonly ILocalizationService _localizationService;

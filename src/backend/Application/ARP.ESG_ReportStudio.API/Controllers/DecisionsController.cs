@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing decision log entries.
 /// Supports ADR-like decision recording with versioning and audit trails.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/decisions")]
+[Route("api/v{version:apiVersion}/decisions")]
 public sealed class DecisionsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

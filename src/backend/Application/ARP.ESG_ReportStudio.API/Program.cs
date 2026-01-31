@@ -145,6 +145,20 @@ else
 
 builder.Services.AddAuthorization();
 
+// Configure API Versioning
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new Asp.Versioning.UrlSegmentApiVersionReader();
+})
+.AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
+
 builder.Services.AddControllers();
 builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Services.TextDiffService>();
 builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Reporting.InMemoryReportStore>();
@@ -204,7 +218,8 @@ builder.Services.AddCors(options =>
             .AllowAnyMethod();
     });
 });
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+// Configure OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -219,6 +234,9 @@ app.UseHttpsRedirection();
 
 app.UseCors("DevCors");
 
+// Add global exception handler early in the pipeline
+app.UseGlobalExceptionHandler();
+
 // Add correlation ID middleware early in the pipeline
 app.UseCorrelationId();
 
@@ -229,3 +247,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+// Make the implicit Program class public for integration tests
+public partial class Program { }
+

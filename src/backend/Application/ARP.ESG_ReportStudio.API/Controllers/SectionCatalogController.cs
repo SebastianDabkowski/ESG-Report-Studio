@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/section-catalog")]
+[Route("api/v{version:apiVersion}/section-catalog")]
 public sealed class SectionCatalogController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

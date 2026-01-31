@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for fragment audit operations.
 /// Provides endpoints to trace any report fragment back to sources, evidence, and decisions.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/fragment-audit")]
+[Route("api/v{version:apiVersion}/fragment-audit")]
 public class FragmentAuditController : ControllerBase
 {
     private readonly InMemoryReportStore _store;
