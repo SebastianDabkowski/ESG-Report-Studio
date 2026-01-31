@@ -22,6 +22,8 @@ import { MaturityAssessmentView } from '@/components/MaturityAssessmentView'
 import RoleManagement from '@/components/RoleManagement'
 import UserRoleAssignment from '@/components/UserRoleAssignment'
 import PermissionMatrixView from '@/components/PermissionMatrixView'
+import { SessionTimeoutWarning } from '@/components/SessionTimeoutWarning'
+import { useSessionManager } from '@/hooks/useSessionManager'
 import { useKV } from '@github/spark/hooks'
 import type { User } from '@/lib/types'
 
@@ -35,6 +37,19 @@ function App() {
   })
 
   const [activeTab, setActiveTab] = useState('dashboard')
+  
+  // Session management
+  const { sessionStatus, showWarning, refreshSession, dismissWarning } = useSessionManager({
+    checkInterval: 60000, // Check every minute
+    onSessionExpired: () => {
+      // Redirect to login or show expired message
+      console.warn('Session expired - user needs to re-authenticate')
+      // In a real app, this would redirect to the login page
+    },
+    onSessionWarning: () => {
+      console.warn('Session timeout warning triggered')
+    }
+  })
 
   if (!currentUser) return null
 
@@ -178,6 +193,18 @@ function App() {
           </TabsContent>
         </Tabs>
       </main>
+      
+      {/* Session timeout warning dialog */}
+      <SessionTimeoutWarning
+        open={showWarning}
+        minutesUntilExpiration={sessionStatus.minutesUntilExpiration}
+        canRefresh={sessionStatus.canRefresh}
+        onRefresh={refreshSession}
+        onDismiss={dismissWarning}
+        onExpired={() => {
+          console.warn('Session expired from warning dialog')
+        }}
+      />
     </div>
   )
 }
