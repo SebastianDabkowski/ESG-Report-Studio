@@ -1,6 +1,6 @@
 export type UserRole = 'admin' | 'report-owner' | 'contributor' | 'auditor'
 
-export type SectionStatus = 'draft' | 'in-review' | 'approved'
+export type SectionStatus = 'draft' | 'in-review' | 'approved' | 'submitted-for-approval' | 'changes-requested'
 
 export type ProgressStatus = 'not-started' | 'in-progress' | 'blocked' | 'completed'
 
@@ -75,6 +75,35 @@ export interface ReportSection {
   approvedBy?: string
   order: number
   catalogCode?: string
+  versionNumber?: number
+  submittedForApprovalAt?: string
+  submittedBy?: string
+  submittedByName?: string
+}
+
+export interface SectionSummary extends ReportSection {
+  dataPointCount: number
+  evidenceCount: number
+  gapCount: number
+  assumptionCount: number
+  completenessPercentage: number
+  ownerName: string
+  progressStatus: ProgressStatus
+}
+
+export interface SectionVersion {
+  id: string
+  sectionId: string
+  versionNumber: number
+  title: string
+  description: string
+  status: string
+  approvedAt?: string
+  approvedBy?: string
+  approvedByName?: string
+  createdAt: string
+  createdBy: string
+  createdByName: string
 }
 
 export interface DataPoint {
@@ -372,16 +401,6 @@ export type MissingReasonCategory =
   | 'data-quality-issue'
   | 'system-limitation'
   | 'other'
-
-export interface SectionSummary extends ReportSection {
-  dataPointCount: number
-  evidenceCount: number
-  gapCount: number
-  assumptionCount: number
-  completenessPercentage: number
-  ownerName: string
-  progressStatus: ProgressStatus
-}
 
 export interface OrganizationalUnit {
   id: string

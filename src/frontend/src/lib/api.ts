@@ -2,6 +2,7 @@ import type {
   ReportingPeriod, 
   ReportSection, 
   SectionSummary, 
+  SectionVersion,
   Organization, 
   OrganizationalUnit, 
   User, 
@@ -298,6 +299,68 @@ export function bulkUpdateSectionOwner(payload: BulkUpdateSectionOwnerPayload): 
     method: 'POST',
     body: JSON.stringify(payload)
   })
+}
+
+// Section Status API methods
+export interface SubmitSectionForApprovalPayload {
+  submittedBy: string
+  submittedByName: string
+  submissionNote?: string
+}
+
+export function submitSectionForApproval(sectionId: string, payload: SubmitSectionForApprovalPayload): Promise<ReportSection> {
+  return requestJson<ReportSection>(`sections/${sectionId}/submit-for-approval`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface ApproveSectionPayload {
+  approvedBy: string
+  approvedByName: string
+  approvalNote?: string
+}
+
+export function approveSection(sectionId: string, payload: ApproveSectionPayload): Promise<ReportSection> {
+  return requestJson<ReportSection>(`sections/${sectionId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface RequestSectionChangesPayload {
+  requestedBy: string
+  requestedByName: string
+  changeNote: string
+}
+
+export function requestSectionChanges(sectionId: string, payload: RequestSectionChangesPayload): Promise<ReportSection> {
+  return requestJson<ReportSection>(`sections/${sectionId}/request-changes`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface CreateSectionRevisionPayload {
+  createdBy: string
+  createdByName: string
+  revisionNote?: string
+}
+
+export function createSectionRevision(sectionId: string, payload: CreateSectionRevisionPayload): Promise<ReportSection> {
+  return requestJson<ReportSection>(`sections/${sectionId}/create-revision`, {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+export interface CanEditSectionResponse {
+  canEdit: boolean
+  reason?: string
+}
+
+export function canEditSection(sectionId: string): Promise<CanEditSectionResponse> {
+  return requestJson<CanEditSectionResponse>(`sections/${sectionId}/can-edit`)
 }
 
 // User API methods

@@ -11,12 +11,13 @@ import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useKV } from '@github/spark/hooks'
-import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle, Users, CheckSquare, Square, FileSearch } from '@phosphor-icons/react'
+import { Plus, CheckCircle, WarningCircle, Target, Article, Lightbulb, FileText, PaperclipHorizontal, UserCircle, Users, CheckSquare, Square, FileSearch, Lock } from '@phosphor-icons/react'
 import type { User, ReportingPeriod, SectionSummary, DataPoint, Gap, Classification, ContentType } from '@/lib/types'
-import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness } from '@/lib/helpers'
+import { getStatusColor, getStatusBorderColor, getProgressStatusColor, getProgressStatusLabel, getClassificationColor, getCompletenessStatusColor, canApproveSection, canEditSection, generateId, calculateCompleteness, isSectionLocked } from '@/lib/helpers'
 import { updateSectionOwner, bulkUpdateSectionOwner, getUsers, type BulkUpdateFailure } from '@/lib/api'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import FragmentAuditView from './FragmentAuditView'
+import SectionStatusManager from './SectionStatusManager'
 
 interface SectionsViewProps {
   currentUser: User
@@ -160,6 +161,16 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
   const handleOpenDetail = (section: SectionSummary) => {
     setSelectedSection(section)
     setIsDetailOpen(true)
+  }
+
+  const handleSectionUpdated = (updatedSection: SectionSummary) => {
+    // Update the section in the local state
+    setSections((current) => {
+      const updated = current || []
+      return updated.map(s => s.id === updatedSection.id ? updatedSection : s)
+    })
+    // Update selected section to reflect changes in the dialog
+    setSelectedSection(updatedSection)
   }
 
   const handleAddData = () => {
@@ -395,6 +406,9 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <CardTitle className="text-lg">{section.title}</CardTitle>
+                        {isSectionLocked(section.status) && (
+                          <Lock size={16} className="text-amber-600" weight="fill" />
+                        )}
                         <Badge className={getStatusColor(section.status)} variant="secondary">
                           {section.status}
                         </Badge>
@@ -517,6 +531,13 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                   )}
                 </div>
 
+                {/* Section Status Manager */}
+                <SectionStatusManager 
+                  section={selectedSection}
+                  currentUser={currentUser}
+                  onSectionUpdated={handleSectionUpdated}
+                />
+
                 {selectedSection.completenessPercentage < 70 && (
                   <Alert>
                     <WarningCircle size={16} />
@@ -532,7 +553,7 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                       <Target size={18} />
                       Data Points ({sectionDataPoints.length})
                     </h4>
-                    {canEditSection(currentUser.role) && selectedSection.status !== 'approved' && (
+                    {canEditSection(currentUser.role) && !isSectionLocked(selectedSection.status) && (
                       <Button size="sm" onClick={() => setIsAddDataOpen(true)} className="gap-2">
                         <Plus size={14} weight="bold" />
                         Add Data
@@ -575,7 +596,7 @@ export default function SectionsView({ currentUser }: SectionsViewProps) {
                       <WarningCircle size={18} />
                       Gaps ({sectionGaps.filter(g => !g.resolved).length})
                     </h4>
-                    {canEditSection(currentUser.role) && selectedSection.status !== 'approved' && (
+                    {canEditSection(currentUser.role) && !isSectionLocked(selectedSection.status) && (
                       <Button size="sm" variant="outline" onClick={() => setIsAddGapOpen(true)} className="gap-2">
                         <Plus size={14} weight="bold" />
                         Document Gap

@@ -119,6 +119,26 @@ public class ReportSection
     /// When false, the section is excluded from generated reports.
     /// </summary>
     public bool IsEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// Version number of the section (increments with each approved revision).
+    /// </summary>
+    public int VersionNumber { get; set; } = 1;
+    
+    /// <summary>
+    /// Timestamp when the section was submitted for approval (ISO 8601 format).
+    /// </summary>
+    public string? SubmittedForApprovalAt { get; set; }
+    
+    /// <summary>
+    /// User ID of the person who submitted the section for approval.
+    /// </summary>
+    public string? SubmittedBy { get; set; }
+    
+    /// <summary>
+    /// User name of the person who submitted the section for approval.
+    /// </summary>
+    public string? SubmittedByName { get; set; }
 }
 
 public sealed class SectionSummary : ReportSection
@@ -298,6 +318,109 @@ public sealed class BulkUpdateFailure
     /// Reason why the section was skipped.
     /// </summary>
     public string Reason { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Represents a historical version of a section for auditability.
+/// </summary>
+public sealed class SectionVersion
+{
+    public string Id { get; set; } = string.Empty;
+    public string SectionId { get; set; } = string.Empty;
+    public int VersionNumber { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string? ApprovedAt { get; set; }
+    public string? ApprovedBy { get; set; }
+    public string? ApprovedByName { get; set; }
+    public string CreatedAt { get; set; } = string.Empty;
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to submit a section for approval.
+/// </summary>
+public sealed class SubmitSectionForApprovalRequest
+{
+    /// <summary>
+    /// User ID of the person submitting the section.
+    /// </summary>
+    public string SubmittedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person submitting the section.
+    /// </summary>
+    public string SubmittedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the submission.
+    /// </summary>
+    public string? SubmissionNote { get; set; }
+}
+
+/// <summary>
+/// Request to approve a section.
+/// </summary>
+public sealed class ApproveSectionRequest
+{
+    /// <summary>
+    /// User ID of the person approving the section.
+    /// </summary>
+    public string ApprovedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person approving the section.
+    /// </summary>
+    public string ApprovedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the approval.
+    /// </summary>
+    public string? ApprovalNote { get; set; }
+}
+
+/// <summary>
+/// Request to request changes on a submitted section.
+/// </summary>
+public sealed class RequestSectionChangesRequest
+{
+    /// <summary>
+    /// User ID of the person requesting changes.
+    /// </summary>
+    public string RequestedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person requesting changes.
+    /// </summary>
+    public string RequestedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Required note explaining what changes are needed.
+    /// </summary>
+    public string ChangeNote { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new revision from an approved section.
+/// </summary>
+public sealed class CreateSectionRevisionRequest
+{
+    /// <summary>
+    /// User ID of the person creating the revision.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name of the person creating the revision.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Optional note explaining the reason for the new revision.
+    /// </summary>
+    public string? RevisionNote { get; set; }
 }
 
 /// <summary>
