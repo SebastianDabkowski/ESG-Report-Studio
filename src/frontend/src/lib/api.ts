@@ -38,7 +38,12 @@ import type {
   GenerationComparison,
   AccessRequest,
   CreateAccessRequestRequest,
-  ReviewAccessRequestRequest
+  ReviewAccessRequestRequest,
+  StandardsCatalogItem,
+  CreateStandardRequest,
+  UpdateStandardRequest,
+  StandardSectionMapping,
+  CreateStandardMappingRequest
 } from '@/lib/types'
 
 export interface ReportingDataSnapshot {
@@ -1764,3 +1769,77 @@ export async function rejectAccessRequest(
     body: JSON.stringify(payload)
   })
 }
+
+// Standards Catalogue API
+
+/**
+ * Gets all standards from the catalogue.
+ * @param includeDeprecated - If true, includes deprecated standards. Default is false.
+ */
+export async function getStandardsCatalog(includeDeprecated = false): Promise<StandardsCatalogItem[]> {
+  const params = includeDeprecated ? '?includeDeprecated=true' : ''
+  return requestJson<StandardsCatalogItem[]>(`/standards-catalog${params}`)
+}
+
+/**
+ * Gets a specific standard by ID.
+ */
+export async function getStandard(id: string): Promise<StandardsCatalogItem> {
+  return requestJson<StandardsCatalogItem>(`/standards-catalog/${id}`)
+}
+
+/**
+ * Creates a new reporting standard.
+ */
+export async function createStandard(payload: CreateStandardRequest): Promise<StandardsCatalogItem> {
+  return requestJson<StandardsCatalogItem>('/standards-catalog', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Updates an existing standard.
+ */
+export async function updateStandard(id: string, payload: UpdateStandardRequest): Promise<StandardsCatalogItem> {
+  return requestJson<StandardsCatalogItem>(`/standards-catalog/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Marks a standard as deprecated.
+ */
+export async function deprecateStandard(id: string): Promise<void> {
+  return requestJson<void>(`/standards-catalog/${id}/deprecate`, {
+    method: 'POST'
+  })
+}
+
+/**
+ * Gets all section mappings for a specific standard.
+ */
+export async function getStandardMappings(standardId: string): Promise<StandardSectionMapping[]> {
+  return requestJson<StandardSectionMapping[]>(`/standards-catalog/${standardId}/mappings`)
+}
+
+/**
+ * Creates a new standard-to-section mapping.
+ */
+export async function createStandardMapping(payload: CreateStandardMappingRequest): Promise<StandardSectionMapping> {
+  return requestJson<StandardSectionMapping>('/standards-catalog/mappings', {
+    method: 'POST',
+    body: JSON.stringify(payload)
+  })
+}
+
+/**
+ * Deletes a standard-to-section mapping.
+ */
+export async function deleteStandardMapping(id: string): Promise<void> {
+  return requestJson<void>(`/standards-catalog/mappings/${id}`, {
+    method: 'DELETE'
+  })
+}
+
