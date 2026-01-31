@@ -76,7 +76,8 @@ export default function StandardsCoverageView() {
   // Get unique topics from coverage data for filtering
   const availableTopics = coverageAnalysis?.disclosureDetails
     .map(d => d.topic)
-    .filter((t, i, arr) => t && arr.indexOf(t) === i)
+    .filter((t): t is string => !!t) // Type guard to ensure non-null
+    .filter((t, i, arr) => arr.indexOf(t) === i) // Remove duplicates
     .sort() || []
 
   const handleExportCoverage = () => {
@@ -222,7 +223,7 @@ export default function StandardsCoverageView() {
                 <SelectContent>
                   <SelectItem value="">All topics</SelectItem>
                   {availableTopics.map((topic) => (
-                    <SelectItem key={topic} value={topic!}>
+                    <SelectItem key={topic} value={topic}>
                       {topic}
                     </SelectItem>
                   ))}
