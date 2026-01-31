@@ -12,6 +12,7 @@ public sealed class InMemoryReportStore
     private readonly List<ReportingPeriod> _periods = new();
     private readonly List<ReportSection> _sections = new();
     private readonly List<SectionSummary> _summaries = new();
+    private readonly List<SectionVersion> _sectionVersions = new(); // Historical section versions
     private readonly List<OrganizationalUnit> _organizationalUnits = new();
     private readonly List<SectionCatalogItem> _sectionCatalog = new();
     private readonly List<DataPoint> _dataPoints = new();
@@ -1167,6 +1168,298 @@ public sealed class InMemoryReportStore
             }
 
             return result;
+        }
+    }
+
+    /// <summary>
+    /// Submits a section for approval, locking it from edits.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportSection? Section) SubmitSectionForApproval(
+        string sectionId, 
+        SubmitSectionForApprovalRequest request)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            // Validate current status allows submission
+            if (section.Status == "submitted-for-approval")
+            {
+                return (false, "Section is already submitted for approval.", null);
+            }
+
+            if (section.Status == "approved")
+            {
+                return (false, "Section is already approved. Create a new revision to make changes.", null);
+            }
+
+            // Update section status
+            var oldStatus = section.Status;
+            section.Status = "submitted-for-approval";
+            section.SubmittedForApprovalAt = DateTime.UtcNow.ToString("o");
+            section.SubmittedBy = request.SubmittedBy;
+            section.SubmittedByName = request.SubmittedByName;
+
+            // Update corresponding summary
+            var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+            if (summary != null)
+            {
+                summary.Status = section.Status;
+                summary.SubmittedForApprovalAt = section.SubmittedForApprovalAt;
+                summary.SubmittedBy = section.SubmittedBy;
+                summary.SubmittedByName = section.SubmittedByName;
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                userId: request.SubmittedBy,
+                userName: request.SubmittedByName,
+                action: "section-submitted-for-approval",
+                entityType: "section",
+                entityId: sectionId,
+                changes: new List<FieldChange>
+                {
+                    new() { Field = "Status", OldValue = oldStatus, NewValue = "submitted-for-approval" }
+                },
+                changeNote: request.SubmissionNote
+            );
+
+            return (true, null, section);
+        }
+    }
+
+    /// <summary>
+    /// Approves a section, creating a version snapshot and keeping it locked.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportSection? Section) ApproveSection(
+        string sectionId, 
+        ApproveSectionRequest request)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            // Validate current status allows approval
+            if (section.Status != "submitted-for-approval")
+            {
+                return (false, "Section must be submitted for approval before it can be approved.", null);
+            }
+
+            // Create version snapshot before approval
+            var version = new SectionVersion
+            {
+                Id = Guid.NewGuid().ToString(),
+                SectionId = sectionId,
+                VersionNumber = section.VersionNumber,
+                Title = section.Title,
+                Description = section.Description,
+                Status = "approved",
+                ApprovedAt = DateTime.UtcNow.ToString("o"),
+                ApprovedBy = request.ApprovedBy,
+                ApprovedByName = request.ApprovedByName,
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                CreatedBy = request.ApprovedBy,
+                CreatedByName = request.ApprovedByName
+            };
+            _sectionVersions.Add(version);
+
+            // Update section status
+            var oldStatus = section.Status;
+            section.Status = "approved";
+            section.ApprovedAt = DateTime.UtcNow.ToString("o");
+            section.ApprovedBy = request.ApprovedBy;
+
+            // Update corresponding summary
+            var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+            if (summary != null)
+            {
+                summary.Status = section.Status;
+                summary.ApprovedAt = section.ApprovedAt;
+                summary.ApprovedBy = section.ApprovedBy;
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                userId: request.ApprovedBy,
+                userName: request.ApprovedByName,
+                action: "section-approved",
+                entityType: "section",
+                entityId: sectionId,
+                changes: new List<FieldChange>
+                {
+                    new() { Field = "Status", OldValue = oldStatus, NewValue = "approved" },
+                    new() { Field = "ApprovedBy", OldValue = section.ApprovedBy ?? "", NewValue = request.ApprovedBy }
+                },
+                changeNote: request.ApprovalNote
+            );
+
+            return (true, null, section);
+        }
+    }
+
+    /// <summary>
+    /// Requests changes on a submitted section, unlocking it for edits.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportSection? Section) RequestSectionChanges(
+        string sectionId, 
+        RequestSectionChangesRequest request)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            // Validate current status allows requesting changes
+            if (section.Status != "submitted-for-approval")
+            {
+                return (false, "Only submitted sections can have changes requested.", null);
+            }
+
+            // Update section status to enable editing again
+            var oldStatus = section.Status;
+            section.Status = "changes-requested";
+            section.SubmittedForApprovalAt = null;
+            section.SubmittedBy = null;
+            section.SubmittedByName = null;
+
+            // Update corresponding summary
+            var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+            if (summary != null)
+            {
+                summary.Status = section.Status;
+                summary.SubmittedForApprovalAt = null;
+                summary.SubmittedBy = null;
+                summary.SubmittedByName = null;
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                userId: request.RequestedBy,
+                userName: request.RequestedByName,
+                action: "section-changes-requested",
+                entityType: "section",
+                entityId: sectionId,
+                changes: new List<FieldChange>
+                {
+                    new() { Field = "Status", OldValue = oldStatus, NewValue = "changes-requested" }
+                },
+                changeNote: request.ChangeNote
+            );
+
+            return (true, null, section);
+        }
+    }
+
+    /// <summary>
+    /// Creates a new draft revision from an approved section without altering the approved version.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, ReportSection? Section) CreateSectionRevision(
+        string sectionId, 
+        CreateSectionRevisionRequest request)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.", null);
+            }
+
+            // Validate current status allows creating a revision
+            if (section.Status != "approved")
+            {
+                return (false, "Only approved sections can have revisions created.", null);
+            }
+
+            // Increment version number and reset to draft
+            var oldVersion = section.VersionNumber;
+            var oldStatus = section.Status;
+            section.VersionNumber++;
+            section.Status = "draft";
+            section.SubmittedForApprovalAt = null;
+            section.SubmittedBy = null;
+            section.SubmittedByName = null;
+            // Keep ApprovedAt and ApprovedBy to show last approval
+
+            // Update corresponding summary
+            var summary = _summaries.FirstOrDefault(s => s.Id == sectionId);
+            if (summary != null)
+            {
+                summary.VersionNumber = section.VersionNumber;
+                summary.Status = section.Status;
+                summary.SubmittedForApprovalAt = null;
+                summary.SubmittedBy = null;
+                summary.SubmittedByName = null;
+            }
+
+            // Create audit log entry
+            CreateAuditLogEntry(
+                userId: request.CreatedBy,
+                userName: request.CreatedByName,
+                action: "section-revision-created",
+                entityType: "section",
+                entityId: sectionId,
+                changes: new List<FieldChange>
+                {
+                    new() { Field = "VersionNumber", OldValue = oldVersion.ToString(), NewValue = section.VersionNumber.ToString() },
+                    new() { Field = "Status", OldValue = oldStatus, NewValue = "draft" }
+                },
+                changeNote: request.RevisionNote
+            );
+
+            return (true, null, section);
+        }
+    }
+
+    /// <summary>
+    /// Gets all versions of a section for audit purposes.
+    /// </summary>
+    public IReadOnlyList<SectionVersion> GetSectionVersions(string sectionId)
+    {
+        lock (_lock)
+        {
+            return _sectionVersions
+                .Where(v => v.SectionId == sectionId)
+                .OrderByDescending(v => v.VersionNumber)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Validates if a section can be edited based on its current status.
+    /// </summary>
+    public (bool CanEdit, string? Reason) CanEditSection(string sectionId)
+    {
+        lock (_lock)
+        {
+            var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+            if (section == null)
+            {
+                return (false, $"Section with ID '{sectionId}' not found.");
+            }
+
+            if (section.Status == "submitted-for-approval")
+            {
+                return (false, $"Section is submitted for approval by {section.SubmittedByName ?? section.SubmittedBy} on {section.SubmittedForApprovalAt}. Changes cannot be made until it is approved or changes are requested.");
+            }
+
+            if (section.Status == "approved")
+            {
+                return (false, $"Section is approved. Create a new revision to make changes.");
+            }
+
+            return (true, null);
         }
     }
 
