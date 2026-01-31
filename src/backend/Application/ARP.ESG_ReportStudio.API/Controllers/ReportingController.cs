@@ -7,7 +7,7 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 
 [ApiVersion("1.0")]
 [ApiController]
-[Route("api")]
+[Route("api/v{version:apiVersion}")]
 public sealed class ReportingController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

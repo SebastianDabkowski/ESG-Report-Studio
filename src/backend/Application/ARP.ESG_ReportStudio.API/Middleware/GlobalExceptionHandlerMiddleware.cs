@@ -10,6 +10,7 @@ namespace ARP.ESG_ReportStudio.API.Middleware;
 /// </summary>
 public class GlobalExceptionHandlerMiddleware
 {
+    private const string CorrelationIdKey = "CorrelationId";
     private readonly RequestDelegate _next;
     private readonly ILogger<GlobalExceptionHandlerMiddleware> _logger;
 
@@ -36,7 +37,7 @@ public class GlobalExceptionHandlerMiddleware
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
         // Get correlation ID from context
-        var correlationId = context.Items["CorrelationId"]?.ToString() ?? Guid.NewGuid().ToString();
+        var correlationId = context.Items[CorrelationIdKey]?.ToString() ?? Guid.NewGuid().ToString();
 
         // Log the exception with correlation ID
         _logger.LogError(exception, 
