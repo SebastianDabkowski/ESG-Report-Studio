@@ -590,6 +590,219 @@ public sealed class UpdateSectionCatalogItemRequest
 }
 
 /// <summary>
+/// Represents a reporting standard in the standards catalogue (e.g., CSRD/ESRS, SME model).
+/// Standards are data-driven configurations that define reporting frameworks.
+/// </summary>
+public sealed class StandardsCatalogItem
+{
+    /// <summary>
+    /// Unique identifier for the standard.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Unique stable identifier code for the standard (e.g., "CSRD-2024", "SME-v1").
+    /// This identifier remains consistent across versions.
+    /// </summary>
+    public string Identifier { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display title of the standard (e.g., "Corporate Sustainability Reporting Directive").
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Detailed description of the standard.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Current version number of the standard (e.g., "1.0", "2024.1").
+    /// </summary>
+    public string Version { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 date when this standard version becomes effective (optional).
+    /// Reports with periods starting on or after this date can use this standard.
+    /// </summary>
+    public string? EffectiveStartDate { get; set; }
+
+    /// <summary>
+    /// ISO 8601 date when this standard version expires (optional).
+    /// Reports with periods starting after this date cannot use this standard.
+    /// </summary>
+    public string? EffectiveEndDate { get; set; }
+
+    /// <summary>
+    /// Indicates whether this standard is deprecated.
+    /// Deprecated standards are not selectable by default for new reports.
+    /// </summary>
+    public bool IsDeprecated { get; set; }
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the standard was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the standard.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the standard was last updated (optional).
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+
+    /// <summary>
+    /// User ID who last updated the standard (optional).
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the standard was deprecated (optional).
+    /// </summary>
+    public string? DeprecatedAt { get; set; }
+}
+
+/// <summary>
+/// Request to create a new reporting standard in the catalogue.
+/// </summary>
+public sealed class CreateStandardRequest
+{
+    /// <summary>
+    /// Unique stable identifier code for the standard (e.g., "CSRD-2024", "SME-v1").
+    /// </summary>
+    public string Identifier { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display title of the standard.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Detailed description of the standard.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Version number of the standard (e.g., "1.0", "2024.1").
+    /// </summary>
+    public string Version { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 date when this standard version becomes effective (optional).
+    /// </summary>
+    public string? EffectiveStartDate { get; set; }
+
+    /// <summary>
+    /// ISO 8601 date when this standard version expires (optional).
+    /// </summary>
+    public string? EffectiveEndDate { get; set; }
+}
+
+/// <summary>
+/// Request to update an existing reporting standard.
+/// </summary>
+public sealed class UpdateStandardRequest
+{
+    /// <summary>
+    /// Display title of the standard.
+    /// </summary>
+    public string Title { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Detailed description of the standard.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Version number of the standard.
+    /// </summary>
+    public string Version { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 date when this standard version becomes effective (optional).
+    /// </summary>
+    public string? EffectiveStartDate { get; set; }
+
+    /// <summary>
+    /// ISO 8601 date when this standard version expires (optional).
+    /// </summary>
+    public string? EffectiveEndDate { get; set; }
+}
+
+/// <summary>
+/// Represents a mapping between a reporting standard and platform structure nodes (sections).
+/// Allows internal aliasing (e.g., 'ESRS E1') to map to specific sections.
+/// </summary>
+public sealed class StandardSectionMapping
+{
+    /// <summary>
+    /// Unique identifier for the mapping.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the standard this mapping belongs to.
+    /// </summary>
+    public string StandardId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// External reference code from the standard (e.g., "ESRS E1", "GRI 305-1").
+    /// This is the alias or reference identifier used in the standard documentation.
+    /// </summary>
+    public string StandardReference { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display title of the standard reference.
+    /// </summary>
+    public string StandardReferenceTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the section catalog item this standard reference maps to.
+    /// Maps the standard's structure to the platform's internal section structure.
+    /// </summary>
+    public string SectionCatalogId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ISO 8601 timestamp of when the mapping was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+
+    /// <summary>
+    /// User ID who created the mapping.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to create a new standard-to-section mapping.
+/// </summary>
+public sealed class CreateStandardMappingRequest
+{
+    /// <summary>
+    /// ID of the standard this mapping belongs to.
+    /// </summary>
+    public string StandardId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// External reference code from the standard (e.g., "ESRS E1").
+    /// </summary>
+    public string StandardReference { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Display title of the standard reference.
+    /// </summary>
+    public string StandardReferenceTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// ID of the section catalog item this standard reference maps to.
+    /// </summary>
+    public string SectionCatalogId { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Represents a source of input data used in an estimate calculation.
 /// Supports both internal documents and external evidence references.
 /// </summary>
