@@ -23,6 +23,8 @@ public class IntegrationDbContext : DbContext
     public DbSet<CanonicalEntityVersion> CanonicalEntityVersions { get; set; } = null!;
     public DbSet<CanonicalAttribute> CanonicalAttributes { get; set; } = null!;
     public DbSet<CanonicalMapping> CanonicalMappings { get; set; } = null!;
+    public DbSet<WebhookSubscription> WebhookSubscriptions { get; set; } = null!;
+    public DbSet<WebhookDelivery> WebhookDeliveries { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -292,6 +294,52 @@ public class IntegrationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(m => m.ConnectorId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // WebhookSubscription configuration
+        modelBuilder.Entity<WebhookSubscription>(entity =>
+        {
+            entity.ToTable("WebhookSubscriptions");
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.Name).IsRequired().HasMaxLength(200);
+            entity.Property(s => s.EndpointUrl).IsRequired().HasMaxLength(500);
+            entity.Property(s => s.SubscribedEvents).IsRequired().HasMaxLength(500);
+            entity.Property(s => s.Status).IsRequired();
+            entity.Property(s => s.SigningSecret).IsRequired().HasMaxLength(500);
+            entity.Property(s => s.VerificationToken).HasMaxLength(200);
+            entity.Property(s => s.DegradedReason).HasMaxLength(2000);
+            entity.Property(s => s.Description).HasMaxLength(1000);
+            entity.Property(s => s.CreatedBy).IsRequired().HasMaxLength(200);
+            entity.Property(s => s.UpdatedBy).HasMaxLength(200);
+            
+            entity.HasIndex(s => s.Status);
+            entity.HasIndex(s => s.EndpointUrl);
+        });
+
+        // WebhookDelivery configuration
+        modelBuilder.Entity<WebhookDelivery>(entity =>
+        {
+            entity.ToTable("WebhookDeliveries");
+            entity.HasKey(d => d.Id);
+            entity.Property(d => d.EventType).IsRequired().HasMaxLength(100);
+            entity.Property(d => d.CorrelationId).IsRequired().HasMaxLength(100);
+            entity.Property(d => d.Payload).IsRequired().HasColumnType("nvarchar(max)");
+            entity.Property(d => d.Signature).IsRequired().HasMaxLength(500);
+            entity.Property(d => d.Status).IsRequired();
+            entity.Property(d => d.LastResponseBody).HasColumnType("nvarchar(max)");
+            entity.Property(d => d.LastErrorMessage).HasMaxLength(2000);
+            
+            entity.HasIndex(d => d.WebhookSubscriptionId);
+            entity.HasIndex(d => d.CorrelationId);
+            entity.HasIndex(d => d.Status);
+            entity.HasIndex(d => d.CreatedAt);
+            entity.HasIndex(d => d.NextRetryAt);
+            
+            // Foreign key relationship
+            entity.HasOne(d => d.WebhookSubscription)
+                .WithMany()
+                .HasForeignKey(d => d.WebhookSubscriptionId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
     }
 }
