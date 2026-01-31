@@ -7418,6 +7418,12 @@ public sealed class SystemRole
     public bool IsPredefined { get; set; }
     
     /// <summary>
+    /// Indicates if this role requires Multi-Factor Authentication (MFA).
+    /// When true, users with this role must have completed MFA via the identity provider.
+    /// </summary>
+    public bool RequiresMfa { get; set; }
+    
+    /// <summary>
     /// ISO 8601 timestamp when role was created.
     /// </summary>
     public string CreatedAt { get; set; } = string.Empty;

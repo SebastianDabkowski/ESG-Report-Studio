@@ -79,6 +79,29 @@ if (authSettings.Oidc?.Enabled == true)
                         {
                             logger.LogWarning("User {UserId} is disabled or not found in system", userId);
                             context.Fail("User is not active in the system");
+                            return;
+                        }
+                        
+                        // Check if user has privileged roles requiring MFA
+                        var requiresMfa = await userProfileSync.UserRequiresMfaAsync(userId);
+                        if (requiresMfa)
+                        {
+                            // Verify MFA claims are present
+                            var hasMfaClaims = userProfileSync.HasValidMfaClaims(claims);
+                            if (!hasMfaClaims)
+                            {
+                                logger.LogWarning("User {UserId} has privileged role requiring MFA but MFA claims not found in token", userId);
+                                context.Fail("Multi-Factor Authentication is required for this account");
+                                return;
+                            }
+                            
+                            // Add MFA claim to the principal for audit trail
+                            var identity = context.Principal.Identity as System.Security.Claims.ClaimsIdentity;
+                            if (identity != null)
+                            {
+                                identity.AddClaim(new System.Security.Claims.Claim("mfa_verified", "true"));
+                                logger.LogInformation("User {UserId} authenticated with MFA", userId);
+                            }
                         }
                     }
                 }

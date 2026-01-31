@@ -22,6 +22,20 @@ public interface IUserProfileSyncService
     /// <param name="userId">The user ID</param>
     /// <returns>True if the user is active, false otherwise</returns>
     Task<bool> IsUserActiveAsync(string userId);
+    
+    /// <summary>
+    /// Checks if a user has any roles that require MFA.
+    /// </summary>
+    /// <param name="userId">The user ID</param>
+    /// <returns>True if the user has at least one role requiring MFA, false otherwise</returns>
+    Task<bool> UserRequiresMfaAsync(string userId);
+    
+    /// <summary>
+    /// Checks if the user's token contains valid MFA claims.
+    /// </summary>
+    /// <param name="claims">The claims from the OIDC token</param>
+    /// <returns>True if MFA claims indicate authentication was completed, false otherwise</returns>
+    bool HasValidMfaClaims(IEnumerable<Claim> claims);
 }
 
 /// <summary>
@@ -34,6 +48,8 @@ public sealed class UserProfileSyncService : IUserProfileSyncService
     private readonly string _nameClaimType;
     private readonly string _emailClaimType;
     private readonly string _displayNameClaimType;
+    private readonly string _mfaClaimType;
+    private readonly string _mfaClaimValue;
 
     public UserProfileSyncService(
         InMemoryReportStore store,
@@ -48,6 +64,8 @@ public sealed class UserProfileSyncService : IUserProfileSyncService
         _nameClaimType = oidcSettings["NameClaimType"] ?? "preferred_username";
         _emailClaimType = oidcSettings["EmailClaimType"] ?? "email";
         _displayNameClaimType = oidcSettings["DisplayNameClaimType"] ?? "name";
+        _mfaClaimType = oidcSettings["MfaClaimType"] ?? "amr";
+        _mfaClaimValue = oidcSettings["MfaClaimValue"] ?? "mfa";
     }
 
     public Task<User> SyncUserFromClaimsAsync(IEnumerable<Claim> claims)
@@ -117,6 +135,64 @@ public sealed class UserProfileSyncService : IUserProfileSyncService
         }
 
         return Task.FromResult(true);
+    }
+    
+    public Task<bool> UserRequiresMfaAsync(string userId)
+    {
+        var user = _store.GetUser(userId);
+        
+        if (user == null)
+        {
+            _logger.LogWarning("User {UserId} not found when checking MFA requirements", userId);
+            return Task.FromResult(false);
+        }
+        
+        // Get all roles for the user
+        var allRoles = _store.GetRoles();
+        var userRoles = allRoles.Where(r => user.RoleIds.Contains(r.Id)).ToList();
+        
+        // Check if any of the user's roles require MFA
+        var requiresMfa = userRoles.Any(r => r.RequiresMfa);
+        
+        if (requiresMfa)
+        {
+            _logger.LogInformation("User {UserId} has privileged role(s) requiring MFA: {Roles}", 
+                userId, 
+                string.Join(", ", userRoles.Where(r => r.RequiresMfa).Select(r => r.Name)));
+        }
+        
+        return Task.FromResult(requiresMfa);
+    }
+    
+    public bool HasValidMfaClaims(IEnumerable<Claim> claims)
+    {
+        var claimsList = claims.ToList();
+        
+        // Look for MFA claim (e.g., "amr" - Authentication Methods Reference)
+        var mfaClaims = claimsList.Where(c => c.Type == _mfaClaimType).ToList();
+        
+        if (!mfaClaims.Any())
+        {
+            _logger.LogDebug("No MFA claims found in token (looking for claim type: {ClaimType})", _mfaClaimType);
+            return false;
+        }
+        
+        // Check if any of the MFA claims contain the expected value
+        var hasMfaValue = mfaClaims.Any(c => c.Value.Contains(_mfaClaimValue, StringComparison.OrdinalIgnoreCase));
+        
+        if (hasMfaValue)
+        {
+            _logger.LogInformation("Valid MFA claim found: {Claims}", 
+                string.Join(", ", mfaClaims.Select(c => c.Value)));
+        }
+        else
+        {
+            _logger.LogWarning("MFA claim found but does not contain expected value '{ExpectedValue}': {ActualValues}", 
+                _mfaClaimValue,
+                string.Join(", ", mfaClaims.Select(c => c.Value)));
+        }
+        
+        return hasMfaValue;
     }
 
     private static string GetClaimValue(List<Claim> claims, params string[] claimTypes)
