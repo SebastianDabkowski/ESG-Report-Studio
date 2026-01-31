@@ -67,6 +67,9 @@ public sealed class InMemoryReportStore
     private readonly List<AccessReview> _accessReviews = new(); // Periodic access reviews
     private readonly List<AccessReviewLogEntry> _accessReviewLog = new(); // Access review audit trail
     private readonly List<BreakGlassSession> _breakGlassSessions = new(); // Break-glass access sessions
+    private readonly List<RegulatoryPackage> _regulatoryPackages = new(); // Regulatory compliance packages
+    private readonly List<TenantRegulatoryConfig> _tenantRegulatoryConfigs = new(); // Tenant-level package configurations
+    private readonly List<PeriodRegulatoryConfig> _periodRegulatoryConfigs = new(); // Period-level package configurations
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -18904,6 +18907,375 @@ public sealed class InMemoryReportStore
             
             // Check if user has admin role
             return user.RoleIds.Contains("role-admin");
+        }
+    }
+    
+    #endregion
+    
+    #region Regulatory Packages
+    
+    /// <summary>
+    /// Get all regulatory packages.
+    /// </summary>
+    public IReadOnlyList<RegulatoryPackage> GetRegulatoryPackages()
+    {
+        lock (_lock)
+        {
+            return _regulatoryPackages.ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get a specific regulatory package by ID.
+    /// </summary>
+    public RegulatoryPackage? GetRegulatoryPackage(string id)
+    {
+        lock (_lock)
+        {
+            return _regulatoryPackages.FirstOrDefault(p => p.Id == id);
+        }
+    }
+    
+    /// <summary>
+    /// Create a new regulatory package.
+    /// </summary>
+    public (bool isValid, string? errorMessage, RegulatoryPackage? package) CreateRegulatoryPackage(CreateRegulatoryPackageRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return (false, "Package name is required.", null);
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.Version))
+        {
+            return (false, "Package version is required.", null);
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.CreatedBy))
+        {
+            return (false, "CreatedBy is required.", null);
+        }
+        
+        lock (_lock)
+        {
+            var package = new RegulatoryPackage
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = request.Name,
+                Description = request.Description,
+                Version = request.Version,
+                Status = "draft",
+                CreatedAt = DateTime.UtcNow.ToString("o"),
+                CreatedBy = request.CreatedBy,
+                CreatedByName = request.CreatedByName,
+                RequiredSections = request.RequiredSections.ToList(),
+                ValidationRuleIds = request.ValidationRuleIds.ToList(),
+                Metadata = request.Metadata
+            };
+            
+            _regulatoryPackages.Add(package);
+            return (true, null, package);
+        }
+    }
+    
+    /// <summary>
+    /// Update an existing regulatory package.
+    /// </summary>
+    public (bool isValid, string? errorMessage, RegulatoryPackage? package) UpdateRegulatoryPackage(string id, UpdateRegulatoryPackageRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return (false, "Package name is required.", null);
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.Version))
+        {
+            return (false, "Package version is required.", null);
+        }
+        
+        var validStatuses = new[] { "draft", "active", "deprecated", "superseded" };
+        if (!validStatuses.Contains(request.Status))
+        {
+            return (false, $"Invalid status. Must be one of: {string.Join(", ", validStatuses)}.", null);
+        }
+        
+        lock (_lock)
+        {
+            var package = _regulatoryPackages.FirstOrDefault(p => p.Id == id);
+            if (package == null)
+            {
+                return (false, $"Package with ID '{id}' not found.", null);
+            }
+            
+            package.Name = request.Name;
+            package.Description = request.Description;
+            package.Version = request.Version;
+            package.Status = request.Status;
+            package.RequiredSections = request.RequiredSections.ToList();
+            package.ValidationRuleIds = request.ValidationRuleIds.ToList();
+            package.Metadata = request.Metadata;
+            package.UpdatedAt = DateTime.UtcNow.ToString("o");
+            package.UpdatedBy = request.UpdatedBy;
+            package.UpdatedByName = request.UpdatedByName;
+            
+            return (true, null, package);
+        }
+    }
+    
+    /// <summary>
+    /// Delete a regulatory package.
+    /// </summary>
+    public bool DeleteRegulatoryPackage(string id)
+    {
+        lock (_lock)
+        {
+            var package = _regulatoryPackages.FirstOrDefault(p => p.Id == id);
+            if (package == null)
+            {
+                return false;
+            }
+            
+            // Check if package is in use by any tenant or period configurations
+            var tenantConfigs = _tenantRegulatoryConfigs.Where(c => c.PackageId == id && c.IsEnabled).ToList();
+            var periodConfigs = _periodRegulatoryConfigs.Where(c => c.PackageId == id && c.IsEnabled).ToList();
+            
+            if (tenantConfigs.Any() || periodConfigs.Any())
+            {
+                return false; // Cannot delete package that is currently enabled
+            }
+            
+            _regulatoryPackages.Remove(package);
+            return true;
+        }
+    }
+    
+    /// <summary>
+    /// Enable a regulatory package for a tenant (organization).
+    /// </summary>
+    public (bool isValid, string? errorMessage, TenantRegulatoryConfig? config) EnablePackageForTenant(EnablePackageForTenantRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.OrganizationId))
+        {
+            return (false, "OrganizationId is required.", null);
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.PackageId))
+        {
+            return (false, "PackageId is required.", null);
+        }
+        
+        lock (_lock)
+        {
+            // Verify package exists and is active
+            var package = _regulatoryPackages.FirstOrDefault(p => p.Id == request.PackageId);
+            if (package == null)
+            {
+                return (false, $"Package with ID '{request.PackageId}' not found.", null);
+            }
+            
+            if (package.Status != "active")
+            {
+                return (false, $"Package must be active to enable. Current status: {package.Status}.", null);
+            }
+            
+            // Check if already enabled
+            var existing = _tenantRegulatoryConfigs.FirstOrDefault(c => 
+                c.OrganizationId == request.OrganizationId && 
+                c.PackageId == request.PackageId &&
+                c.IsEnabled);
+            
+            if (existing != null)
+            {
+                return (false, "Package is already enabled for this tenant.", null);
+            }
+            
+            var config = new TenantRegulatoryConfig
+            {
+                Id = Guid.NewGuid().ToString(),
+                OrganizationId = request.OrganizationId,
+                PackageId = request.PackageId,
+                IsEnabled = true,
+                EnabledAt = DateTime.UtcNow.ToString("o"),
+                EnabledBy = request.EnabledBy,
+                EnabledByName = request.EnabledByName
+            };
+            
+            _tenantRegulatoryConfigs.Add(config);
+            return (true, null, config);
+        }
+    }
+    
+    /// <summary>
+    /// Disable a regulatory package for a tenant.
+    /// </summary>
+    public bool DisablePackageForTenant(string organizationId, string packageId, string disabledBy, string disabledByName)
+    {
+        lock (_lock)
+        {
+            var config = _tenantRegulatoryConfigs.FirstOrDefault(c => 
+                c.OrganizationId == organizationId && 
+                c.PackageId == packageId &&
+                c.IsEnabled);
+            
+            if (config == null)
+            {
+                return false;
+            }
+            
+            config.IsEnabled = false;
+            config.DisabledAt = DateTime.UtcNow.ToString("o");
+            config.DisabledBy = disabledBy;
+            config.DisabledByName = disabledByName;
+            
+            return true;
+        }
+    }
+    
+    /// <summary>
+    /// Get regulatory packages enabled for a tenant.
+    /// </summary>
+    public IReadOnlyList<TenantRegulatoryConfig> GetTenantRegulatoryConfigs(string organizationId)
+    {
+        lock (_lock)
+        {
+            return _tenantRegulatoryConfigs
+                .Where(c => c.OrganizationId == organizationId)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Enable a regulatory package for a reporting period.
+    /// </summary>
+    public (bool isValid, string? errorMessage, PeriodRegulatoryConfig? config) EnablePackageForPeriod(EnablePackageForPeriodRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.PeriodId))
+        {
+            return (false, "PeriodId is required.", null);
+        }
+        
+        if (string.IsNullOrWhiteSpace(request.PackageId))
+        {
+            return (false, "PackageId is required.", null);
+        }
+        
+        lock (_lock)
+        {
+            // Verify package exists
+            var package = _regulatoryPackages.FirstOrDefault(p => p.Id == request.PackageId);
+            if (package == null)
+            {
+                return (false, $"Package with ID '{request.PackageId}' not found.", null);
+            }
+            
+            // Verify period exists
+            var period = _periods.FirstOrDefault(p => p.Id == request.PeriodId);
+            if (period == null)
+            {
+                return (false, $"Period with ID '{request.PeriodId}' not found.", null);
+            }
+            
+            // Verify package is enabled for tenant
+            var tenantConfig = _tenantRegulatoryConfigs.FirstOrDefault(c => 
+                c.OrganizationId == period.OrganizationId && 
+                c.PackageId == request.PackageId &&
+                c.IsEnabled);
+            
+            if (tenantConfig == null)
+            {
+                return (false, "Package must be enabled for tenant before enabling for a period.", null);
+            }
+            
+            // Check if already enabled
+            var existing = _periodRegulatoryConfigs.FirstOrDefault(c => 
+                c.PeriodId == request.PeriodId && 
+                c.PackageId == request.PackageId &&
+                c.IsEnabled);
+            
+            if (existing != null)
+            {
+                return (false, "Package is already enabled for this period.", null);
+            }
+            
+            var config = new PeriodRegulatoryConfig
+            {
+                Id = Guid.NewGuid().ToString(),
+                PeriodId = request.PeriodId,
+                PackageId = request.PackageId,
+                IsEnabled = true,
+                EnabledAt = DateTime.UtcNow.ToString("o"),
+                EnabledBy = request.EnabledBy,
+                EnabledByName = request.EnabledByName
+            };
+            
+            _periodRegulatoryConfigs.Add(config);
+            return (true, null, config);
+        }
+    }
+    
+    /// <summary>
+    /// Disable a regulatory package for a period (preserves historical validation snapshot).
+    /// </summary>
+    public bool DisablePackageForPeriod(string periodId, string packageId, string disabledBy, string disabledByName, string? validationSnapshot = null)
+    {
+        lock (_lock)
+        {
+            var config = _periodRegulatoryConfigs.FirstOrDefault(c => 
+                c.PeriodId == periodId && 
+                c.PackageId == packageId &&
+                c.IsEnabled);
+            
+            if (config == null)
+            {
+                return false;
+            }
+            
+            config.IsEnabled = false;
+            config.DisabledAt = DateTime.UtcNow.ToString("o");
+            config.DisabledBy = disabledBy;
+            config.DisabledByName = disabledByName;
+            config.ValidationSnapshot = validationSnapshot; // Preserve historical compliance results
+            
+            return true;
+        }
+    }
+    
+    /// <summary>
+    /// Get regulatory packages enabled for a period.
+    /// </summary>
+    public IReadOnlyList<PeriodRegulatoryConfig> GetPeriodRegulatoryConfigs(string periodId)
+    {
+        lock (_lock)
+        {
+            return _periodRegulatoryConfigs
+                .Where(c => c.PeriodId == periodId)
+                .ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Get validation rules applicable to a period based on enabled regulatory packages.
+    /// </summary>
+    public IReadOnlyList<ValidationRule> GetValidationRulesForPeriod(string periodId)
+    {
+        lock (_lock)
+        {
+            // Get all enabled packages for this period
+            var enabledPackageIds = _periodRegulatoryConfigs
+                .Where(c => c.PeriodId == periodId && c.IsEnabled)
+                .Select(c => c.PackageId)
+                .ToHashSet();
+            
+            // Get validation rule IDs from these packages
+            var validationRuleIds = _regulatoryPackages
+                .Where(p => enabledPackageIds.Contains(p.Id))
+                .SelectMany(p => p.ValidationRuleIds)
+                .ToHashSet();
+            
+            // Return the actual validation rules
+            return _validationRules
+                .Where(r => validationRuleIds.Contains(r.Id) && r.IsActive)
+                .ToList();
         }
     }
     

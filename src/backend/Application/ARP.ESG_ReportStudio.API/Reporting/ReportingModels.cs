@@ -9109,3 +9109,255 @@ public sealed class BreakGlassSession
     /// </summary>
     public int ActionCount { get; set; }
 }
+
+/// <summary>
+/// Represents a regulatory compliance package that can be enabled for tenants and periods.
+/// Examples: CSRD/ESRS, GRI Standards, TCFD, custom regulatory frameworks.
+/// </summary>
+public sealed class RegulatoryPackage
+{
+    /// <summary>
+    /// Unique identifier for the package.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Name of the regulatory package (e.g., "CSRD/ESRS 2024", "GRI Universal Standards 2021").
+    /// </summary>
+    public string Name { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Detailed description of the regulatory package and its requirements.
+    /// </summary>
+    public string Description { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Package version identifier (e.g., "1.0", "2024.1").
+    /// </summary>
+    public string Version { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Package status: "draft", "active", "deprecated", "superseded".
+    /// Only active packages can be enabled for tenants.
+    /// </summary>
+    public string Status { get; set; } = "draft";
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was created.
+    /// </summary>
+    public string CreatedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who created the package.
+    /// </summary>
+    public string CreatedBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who created the package.
+    /// </summary>
+    public string CreatedByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was last updated.
+    /// </summary>
+    public string? UpdatedAt { get; set; }
+    
+    /// <summary>
+    /// User ID who last updated the package.
+    /// </summary>
+    public string? UpdatedBy { get; set; }
+    
+    /// <summary>
+    /// User name who last updated the package.
+    /// </summary>
+    public string? UpdatedByName { get; set; }
+    
+    /// <summary>
+    /// IDs of section catalog codes that this package requires.
+    /// </summary>
+    public List<string> RequiredSections { get; set; } = new();
+    
+    /// <summary>
+    /// IDs of validation rules associated with this package.
+    /// </summary>
+    public List<string> ValidationRuleIds { get; set; } = new();
+    
+    /// <summary>
+    /// JSON-encoded metadata for package-specific configuration.
+    /// </summary>
+    public string? Metadata { get; set; }
+}
+
+/// <summary>
+/// Represents tenant-level configuration for a regulatory package.
+/// Controls which packages are available for a specific tenant (organization).
+/// </summary>
+public sealed class TenantRegulatoryConfig
+{
+    /// <summary>
+    /// Unique identifier for the configuration.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Organization ID this configuration applies to.
+    /// </summary>
+    public string OrganizationId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Regulatory package ID.
+    /// </summary>
+    public string PackageId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the package is enabled for this tenant.
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was enabled for this tenant.
+    /// </summary>
+    public string EnabledAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who enabled the package.
+    /// </summary>
+    public string EnabledBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who enabled the package.
+    /// </summary>
+    public string EnabledByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was disabled (if applicable).
+    /// </summary>
+    public string? DisabledAt { get; set; }
+    
+    /// <summary>
+    /// User ID who disabled the package.
+    /// </summary>
+    public string? DisabledBy { get; set; }
+    
+    /// <summary>
+    /// User name who disabled the package.
+    /// </summary>
+    public string? DisabledByName { get; set; }
+}
+
+/// <summary>
+/// Represents period-specific configuration for a regulatory package.
+/// Controls which packages apply to a specific reporting period.
+/// </summary>
+public sealed class PeriodRegulatoryConfig
+{
+    /// <summary>
+    /// Unique identifier for the configuration.
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Reporting period ID this configuration applies to.
+    /// </summary>
+    public string PeriodId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Regulatory package ID.
+    /// </summary>
+    public string PackageId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the package is enabled for this period.
+    /// </summary>
+    public bool IsEnabled { get; set; } = true;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was enabled for this period.
+    /// </summary>
+    public string EnabledAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who enabled the package for this period.
+    /// </summary>
+    public string EnabledBy { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who enabled the package for this period.
+    /// </summary>
+    public string EnabledByName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the package was disabled for this period (if applicable).
+    /// Historical compliance results remain available even after disabling.
+    /// </summary>
+    public string? DisabledAt { get; set; }
+    
+    /// <summary>
+    /// User ID who disabled the package for this period.
+    /// </summary>
+    public string? DisabledBy { get; set; }
+    
+    /// <summary>
+    /// User name who disabled the package for this period.
+    /// </summary>
+    public string? DisabledByName { get; set; }
+    
+    /// <summary>
+    /// Validation results snapshot from when the package was last validated for this period.
+    /// Preserved for historical compliance tracking.
+    /// </summary>
+    public string? ValidationSnapshot { get; set; }
+}
+
+/// <summary>
+/// Request to create a new regulatory package.
+/// </summary>
+public sealed class CreateRegulatoryPackageRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public List<string> RequiredSections { get; set; } = new();
+    public List<string> ValidationRuleIds { get; set; } = new();
+    public string? Metadata { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string CreatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to update a regulatory package.
+/// </summary>
+public sealed class UpdateRegulatoryPackageRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Version { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public List<string> RequiredSections { get; set; } = new();
+    public List<string> ValidationRuleIds { get; set; } = new();
+    public string? Metadata { get; set; }
+    public string UpdatedBy { get; set; } = string.Empty;
+    public string UpdatedByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to enable a regulatory package for a tenant.
+/// </summary>
+public sealed class EnablePackageForTenantRequest
+{
+    public string OrganizationId { get; set; } = string.Empty;
+    public string PackageId { get; set; } = string.Empty;
+    public string EnabledBy { get; set; } = string.Empty;
+    public string EnabledByName { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Request to enable a regulatory package for a reporting period.
+/// </summary>
+public sealed class EnablePackageForPeriodRequest
+{
+    public string PeriodId { get; set; } = string.Empty;
+    public string PackageId { get; set; } = string.Empty;
+    public string EnabledBy { get; set; } = string.Empty;
+    public string EnabledByName { get; set; } = string.Empty;
+}
