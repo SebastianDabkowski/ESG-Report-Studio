@@ -185,10 +185,15 @@ builder.Services.AddScoped<IHREntityRepository, HREntityRepository>();
 builder.Services.AddScoped<IHRSyncRecordRepository, HRSyncRecordRepository>();
 builder.Services.AddScoped<IFinanceEntityRepository, FinanceEntityRepository>();
 builder.Services.AddScoped<IFinanceSyncRecordRepository, FinanceSyncRecordRepository>();
+builder.Services.AddScoped<ICanonicalEntityRepository, CanonicalEntityRepository>();
+builder.Services.AddScoped<ICanonicalEntityVersionRepository, CanonicalEntityVersionRepository>();
+builder.Services.AddScoped<ICanonicalAttributeRepository, CanonicalAttributeRepository>();
+builder.Services.AddScoped<ICanonicalMappingRepository, CanonicalMappingRepository>();
 builder.Services.AddScoped<ConnectorService>();
 builder.Services.AddScoped<IntegrationExecutionService>();
 builder.Services.AddScoped<HRSyncService>();
 builder.Services.AddScoped<FinanceSyncService>();
+builder.Services.AddScoped<CanonicalMappingService>();
 
 builder.Services.AddCors(options =>
 {
