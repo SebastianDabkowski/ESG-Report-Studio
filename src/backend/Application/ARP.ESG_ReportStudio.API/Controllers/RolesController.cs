@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -8,8 +9,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Provides endpoints for viewing, creating, updating, and deleting roles.
 /// Predefined roles are protected from deletion to ensure consistent access control.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/roles")]
+[Route("api/v{version:apiVersion}/roles")]
 public sealed class RolesController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

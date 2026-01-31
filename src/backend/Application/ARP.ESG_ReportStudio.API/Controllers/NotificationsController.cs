@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -8,8 +9,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// NOTE: This is an MVP implementation. In production, add authorization checks to ensure
 /// users can only access their own notifications.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/notifications")]
+[Route("api/v{version:apiVersion}/notifications")]
 public sealed class NotificationsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

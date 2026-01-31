@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using System.IO.Compression;
 using System.Text.Json;
@@ -10,8 +11,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for generating year-over-year annex exports for auditors.
 /// Provides metric deltas, variance explanations, narrative diffs, and evidence references.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/yoy-annex")]
+[Route("api/v{version:apiVersion}/yoy-annex")]
 public sealed class YearOverYearAnnexController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

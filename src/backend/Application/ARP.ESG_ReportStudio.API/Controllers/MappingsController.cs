@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing mappings between report sections/data points and standard disclosures.
 /// Supports many-to-many relationships for standards compliance tracking.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/mappings")]
+[Route("api/v{version:apiVersion}/mappings")]
 public sealed class MappingsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
 [Route("api")]
 public sealed class ReportingController : ControllerBase

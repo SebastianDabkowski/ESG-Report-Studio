@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for analyzing standards coverage across reporting periods.
 /// Provides insights into which standard disclosures are covered, partially covered, or missing.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/coverage")]
+[Route("api/v{version:apiVersion}/coverage")]
 public sealed class CoverageController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

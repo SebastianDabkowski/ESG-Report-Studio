@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using ARP.ESG_ReportStudio.API.Services;
 
@@ -17,8 +18,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 ///   * Admins can view all requests
 /// - Additional authorization checks in each method to validate user permissions
 /// </remarks>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/access-requests")]
+[Route("api/v{version:apiVersion}/access-requests")]
 public sealed class AccessRequestsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

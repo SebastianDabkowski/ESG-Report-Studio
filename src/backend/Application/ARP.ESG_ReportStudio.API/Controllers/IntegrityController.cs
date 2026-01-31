@@ -1,10 +1,12 @@
 using ARP.ESG_ReportStudio.API.Reporting;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/integrity")]
+[Route("api/v{version:apiVersion}/integrity")]
 public class IntegrityController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

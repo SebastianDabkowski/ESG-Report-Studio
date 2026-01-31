@@ -1,13 +1,15 @@
 using ARP.ESG_ReportStudio.API.Reporting;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
 /// <summary>
 /// API endpoints for progress dashboard showing trends across periods.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/progress-dashboard")]
+[Route("api/v{version:apiVersion}/progress-dashboard")]
 public class ProgressDashboardController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

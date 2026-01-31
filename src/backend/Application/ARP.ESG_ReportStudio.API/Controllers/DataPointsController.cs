@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using ARP.ESG_ReportStudio.API.Services;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/data-points")]
+[Route("api/v{version:apiVersion}/data-points")]
 public sealed class DataPointsController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using System.Text;
 using System.Text.Json;
@@ -10,8 +11,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Enables Compliance Officers to review user access, roles, and section scopes,
 /// and make decisions to retain or revoke access.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/access-reviews")]
+[Route("api/v{version:apiVersion}/access-reviews")]
 public sealed class AccessReviewController : ControllerBase
 {
     /// <summary>

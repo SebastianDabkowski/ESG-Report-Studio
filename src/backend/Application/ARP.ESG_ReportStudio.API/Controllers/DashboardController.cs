@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -6,8 +7,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for dashboard analytics and statistics.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/dashboard")]
+[Route("api/v{version:apiVersion}/dashboard")]
 public sealed class DashboardController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

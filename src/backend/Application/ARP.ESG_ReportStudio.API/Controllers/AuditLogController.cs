@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using System.Text;
 using System.Text.Json;
@@ -13,8 +14,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// - report-owner: Access to audit data for their own periods
 /// - contributor: Access to audit data for entities they own or have modified
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/audit-log")]
+[Route("api/v{version:apiVersion}/audit-log")]
 public sealed class AuditLogController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

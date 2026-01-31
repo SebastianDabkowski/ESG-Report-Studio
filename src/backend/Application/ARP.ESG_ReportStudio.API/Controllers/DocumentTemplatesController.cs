@@ -1,10 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/document-templates")]
+[Route("api/v{version:apiVersion}/document-templates")]
 public sealed class DocumentTemplatesController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

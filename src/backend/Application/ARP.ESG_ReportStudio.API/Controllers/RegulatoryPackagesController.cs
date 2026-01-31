@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -7,8 +8,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for managing regulatory compliance packages.
 /// Provides controlled mechanism to add new regulatory requirements (disclosures, validations, workflows).
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/regulatory-packages")]
+[Route("api/v{version:apiVersion}/regulatory-packages")]
 public sealed class RegulatoryPackagesController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

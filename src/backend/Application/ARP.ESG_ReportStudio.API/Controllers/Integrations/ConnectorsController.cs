@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using SD.ProjectName.Modules.Integrations.Application;
 using SD.ProjectName.Modules.Integrations.Domain.Entities;
 
 namespace ARP.ESG_ReportStudio.API.Controllers.Integrations;
 
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/v1/[controller]")]
+[Route("api/v{version:apiVersion}/[controller]")]
 public class ConnectorsController : ControllerBase
 {
     private readonly ConnectorService _connectorService;

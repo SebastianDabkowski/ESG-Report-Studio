@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -6,8 +7,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for consistency validation and publication control.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/consistency")]
+[Route("api/v{version:apiVersion}/consistency")]
 public sealed class ConsistencyController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

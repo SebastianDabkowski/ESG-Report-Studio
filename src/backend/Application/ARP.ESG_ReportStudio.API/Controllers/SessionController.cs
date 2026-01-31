@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Models;
 using ARP.ESG_ReportStudio.API.Services;
 
@@ -8,8 +9,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// <summary>
 /// Controller for session management operations.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/session")]
+[Route("api/v{version:apiVersion}/session")]
 public sealed class SessionController : ControllerBase
 {
     private readonly ISessionManager _sessionManager;

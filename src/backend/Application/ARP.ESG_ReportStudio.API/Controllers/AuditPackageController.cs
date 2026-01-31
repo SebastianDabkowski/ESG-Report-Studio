@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 using System.IO.Compression;
 using System.Text;
@@ -11,8 +12,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 /// Controller for generating audit packages for external auditors.
 /// Exports comprehensive bundles including report data, audit trails, decisions, and evidence.
 /// </summary>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/audit-package")]
+[Route("api/v{version:apiVersion}/audit-package")]
 public sealed class AuditPackageController : ControllerBase
 {
     private readonly InMemoryReportStore _store;

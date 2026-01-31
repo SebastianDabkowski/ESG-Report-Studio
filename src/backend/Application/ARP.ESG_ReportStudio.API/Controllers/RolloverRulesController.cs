@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Asp.Versioning;
 using ARP.ESG_ReportStudio.API.Reporting;
 
 namespace ARP.ESG_ReportStudio.API.Controllers;
@@ -15,8 +16,9 @@ namespace ARP.ESG_ReportStudio.API.Controllers;
 ///   * Contributors and auditors can view rules but not modify them
 /// - Additional authorization checks in each method to validate user permissions
 /// </remarks>
+[ApiVersion("1.0")]
 [ApiController]
-[Route("api/rollover-rules")]
+[Route("api/v{version:apiVersion}/rollover-rules")]
 public sealed class RolloverRulesController : ControllerBase
 {
     private readonly InMemoryReportStore _store;
