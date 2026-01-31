@@ -7221,6 +7221,21 @@ public sealed class ExportHistoryEntry
     /// Last download timestamp (ISO 8601 format).
     /// </summary>
     public string? LastDownloadedAt { get; set; }
+    
+    /// <summary>
+    /// Scope of the export: either "full" (all sections) or "partial" (selected sections).
+    /// </summary>
+    public string ExportScope { get; set; } = "full";
+    
+    /// <summary>
+    /// List of section IDs included in the export.
+    /// </summary>
+    public List<string> IncludedSectionIds { get; set; } = new();
+    
+    /// <summary>
+    /// List of section names included in the export for display purposes.
+    /// </summary>
+    public List<string> IncludedSectionNames { get; set; } = new();
 }
 
 /// <summary>
