@@ -160,6 +160,33 @@ export function canEditSection(userRole: UserRole): boolean {
   return userRole === 'admin' || userRole === 'report-owner' || userRole === 'contributor'
 }
 
+/**
+ * Check if a section is locked for editing based on its status.
+ * Sections are locked when:
+ * - Status is 'submitted-for-approval' (awaiting review)
+ * - Status is 'approved' (needs new revision to edit)
+ */
+export function isSectionLocked(status: string): boolean {
+  return status === 'submitted-for-approval' || status === 'approved'
+}
+
+/**
+ * Get a human-readable explanation for why a section is locked.
+ */
+export function getSectionLockReason(status: string, submittedBy?: string, submittedAt?: string): string {
+  if (status === 'submitted-for-approval') {
+    const who = submittedBy || 'someone'
+    const when = submittedAt ? ` on ${new Date(submittedAt).toLocaleDateString()}` : ''
+    return `This section is submitted for approval by ${who}${when}. Changes cannot be made until it is approved or changes are requested.`
+  }
+  
+  if (status === 'approved') {
+    return 'This section is approved. Create a new revision to make changes.'
+  }
+  
+  return ''
+}
+
 export function isReadOnly(userRole: UserRole): boolean {
   return userRole === 'auditor'
 }
