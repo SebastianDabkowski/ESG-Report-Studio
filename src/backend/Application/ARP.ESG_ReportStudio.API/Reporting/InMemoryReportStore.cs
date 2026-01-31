@@ -150,6 +150,9 @@ public sealed class InMemoryReportStore
         // Initialize the catalog with default sections
         InitializeDefaultCatalog();
         
+        // Initialize sample standards
+        InitializeDefaultStandards();
+        
         // Initialize sample users
         InitializeSampleUsers();
         
@@ -203,6 +206,114 @@ public sealed class InMemoryReportStore
                 IsDeprecated = false,
                 CreatedAt = DateTime.UtcNow.ToString("O")
             });
+        }
+    }
+
+    private void InitializeDefaultStandards()
+    {
+        // Initialize sample reporting standards
+        var now = DateTime.UtcNow;
+        var currentYear = now.Year;
+
+        // CSRD/ESRS Standard (Current - Active)
+        var csrdStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "CSRD-ESRS-2024",
+            Title = "Corporate Sustainability Reporting Directive (CSRD) - European Sustainability Reporting Standards (ESRS)",
+            Description = "EU directive requiring companies to report on sustainability matters. ESRS are the detailed disclosure standards covering environmental, social, and governance topics.",
+            Version = "2024.1",
+            EffectiveStartDate = new DateTime(2024, 1, 1).ToString("O"),
+            EffectiveEndDate = null, // Still active
+            IsDeprecated = false,
+            CreatedAt = now.ToString("O"),
+            CreatedBy = "system"
+        };
+        _standardsCatalog.Add(csrdStandard);
+
+        // SME Simplified Standard (Current - Active)
+        var smeStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "SME-SIMPLIFIED-2024",
+            Title = "SME Simplified ESG Reporting Standard",
+            Description = "Simplified ESG reporting framework designed for small and medium enterprises. Focuses on core sustainability metrics without the full complexity of CSRD.",
+            Version = "1.0",
+            EffectiveStartDate = new DateTime(2024, 1, 1).ToString("O"),
+            EffectiveEndDate = null, // Still active
+            IsDeprecated = false,
+            CreatedAt = now.ToString("O"),
+            CreatedBy = "system"
+        };
+        _standardsCatalog.Add(smeStandard);
+
+        // Legacy Standard (Deprecated)
+        var legacyStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "ESG-BASIC-2023",
+            Title = "Basic ESG Reporting Framework (Legacy)",
+            Description = "Legacy ESG reporting framework. Replaced by SME Simplified and CSRD/ESRS standards for better alignment with EU regulations.",
+            Version = "2023.2",
+            EffectiveStartDate = new DateTime(2023, 1, 1).ToString("O"),
+            EffectiveEndDate = new DateTime(2023, 12, 31).ToString("O"),
+            IsDeprecated = true,
+            CreatedAt = now.AddMonths(-12).ToString("O"),
+            CreatedBy = "system",
+            DeprecatedAt = new DateTime(2024, 1, 1).ToString("O")
+        };
+        _standardsCatalog.Add(legacyStandard);
+
+        // Create sample mappings for CSRD standard to demonstrate aliasing
+        if (_sectionCatalog.Any())
+        {
+            // Map ESRS E1 (Climate Change) to Energy & Emissions section
+            var energySection = _sectionCatalog.FirstOrDefault(s => s.Code == "ENV-001");
+            if (energySection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS E1",
+                    StandardReferenceTitle = "Climate Change",
+                    SectionCatalogId = energySection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
+
+            // Map ESRS S1 (Own Workforce) to Employee Health & Safety section
+            var safetySection = _sectionCatalog.FirstOrDefault(s => s.Code == "SOC-001");
+            if (safetySection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS S1",
+                    StandardReferenceTitle = "Own Workforce",
+                    SectionCatalogId = safetySection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
+
+            // Map ESRS G1 (Business Conduct) to Ethics & Compliance section
+            var ethicsSection = _sectionCatalog.FirstOrDefault(s => s.Code == "GOV-002");
+            if (ethicsSection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS G1",
+                    StandardReferenceTitle = "Business Conduct",
+                    SectionCatalogId = ethicsSection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
         }
     }
 
