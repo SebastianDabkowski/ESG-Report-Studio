@@ -48,7 +48,18 @@ public class HREntity
     public DateTime? UpdatedAt { get; set; }
     
     /// <summary>
+    /// Reference to the canonical entity this HR entity maps to (optional)
+    /// Enables multiple external systems to map into same canonical concepts
+    /// </summary>
+    public int? CanonicalEntityId { get; set; }
+    
+    /// <summary>
     /// Navigation property to Connector
     /// </summary>
     public Connector? Connector { get; set; }
+    
+    /// <summary>
+    /// Navigation property to CanonicalEntity
+    /// </summary>
+    public CanonicalEntity? CanonicalEntity { get; set; }
 }
