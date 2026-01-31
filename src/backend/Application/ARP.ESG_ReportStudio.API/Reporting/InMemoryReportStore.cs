@@ -5666,7 +5666,9 @@ public sealed class InMemoryReportStore
                 Metadata = metadata,
                 ContentHash = contentHash,
                 // Signature would be computed here in production using a private key
-                Signature = $"SIGNATURE_PLACEHOLDER_{contentHash.Substring(0, 16)}"
+                Signature = contentHash.Length >= 16 
+                    ? $"SIGNATURE_PLACEHOLDER_{contentHash.Substring(0, 16)}"
+                    : $"SIGNATURE_PLACEHOLDER_{contentHash}"
             };
             
             return response;

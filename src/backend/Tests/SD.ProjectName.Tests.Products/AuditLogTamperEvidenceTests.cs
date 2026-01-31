@@ -318,11 +318,9 @@ public sealed class AuditLogTamperEvidenceTests
         // Arrange
         var store = CreateStoreWithTestData();
         
-        // Create entries
+        // Create entries - they will naturally have sequential timestamps
         var request1 = new AssignUserRolesRequest { RoleIds = new List<string> { "role-contributor" } };
         store.AssignUserRoles("user-1", request1, "admin-1", "Admin User");
-        
-        System.Threading.Thread.Sleep(10); // Small delay to ensure different timestamps
         
         var request2 = new AssignUserRolesRequest { RoleIds = new List<string> { "role-admin" } };
         store.AssignUserRoles("user-1", request2, "admin-1", "Admin User");
@@ -333,9 +331,15 @@ public sealed class AuditLogTamperEvidenceTests
         // Assert - Entries should be in chronological order (oldest first)
         for (int i = 1; i < export.Entries.Count; i++)
         {
-            var current = DateTime.Parse(export.Entries[i].Timestamp);
-            var previous = DateTime.Parse(export.Entries[i - 1].Timestamp);
-            Assert.True(current >= previous, "Entries should be in chronological order");
+            if (DateTime.TryParse(export.Entries[i].Timestamp, out var current) &&
+                DateTime.TryParse(export.Entries[i - 1].Timestamp, out var previous))
+            {
+                Assert.True(current >= previous, "Entries should be in chronological order");
+            }
+            else
+            {
+                Assert.Fail("Failed to parse entry timestamps");
+            }
         }
     }
     
