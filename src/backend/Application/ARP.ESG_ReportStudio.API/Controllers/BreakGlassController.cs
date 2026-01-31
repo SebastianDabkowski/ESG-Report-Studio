@@ -262,12 +262,29 @@ public sealed class BreakGlassController : ControllerBase
     /// Get break-glass configuration.
     /// </summary>
     /// <response code="200">Returns break-glass configuration</response>
+    /// <response code="401">User is not authenticated</response>
     [HttpGet("config")]
-    [AllowAnonymous]
     [ProducesResponseType(typeof(BreakGlassConfig), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public ActionResult<BreakGlassConfig> GetConfig()
     {
         var config = GetBreakGlassConfig();
+        
+        // Remove sensitive information like authorized role IDs for non-admin users
+        var userId = GetUserId();
+        if (string.IsNullOrEmpty(userId) || !_store.IsAuthorizedForBreakGlass(userId))
+        {
+            // Return limited config for non-authorized users
+            return Ok(new BreakGlassConfig
+            {
+                Enabled = config.Enabled,
+                MinReasonLength = config.MinReasonLength,
+                RequireMfa = config.RequireMfa,
+                MaxSessionDurationHours = config.MaxSessionDurationHours
+                // AuthorizedRoleIds intentionally omitted for security
+            });
+        }
+        
         return Ok(config);
     }
 
