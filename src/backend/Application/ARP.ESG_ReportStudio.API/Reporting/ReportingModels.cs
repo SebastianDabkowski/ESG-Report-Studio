@@ -1736,6 +1736,17 @@ public sealed class AuditLogEntry
     /// Creates a hash chain that makes it evident if entries are modified or removed.
     /// </summary>
     public string? PreviousEntryHash { get; init; }
+    
+    /// <summary>
+    /// Whether this action was performed during an active break-glass session.
+    /// Used to identify emergency access actions in audit reports.
+    /// </summary>
+    public bool IsBreakGlassAction { get; init; }
+    
+    /// <summary>
+    /// Break-glass session ID if this was a break-glass action.
+    /// </summary>
+    public string? BreakGlassSessionId { get; init; }
 }
 
 /// <summary>
@@ -8388,4 +8399,76 @@ public sealed class AuditExportMetadata
     /// Description of any hash chain validation issues.
     /// </summary>
     public string? ValidationMessage { get; set; }
+}
+
+/// <summary>
+/// Represents a break-glass admin access session.
+/// Provides emergency access with full audit trail and mandatory justification.
+/// </summary>
+public sealed class BreakGlassSession
+{
+    /// <summary>
+    /// Unique identifier for this break-glass session.
+    /// </summary>
+    public string Id { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// User ID who activated break-glass access.
+    /// </summary>
+    public string UserId { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// User name who activated break-glass access.
+    /// </summary>
+    public string UserName { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// Mandatory reason explaining why break-glass access was needed.
+    /// </summary>
+    public string Reason { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when break-glass was activated.
+    /// </summary>
+    public string ActivatedAt { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when break-glass was deactivated (null if still active).
+    /// </summary>
+    public string? DeactivatedAt { get; set; }
+    
+    /// <summary>
+    /// User ID who deactivated the session (null if still active).
+    /// </summary>
+    public string? DeactivatedBy { get; set; }
+    
+    /// <summary>
+    /// User name who deactivated the session (null if still active).
+    /// </summary>
+    public string? DeactivatedByName { get; set; }
+    
+    /// <summary>
+    /// Note provided when deactivating the session (optional).
+    /// </summary>
+    public string? DeactivationNote { get; set; }
+    
+    /// <summary>
+    /// Whether this session is currently active.
+    /// </summary>
+    public bool IsActive { get; set; } = true;
+    
+    /// <summary>
+    /// Authentication method used during activation (e.g., "MFA", "Hardware-Token").
+    /// </summary>
+    public string? AuthenticationMethod { get; set; }
+    
+    /// <summary>
+    /// IP address from which break-glass was activated.
+    /// </summary>
+    public string? IpAddress { get; set; }
+    
+    /// <summary>
+    /// Number of privileged actions performed during this session.
+    /// </summary>
+    public int ActionCount { get; set; }
 }

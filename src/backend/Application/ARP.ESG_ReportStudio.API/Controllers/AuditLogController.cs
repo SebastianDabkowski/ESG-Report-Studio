@@ -25,7 +25,7 @@ public sealed class AuditLogController : ControllerBase
     }
 
     /// <summary>
-    /// Get audit log entries with optional filtering by entity type, entity ID, user ID, action, date range, section, and owner.
+    /// Get audit log entries with optional filtering by entity type, entity ID, user ID, action, date range, section, owner, and break-glass actions.
     /// Access is controlled by user role.
     /// </summary>
     /// <param name="requestingUserId">ID of the user requesting the audit log</param>
@@ -37,6 +37,7 @@ public sealed class AuditLogController : ControllerBase
     /// <param name="endDate">Filter by entries before this date (ISO 8601 format)</param>
     /// <param name="sectionId">Filter by section ID (for entities that belong to a section)</param>
     /// <param name="ownerId">Filter by owner/creator ID (for entities that have an owner)</param>
+    /// <param name="breakGlassOnly">Filter to show only break-glass actions (true) or only non-break-glass actions (false)</param>
     /// <returns>List of audit log entries in reverse chronological order</returns>
     [HttpGet]
     public ActionResult<IReadOnlyList<AuditLogEntry>> GetAuditLog(
@@ -48,7 +49,8 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? startDate = null,
         [FromQuery] string? endDate = null,
         [FromQuery] string? sectionId = null,
-        [FromQuery] string? ownerId = null)
+        [FromQuery] string? ownerId = null,
+        [FromQuery] bool? breakGlassOnly = null)
     {
         // Check access permission
         var accessResult = CheckAuditLogAccess(requestingUserId);
@@ -58,7 +60,7 @@ public sealed class AuditLogController : ControllerBase
         }
 
         // Apply role-based filtering
-        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
+        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId, breakGlassOnly);
         
         // Contributors only see their own actions
         if (accessResult.UserRole == "contributor")
@@ -83,7 +85,8 @@ public sealed class AuditLogController : ControllerBase
         [FromQuery] string? startDate = null,
         [FromQuery] string? endDate = null,
         [FromQuery] string? sectionId = null,
-        [FromQuery] string? ownerId = null)
+        [FromQuery] string? ownerId = null,
+        [FromQuery] bool? breakGlassOnly = null)
     {
         // Check access permission - export requires admin or auditor role
         var accessResult = CheckAuditLogAccess(requestingUserId, requireExportRole: true);
@@ -92,25 +95,26 @@ public sealed class AuditLogController : ControllerBase
             return StatusCode(403, new { error = accessResult.ErrorMessage });
         }
 
-        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId);
+        var entries = _store.GetAuditLog(entityType, entityId, userId, action, startDate, endDate, sectionId, ownerId, breakGlassOnly);
         
         var csv = new StringBuilder();
         // Add UTF-8 BOM for better Excel compatibility
         csv.Append('\ufeff');
-        csv.AppendLine("\"Timestamp\",\"User ID\",\"User Name\",\"Action\",\"Entity Type\",\"Entity ID\",\"Change Note\",\"Field\",\"Old Value\",\"New Value\"");
+        csv.AppendLine("\"Timestamp\",\"User ID\",\"User Name\",\"Action\",\"Entity Type\",\"Entity ID\",\"Change Note\",\"Break-Glass\",\"Field\",\"Old Value\",\"New Value\"");
         
         foreach (var entry in entries)
         {
+            var breakGlassFlag = entry.IsBreakGlassAction ? "Yes" : "No";
             if (entry.Changes != null && entry.Changes.Count > 0)
             {
                 foreach (var change in entry.Changes)
                 {
-                    csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},{FormatCsvField(change.Field)},{FormatCsvField(change.OldValue ?? "")},{FormatCsvField(change.NewValue ?? "")}");
+                    csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},{FormatCsvField(breakGlassFlag)},{FormatCsvField(change.Field)},{FormatCsvField(change.OldValue ?? "")},{FormatCsvField(change.NewValue ?? "")}");
                 }
             }
             else
             {
-                csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},\"\",\"\",\"\"");
+                csv.AppendLine($"{FormatCsvField(entry.Timestamp)},{FormatCsvField(entry.UserId)},{FormatCsvField(entry.UserName)},{FormatCsvField(entry.Action)},{FormatCsvField(entry.EntityType)},{FormatCsvField(entry.EntityId)},{FormatCsvField(entry.ChangeNote ?? "")},{FormatCsvField(breakGlassFlag)},\"\",\"\",\"\"");
             }
         }
         

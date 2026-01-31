@@ -60,6 +60,7 @@ public sealed class InMemoryReportStore
     private readonly List<AccessRequest> _accessRequests = new(); // Access request workflow
     private readonly List<AccessReview> _accessReviews = new(); // Periodic access reviews
     private readonly List<AccessReviewLogEntry> _accessReviewLog = new(); // Access review audit trail
+    private readonly List<BreakGlassSession> _breakGlassSessions = new(); // Break-glass access sessions
 
     // Valid missing reason categories
     private static readonly string[] ValidMissingReasonCategories = new[] 
@@ -5438,6 +5439,11 @@ public sealed class InMemoryReportStore
         var entryId = Guid.NewGuid().ToString();
         var timestamp = DateTime.UtcNow.ToString("O");
         
+        // Check if this action is being performed during an active break-glass session
+        var activeBreakGlassSession = GetActiveBreakGlassSession(userId);
+        var isBreakGlassAction = activeBreakGlassSession != null;
+        var breakGlassSessionId = activeBreakGlassSession?.Id;
+        
         // Compute hash for this entry
         var entryHash = ComputeAuditEntryHash(entryId, timestamp, userId, action, entityType, entityId, changes, previousHash);
         
@@ -5453,10 +5459,18 @@ public sealed class InMemoryReportStore
             ChangeNote = changeNote,
             Changes = changes,
             EntryHash = entryHash,
-            PreviousEntryHash = previousHash
+            PreviousEntryHash = previousHash,
+            IsBreakGlassAction = isBreakGlassAction,
+            BreakGlassSessionId = breakGlassSessionId
         };
         
         _auditLog.Add(entry);
+        
+        // If this was a break-glass action, increment the action count
+        if (isBreakGlassAction && breakGlassSessionId != null)
+        {
+            IncrementBreakGlassActionCount(breakGlassSessionId);
+        }
     }
     
     /// <summary>
@@ -5512,7 +5526,8 @@ public sealed class InMemoryReportStore
         string? startDate = null, 
         string? endDate = null,
         string? sectionId = null,
-        string? ownerId = null)
+        string? ownerId = null,
+        bool? breakGlassOnly = null)
     {
         lock (_lock)
         {
@@ -5546,6 +5561,12 @@ public sealed class InMemoryReportStore
             if (!string.IsNullOrWhiteSpace(endDate) && DateTime.TryParse(endDate, out var end))
             {
                 query = query.Where(e => DateTime.Parse(e.Timestamp) <= end);
+            }
+            
+            // Filter by break-glass actions if specified
+            if (breakGlassOnly.HasValue)
+            {
+                query = query.Where(e => e.IsBreakGlassAction == breakGlassOnly.Value);
             }
 
             // Filter by section if provided
@@ -17733,6 +17754,200 @@ public sealed class InMemoryReportStore
             RevokeDecisions = entries.Count(e => e.Decision == "revoke"),
             AccessesRevoked = 0 // Updated when revocations occur
         };
+    }
+    
+    #endregion
+    
+    #region Break-Glass Access Management
+    
+    /// <summary>
+    /// Activate break-glass admin access for a user.
+    /// Creates a new session with comprehensive audit trail.
+    /// </summary>
+    public (bool Success, string? ErrorMessage, BreakGlassSession? Session) ActivateBreakGlass(
+        string userId,
+        string userName,
+        string reason,
+        string? authenticationMethod = null,
+        string? ipAddress = null)
+    {
+        lock (_lock)
+        {
+            // Validate user exists and is active
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null || !user.IsActive)
+            {
+                return (false, "User not found or inactive", null);
+            }
+            
+            // Check if user already has an active break-glass session
+            var activeSession = _breakGlassSessions.FirstOrDefault(s => s.UserId == userId && s.IsActive);
+            if (activeSession != null)
+            {
+                return (false, "User already has an active break-glass session", null);
+            }
+            
+            // Validate reason is provided and not empty
+            if (string.IsNullOrWhiteSpace(reason) || reason.Length < 20)
+            {
+                return (false, "Reason must be at least 20 characters long", null);
+            }
+            
+            // Create new break-glass session
+            var session = new BreakGlassSession
+            {
+                Id = Guid.NewGuid().ToString(),
+                UserId = userId,
+                UserName = userName,
+                Reason = reason,
+                ActivatedAt = DateTime.UtcNow.ToString("O"),
+                IsActive = true,
+                AuthenticationMethod = authenticationMethod,
+                IpAddress = ipAddress,
+                ActionCount = 0
+            };
+            
+            _breakGlassSessions.Add(session);
+            
+            // Create audit log entry
+            CreateAuditLogEntry(
+                userId,
+                userName,
+                "activate-break-glass",
+                "BreakGlassSession",
+                session.Id,
+                new List<FieldChange>
+                {
+                    new() { Field = "Reason", OldValue = "", NewValue = reason },
+                    new() { Field = "AuthenticationMethod", OldValue = "", NewValue = authenticationMethod ?? "Not specified" },
+                    new() { Field = "IpAddress", OldValue = "", NewValue = ipAddress ?? "Not recorded" }
+                },
+                $"Break-glass access activated: {reason}"
+            );
+            
+            return (true, null, session);
+        }
+    }
+    
+    /// <summary>
+    /// Deactivate an active break-glass session.
+    /// Records deactivation in audit trail and session history.
+    /// </summary>
+    public (bool Success, string? ErrorMessage) DeactivateBreakGlass(
+        string sessionId,
+        string deactivatedByUserId,
+        string deactivatedByUserName,
+        string? note = null)
+    {
+        lock (_lock)
+        {
+            var session = _breakGlassSessions.FirstOrDefault(s => s.Id == sessionId);
+            if (session == null)
+            {
+                return (false, "Session not found");
+            }
+            
+            if (!session.IsActive)
+            {
+                return (false, "Session is already deactivated");
+            }
+            
+            // Deactivate session
+            session.IsActive = false;
+            session.DeactivatedAt = DateTime.UtcNow.ToString("O");
+            session.DeactivatedBy = deactivatedByUserId;
+            session.DeactivatedByName = deactivatedByUserName;
+            session.DeactivationNote = note;
+            
+            // Create audit log entry
+            CreateAuditLogEntry(
+                deactivatedByUserId,
+                deactivatedByUserName,
+                "deactivate-break-glass",
+                "BreakGlassSession",
+                sessionId,
+                new List<FieldChange>
+                {
+                    new() { Field = "IsActive", OldValue = "true", NewValue = "false" },
+                    new() { Field = "DeactivatedAt", OldValue = "", NewValue = session.DeactivatedAt },
+                    new() { Field = "ActionCount", OldValue = "", NewValue = session.ActionCount.ToString() }
+                },
+                note ?? "Break-glass access deactivated"
+            );
+            
+            return (true, null);
+        }
+    }
+    
+    /// <summary>
+    /// Get the active break-glass session for a user.
+    /// </summary>
+    public BreakGlassSession? GetActiveBreakGlassSession(string userId)
+    {
+        lock (_lock)
+        {
+            return _breakGlassSessions.FirstOrDefault(s => s.UserId == userId && s.IsActive);
+        }
+    }
+    
+    /// <summary>
+    /// Get all break-glass sessions (active and historical).
+    /// </summary>
+    public IReadOnlyList<BreakGlassSession> GetBreakGlassSessions(
+        string? userId = null,
+        bool? activeOnly = null)
+    {
+        lock (_lock)
+        {
+            var query = _breakGlassSessions.AsEnumerable();
+            
+            if (!string.IsNullOrWhiteSpace(userId))
+            {
+                query = query.Where(s => s.UserId == userId);
+            }
+            
+            if (activeOnly.HasValue)
+            {
+                query = query.Where(s => s.IsActive == activeOnly.Value);
+            }
+            
+            return query.OrderByDescending(s => s.ActivatedAt).ToList();
+        }
+    }
+    
+    /// <summary>
+    /// Increment the action count for an active break-glass session.
+    /// Called when a privileged action is performed during a break-glass session.
+    /// </summary>
+    public void IncrementBreakGlassActionCount(string sessionId)
+    {
+        lock (_lock)
+        {
+            var session = _breakGlassSessions.FirstOrDefault(s => s.Id == sessionId && s.IsActive);
+            if (session != null)
+            {
+                session.ActionCount++;
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Check if a user is authorized to use break-glass access.
+    /// Typically limited to admin role or specific emergency response roles.
+    /// </summary>
+    public bool IsAuthorizedForBreakGlass(string userId)
+    {
+        lock (_lock)
+        {
+            var user = _users.FirstOrDefault(u => u.Id == userId);
+            if (user == null || !user.IsActive)
+            {
+                return false;
+            }
+            
+            // Check if user has admin role
+            return user.RoleIds.Contains("role-admin");
+        }
     }
     
     #endregion
