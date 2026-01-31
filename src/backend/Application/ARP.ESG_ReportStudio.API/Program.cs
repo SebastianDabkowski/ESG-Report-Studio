@@ -9,11 +9,30 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Configure authentication settings
 var authSettings = builder.Configuration.GetSection("Authentication").Get<AuthenticationSettings>();
+
+// Validate authentication configuration if OIDC is intended to be used
+if (authSettings == null)
+{
+    // If no authentication section exists, create default with disabled OIDC
+    authSettings = new AuthenticationSettings
+    {
+        EnableLocalAuth = true,
+        Oidc = new OidcSettings { Enabled = false }
+    };
+}
+
 builder.Services.Configure<AuthenticationSettings>(builder.Configuration.GetSection("Authentication"));
 
 // Add authentication services
-if (authSettings?.Oidc?.Enabled == true)
+if (authSettings.Oidc?.Enabled == true)
 {
+    if (string.IsNullOrEmpty(authSettings.Oidc.Authority) || string.IsNullOrEmpty(authSettings.Oidc.ClientId))
+    {
+        throw new InvalidOperationException(
+            "OIDC is enabled but required configuration is missing. " +
+            "Please configure Authentication:Oidc:Authority and Authentication:Oidc:ClientId in appsettings.json");
+    }
+
     builder.Services.AddAuthentication(options =>
     {
         options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;

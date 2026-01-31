@@ -87,7 +87,7 @@ public sealed class UserProfileSyncService : IUserProfileSyncService
         var newUser = new User
         {
             Id = userId,
-            Email = email ?? $"{userId}@unknown.com",
+            Email = email ?? $"{userId}@example.com", // Use example.com per RFC 2606
             Name = displayName ?? userId,
             RoleIds = new List<string>(), // No roles assigned by default
             IsActive = true
