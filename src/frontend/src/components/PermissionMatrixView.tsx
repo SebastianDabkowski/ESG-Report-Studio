@@ -127,6 +127,7 @@ export default function PermissionMatrixView() {
                 size={18} 
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" 
                 weight="bold"
+                aria-hidden="true"
               />
               <Input
                 type="text"

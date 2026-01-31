@@ -15937,54 +15937,55 @@ public sealed class InMemoryReportStore
     private List<string> MapActionToPermissions(string resourceType, string action)
     {
         var permissions = new List<string>();
+        var normalizedAction = action.ToLowerInvariant();
         
         switch (resourceType.ToLowerInvariant())
         {
             case "report-structure":
-                if (action == "view")
+                if (normalizedAction == "view")
                     permissions.AddRange(new[] { "view-all-reports", "view-reports" });
-                else if (action == "edit" || action == "manage")
+                else if (normalizedAction == "edit" || normalizedAction == "manage")
                     permissions.Add("all");
                 break;
                 
             case "section-content":
-                if (action == "view")
+                if (normalizedAction == "view")
                     permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections", "view-public-sections" });
-                else if (action == "edit")
+                else if (normalizedAction == "edit")
                     permissions.Add("edit-assigned-sections");
-                else if (action == "comment")
+                else if (normalizedAction == "comment")
                     permissions.AddRange(new[] { "add-comments", "add-recommendations" });
-                else if (action == "approve")
+                else if (normalizedAction == "approve")
                     permissions.AddRange(new[] { "approve-section-data", "approve-sections" });
-                else if (action == "reject")
+                else if (normalizedAction == "reject")
                     permissions.Add("reject-sections");
                 break;
                 
             case "esg-data-items":
-                if (action == "view")
+                if (normalizedAction == "view")
                     permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections" });
-                else if (action == "edit")
+                else if (normalizedAction == "edit")
                     permissions.AddRange(new[] { "edit-assigned-sections", "add-assumptions", "add-gaps" });
-                else if (action == "comment")
+                else if (normalizedAction == "comment")
                     permissions.AddRange(new[] { "add-comments", "add-recommendations" });
                 break;
                 
             case "attachments":
-                if (action == "view")
+                if (normalizedAction == "view")
                     permissions.AddRange(new[] { "view-all-reports", "view-reports", "view-assigned-sections" });
-                else if (action == "edit")
+                else if (normalizedAction == "edit")
                     permissions.Add("upload-evidence");
                 break;
                 
             case "exports":
-                if (action == "export")
+                if (normalizedAction == "export")
                     permissions.AddRange(new[] { "export-reports", "export-audit-packages" });
-                else if (action == "view")
+                else if (normalizedAction == "view")
                     permissions.AddRange(new[] { "view-all-reports", "view-reports" });
                 break;
                 
             case "users":
-                if (action == "view" || action == "manage")
+                if (normalizedAction == "view" || normalizedAction == "manage")
                     permissions.Add("all");
                 break;
         }
