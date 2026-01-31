@@ -7254,3 +7254,134 @@ public sealed class RolePermissionDetail
     public string RoleName { get; set; } = string.Empty;
     public List<string> Permissions { get; set; } = new();
 }
+
+/// <summary>
+/// Represents a single entry in the permission matrix showing which actions a role can perform.
+/// </summary>
+public sealed class PermissionMatrixEntry
+{
+    /// <summary>
+    /// Role ID.
+    /// </summary>
+    public string RoleId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Role name (e.g., "Compliance Officer", "Admin").
+    /// </summary>
+    public string RoleName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether this is a predefined role.
+    /// </summary>
+    public bool IsPredefined { get; set; }
+    
+    /// <summary>
+    /// Map of resource types to their allowed actions.
+    /// Key: resource type (e.g., "report-structure", "section-content", "esg-data-items", "attachments", "exports", "users")
+    /// Value: list of allowed actions (e.g., "view", "edit", "comment", "submit", "approve", "reject", "export", "manage")
+    /// </summary>
+    public Dictionary<string, List<string>> ResourceActions { get; set; } = new();
+}
+
+/// <summary>
+/// Complete permission matrix showing all roles and their permissions across resources.
+/// </summary>
+public sealed class PermissionMatrix
+{
+    /// <summary>
+    /// List of all roles with their permissions.
+    /// </summary>
+    public List<PermissionMatrixEntry> Entries { get; set; } = new();
+    
+    /// <summary>
+    /// List of all resource types covered in the matrix.
+    /// </summary>
+    public List<string> ResourceTypes { get; set; } = new();
+    
+    /// <summary>
+    /// List of all possible actions across all resources.
+    /// </summary>
+    public List<string> AllActions { get; set; } = new();
+    
+    /// <summary>
+    /// Timestamp when matrix was generated.
+    /// </summary>
+    public string GeneratedAt { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Result of a permission check operation.
+/// </summary>
+public sealed class PermissionCheckResult
+{
+    /// <summary>
+    /// User ID who attempted the action.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// User name who attempted the action.
+    /// </summary>
+    public string UserName { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Resource type being accessed (e.g., "section-content", "exports").
+    /// </summary>
+    public string ResourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Specific resource ID being accessed (optional).
+    /// </summary>
+    public string? ResourceId { get; set; }
+    
+    /// <summary>
+    /// Action being attempted (e.g., "view", "edit", "approve").
+    /// </summary>
+    public string Action { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Whether the permission check passed.
+    /// </summary>
+    public bool Allowed { get; set; }
+    
+    /// <summary>
+    /// Reason for denial if not allowed.
+    /// </summary>
+    public string? DenialReason { get; set; }
+    
+    /// <summary>
+    /// Timestamp of the check.
+    /// </summary>
+    public string CheckedAt { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Roles that were evaluated for this check.
+    /// </summary>
+    public List<string> EvaluatedRoles { get; set; } = new();
+}
+
+/// <summary>
+/// Request to check if a user has permission to perform an action.
+/// </summary>
+public sealed class PermissionCheckRequest
+{
+    /// <summary>
+    /// User ID to check permissions for.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Resource type being accessed.
+    /// </summary>
+    public string ResourceType { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Specific resource ID being accessed (optional).
+    /// </summary>
+    public string? ResourceId { get; set; }
+    
+    /// <summary>
+    /// Action being attempted.
+    /// </summary>
+    public string Action { get; set; } = string.Empty;
+}
