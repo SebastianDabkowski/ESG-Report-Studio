@@ -60,6 +60,18 @@ public sealed class OidcSettings
     /// The claim type to use for the user's display name.
     /// </summary>
     public string DisplayNameClaimType { get; set; } = "name";
+    
+    /// <summary>
+    /// The claim type to check for MFA verification.
+    /// Common values: "amr" (Authentication Methods Reference) or "mfa_verified".
+    /// </summary>
+    public string MfaClaimType { get; set; } = "amr";
+    
+    /// <summary>
+    /// The expected value in the MFA claim to indicate MFA was completed.
+    /// For "amr" claim, common values are "mfa" or "otp".
+    /// </summary>
+    public string MfaClaimValue { get; set; } = "mfa";
 
     /// <summary>
     /// Whether to validate the issuer signing key.

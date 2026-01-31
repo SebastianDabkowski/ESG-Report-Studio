@@ -64,6 +64,12 @@ public sealed class AuthenticationController : ControllerBase
 
         var claims = User.Claims;
         var user = await _userProfileSync.SyncUserFromClaimsAsync(claims);
+        
+        // Check if user has MFA verified claim (added during authentication)
+        var mfaVerified = User.HasClaim(c => c.Type == "mfa_verified" && c.Value == "true");
+        
+        // Check if user requires MFA based on their roles
+        var requiresMfa = await _userProfileSync.UserRequiresMfaAsync(user.Id);
 
         return Ok(new CurrentUserResponse
         {
@@ -71,7 +77,9 @@ public sealed class AuthenticationController : ControllerBase
             Name = user.Name,
             Email = user.Email,
             IsActive = user.IsActive,
-            RoleIds = user.RoleIds
+            RoleIds = user.RoleIds,
+            MfaVerified = mfaVerified,
+            RequiresMfa = requiresMfa
         });
     }
 
@@ -112,6 +120,17 @@ public sealed class CurrentUserResponse
     public string Email { get; set; } = string.Empty;
     public bool IsActive { get; set; }
     public List<string> RoleIds { get; set; } = new();
+    
+    /// <summary>
+    /// Indicates whether the user authenticated with MFA.
+    /// This is recorded in session claims for audit purposes.
+    /// </summary>
+    public bool MfaVerified { get; set; }
+    
+    /// <summary>
+    /// Indicates whether the user has any roles that require MFA.
+    /// </summary>
+    public bool RequiresMfa { get; set; }
 }
 
 /// <summary>

@@ -15818,6 +15818,7 @@ public sealed class InMemoryReportStore
                 Description = "Full system access including user management, configuration, and all data operations",
                 Permissions = new List<string> { "all" },
                 IsPredefined = true,
+                RequiresMfa = true,
                 CreatedAt = now,
                 CreatedBy = systemUser,
                 Version = 1
@@ -15829,6 +15830,7 @@ public sealed class InMemoryReportStore
                 Description = "Strategic oversight, report approval, and high-level access to all ESG data",
                 Permissions = new List<string> { "view-all-reports", "approve-reports", "export-reports", "view-dashboards" },
                 IsPredefined = true,
+                RequiresMfa = true,
                 CreatedAt = now,
                 CreatedBy = systemUser,
                 Version = 1
@@ -15840,6 +15842,7 @@ public sealed class InMemoryReportStore
                 Description = "Ensure regulatory compliance, audit data quality, and manage validation rules",
                 Permissions = new List<string> { "view-all-reports", "manage-validation-rules", "run-audits", "export-audit-packages", "view-compliance-reports" },
                 IsPredefined = true,
+                RequiresMfa = true,
                 CreatedAt = now,
                 CreatedBy = systemUser,
                 Version = 1

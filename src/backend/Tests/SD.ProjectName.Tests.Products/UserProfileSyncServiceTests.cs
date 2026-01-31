@@ -196,4 +196,203 @@ public class UserProfileSyncServiceTests
         // Name will be from existing user
         Assert.NotEmpty(result.Name);
     }
+    
+    [Fact]
+    public async Task UserRequiresMfaAsync_ShouldReturnTrue_WhenUserHasPrivilegedRole()
+    {
+        // Arrange - user-2 is Admin with role-admin
+        var userId = "user-2";
+        
+        // Act
+        var result = await _service.UserRequiresMfaAsync(userId);
+        
+        // Assert
+        Assert.True(result);
+    }
+    
+    [Fact]
+    public async Task UserRequiresMfaAsync_ShouldReturnTrue_WhenUserHasComplianceOfficerRole()
+    {
+        // Arrange - user-6 is Compliance Officer with role-compliance-officer
+        var userId = "user-6";
+        
+        // Act
+        var result = await _service.UserRequiresMfaAsync(userId);
+        
+        // Assert
+        Assert.True(result);
+    }
+    
+    [Fact]
+    public async Task UserRequiresMfaAsync_ShouldReturnFalse_WhenUserHasNoPrivilegedRole()
+    {
+        // Arrange - user-3 is Contributor with role-contributor (not privileged)
+        var userId = "user-3";
+        
+        // Act
+        var result = await _service.UserRequiresMfaAsync(userId);
+        
+        // Assert
+        Assert.False(result);
+    }
+    
+    [Fact]
+    public async Task UserRequiresMfaAsync_ShouldReturnFalse_WhenUserDoesNotExist()
+    {
+        // Arrange
+        var userId = "nonexistent-user";
+        
+        // Act
+        var result = await _service.UserRequiresMfaAsync(userId);
+        
+        // Assert
+        Assert.False(result);
+    }
+    
+    [Fact]
+    public async Task UserRequiresMfaAsync_ShouldReturnFalse_WhenUserHasNoRoles()
+    {
+        // Arrange - user-0 has no roles
+        var userId = "user-0";
+        
+        // Act
+        var result = await _service.UserRequiresMfaAsync(userId);
+        
+        // Assert
+        Assert.False(result);
+    }
 }
+
+/// <summary>
+/// Tests for MFA claim validation in UserProfileSyncService.
+/// </summary>
+public class MfaClaimValidationTests
+{
+    private readonly InMemoryReportStore _store;
+    private readonly Mock<ILogger<UserProfileSyncService>> _mockLogger;
+    private readonly Mock<IConfiguration> _mockConfiguration;
+    private readonly Mock<IConfigurationSection> _mockOidcSection;
+    private readonly UserProfileSyncService _service;
+
+    public MfaClaimValidationTests()
+    {
+        _store = new InMemoryReportStore();
+        _mockLogger = new Mock<ILogger<UserProfileSyncService>>();
+        _mockConfiguration = new Mock<IConfiguration>();
+        _mockOidcSection = new Mock<IConfigurationSection>();
+
+        // Setup configuration mocks for MFA claim checking
+        _mockConfiguration.Setup(c => c.GetSection("Authentication:Oidc")).Returns(_mockOidcSection.Object);
+        _mockOidcSection.Setup(s => s["NameClaimType"]).Returns("preferred_username");
+        _mockOidcSection.Setup(s => s["EmailClaimType"]).Returns("email");
+        _mockOidcSection.Setup(s => s["DisplayNameClaimType"]).Returns("name");
+        _mockOidcSection.Setup(s => s["MfaClaimType"]).Returns("amr");
+        _mockOidcSection.Setup(s => s["MfaClaimValue"]).Returns("mfa");
+
+        _service = new UserProfileSyncService(_store, _mockLogger.Object, _mockConfiguration.Object);
+    }
+
+    [Fact]
+    public void HasValidMfaClaims_ShouldReturnTrue_WhenMfaClaimPresent()
+    {
+        // Arrange
+        var claims = new List<Claim>
+        {
+            new Claim("amr", "mfa"),
+            new Claim("preferred_username", "testuser")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void HasValidMfaClaims_ShouldReturnFalse_WhenMfaClaimNotPresent()
+    {
+        // Arrange
+        var claims = new List<Claim>
+        {
+            new Claim("preferred_username", "testuser"),
+            new Claim("email", "test@example.com")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void HasValidMfaClaims_ShouldReturnTrue_WhenMfaValueInMultiValueClaim()
+    {
+        // Arrange - Some IdPs return multiple authentication methods
+        var claims = new List<Claim>
+        {
+            new Claim("amr", "pwd"),
+            new Claim("amr", "mfa"),
+            new Claim("preferred_username", "testuser")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.True(result);
+    }
+
+    [Fact]
+    public void HasValidMfaClaims_ShouldReturnFalse_WhenMfaClaimHasWrongValue()
+    {
+        // Arrange
+        var claims = new List<Claim>
+        {
+            new Claim("amr", "pwd"),
+            new Claim("preferred_username", "testuser")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.False(result);
+    }
+
+    [Fact]
+    public void HasValidMfaClaims_ShouldBeCaseInsensitive()
+    {
+        // Arrange - MFA value in different case
+        var claims = new List<Claim>
+        {
+            new Claim("amr", "MFA"),
+            new Claim("preferred_username", "testuser")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.True(result);
+    }
+    
+    [Fact]
+    public void HasValidMfaClaims_ShouldReturnTrue_WhenMfaValueIsPartOfCompositeString()
+    {
+        // Arrange - Some IdPs may return composite values
+        var claims = new List<Claim>
+        {
+            new Claim("amr", "pwd,mfa,otp"),
+            new Claim("preferred_username", "testuser")
+        };
+
+        // Act
+        var result = _service.HasValidMfaClaims(claims);
+
+        // Assert
+        Assert.True(result);
+    }
+}
+
