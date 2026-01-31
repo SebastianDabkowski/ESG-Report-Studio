@@ -58,6 +58,13 @@ public sealed class SessionManager : ISessionManager
     private readonly Dictionary<string, UserSession> _sessions = new();
     private readonly List<SessionActivityEvent> _sessionEvents = new();
     private readonly object _lock = new();
+    
+    /// <summary>
+    /// Maximum number of session events to retain in memory.
+    /// Events older than this limit are removed to prevent unbounded memory growth.
+    /// 10,000 events should cover several days of typical usage.
+    /// </summary>
+    private const int MaxSessionEventsInMemory = 10000;
 
     public SessionManager(
         InMemoryReportStore store,
@@ -385,10 +392,11 @@ public sealed class SessionManager : ISessionManager
         {
             _sessionEvents.Add(evt);
             
-            // Keep only the last 10000 events to prevent unbounded growth
-            if (_sessionEvents.Count > 10000)
+            // Keep only recent events to prevent unbounded memory growth
+            // Remove oldest events when limit is reached
+            if (_sessionEvents.Count > MaxSessionEventsInMemory)
             {
-                _sessionEvents.RemoveRange(0, _sessionEvents.Count - 10000);
+                _sessionEvents.RemoveRange(0, _sessionEvents.Count - MaxSessionEventsInMemory);
             }
         }
     }
