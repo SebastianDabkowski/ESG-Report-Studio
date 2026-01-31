@@ -205,11 +205,13 @@ builder.Services.AddScoped<ICanonicalAttributeRepository, CanonicalAttributeRepo
 builder.Services.AddScoped<ICanonicalMappingRepository, CanonicalMappingRepository>();
 builder.Services.AddScoped<IWebhookSubscriptionRepository, WebhookSubscriptionRepository>();
 builder.Services.AddScoped<IWebhookDeliveryRepository, WebhookDeliveryRepository>();
+builder.Services.AddScoped<IIntegrationJobMetadataRepository, IntegrationJobMetadataRepository>();
 builder.Services.AddScoped<ConnectorService>();
 builder.Services.AddScoped<IntegrationExecutionService>();
 builder.Services.AddScoped<HRSyncService>();
 builder.Services.AddScoped<FinanceSyncService>();
 builder.Services.AddScoped<CanonicalMappingService>();
+builder.Services.AddScoped<IntegrationMonitoringService>();
 builder.Services.AddSingleton<WebhookSignatureService>();
 builder.Services.AddScoped<WebhookSubscriptionService>();
 builder.Services.AddScoped<WebhookDeliveryService>();

@@ -31,4 +31,28 @@ public interface IIntegrationLogRepository
     /// Update an existing integration log entry
     /// </summary>
     Task<IntegrationLog> UpdateAsync(IntegrationLog log);
+    
+    /// <summary>
+    /// Search integration logs with filtering
+    /// </summary>
+    Task<List<IntegrationLog>> SearchLogsAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        IntegrationStatus? status = null,
+        int? connectorId = null,
+        string? operationType = null,
+        string? initiatedBy = null,
+        int skip = 0,
+        int take = 50);
+    
+    /// <summary>
+    /// Get total count of logs matching search criteria
+    /// </summary>
+    Task<int> GetLogCountAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        IntegrationStatus? status = null,
+        int? connectorId = null,
+        string? operationType = null,
+        string? initiatedBy = null);
 }
