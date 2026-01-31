@@ -1829,3 +1829,70 @@ export interface ReviewAccessRequestRequest {
   reviewComment?: string
 }
 
+// Standards Catalogue Types
+
+/**
+ * Represents a reporting standard in the standards catalogue (e.g., CSRD/ESRS, SME model).
+ */
+export interface StandardsCatalogItem {
+  id: string
+  identifier: string // Unique stable identifier (e.g., "CSRD-2024", "SME-v1")
+  title: string
+  description: string
+  version: string
+  effectiveStartDate?: string // ISO 8601 date
+  effectiveEndDate?: string // ISO 8601 date
+  isDeprecated: boolean
+  createdAt: string
+  createdBy: string
+  updatedAt?: string
+  updatedBy?: string
+  deprecatedAt?: string
+}
+
+/**
+ * Request to create a new reporting standard.
+ */
+export interface CreateStandardRequest {
+  identifier: string
+  title: string
+  description: string
+  version: string
+  effectiveStartDate?: string
+  effectiveEndDate?: string
+}
+
+/**
+ * Request to update an existing reporting standard.
+ */
+export interface UpdateStandardRequest {
+  title: string
+  description: string
+  version: string
+  effectiveStartDate?: string
+  effectiveEndDate?: string
+}
+
+/**
+ * Mapping between a standard reference and a platform section.
+ */
+export interface StandardSectionMapping {
+  id: string
+  standardId: string
+  standardReference: string // External reference (e.g., "ESRS E1")
+  standardReferenceTitle: string
+  sectionCatalogId: string // Maps to internal section
+  createdAt: string
+  createdBy: string
+}
+
+/**
+ * Request to create a standard-to-section mapping.
+ */
+export interface CreateStandardMappingRequest {
+  standardId: string
+  standardReference: string
+  standardReferenceTitle: string
+  sectionCatalogId: string
+}
+

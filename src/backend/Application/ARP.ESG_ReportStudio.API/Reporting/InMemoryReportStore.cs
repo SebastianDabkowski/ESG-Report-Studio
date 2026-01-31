@@ -15,6 +15,8 @@ public sealed class InMemoryReportStore
     private readonly List<SectionVersion> _sectionVersions = new(); // Historical section versions
     private readonly List<OrganizationalUnit> _organizationalUnits = new();
     private readonly List<SectionCatalogItem> _sectionCatalog = new();
+    private readonly List<StandardsCatalogItem> _standardsCatalog = new(); // Reporting standards catalogue
+    private readonly List<StandardSectionMapping> _standardMappings = new(); // Standard-to-section mappings
     private readonly List<DataPoint> _dataPoints = new();
     private readonly List<Evidence> _evidence = new();
     private readonly List<Assumption> _assumptions = new();
@@ -148,6 +150,9 @@ public sealed class InMemoryReportStore
         // Initialize the catalog with default sections
         InitializeDefaultCatalog();
         
+        // Initialize sample standards
+        InitializeDefaultStandards();
+        
         // Initialize sample users
         InitializeSampleUsers();
         
@@ -201,6 +206,114 @@ public sealed class InMemoryReportStore
                 IsDeprecated = false,
                 CreatedAt = DateTime.UtcNow.ToString("O")
             });
+        }
+    }
+
+    private void InitializeDefaultStandards()
+    {
+        // Initialize sample reporting standards
+        var now = DateTime.UtcNow;
+        var currentYear = now.Year;
+
+        // CSRD/ESRS Standard (Current - Active)
+        var csrdStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "CSRD-ESRS-2024",
+            Title = "Corporate Sustainability Reporting Directive (CSRD) - European Sustainability Reporting Standards (ESRS)",
+            Description = "EU directive requiring companies to report on sustainability matters. ESRS are the detailed disclosure standards covering environmental, social, and governance topics.",
+            Version = "2024.1",
+            EffectiveStartDate = new DateTime(2024, 1, 1).ToString("O"),
+            EffectiveEndDate = null, // Still active
+            IsDeprecated = false,
+            CreatedAt = now.ToString("O"),
+            CreatedBy = "system"
+        };
+        _standardsCatalog.Add(csrdStandard);
+
+        // SME Simplified Standard (Current - Active)
+        var smeStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "SME-SIMPLIFIED-2024",
+            Title = "SME Simplified ESG Reporting Standard",
+            Description = "Simplified ESG reporting framework designed for small and medium enterprises. Focuses on core sustainability metrics without the full complexity of CSRD.",
+            Version = "1.0",
+            EffectiveStartDate = new DateTime(2024, 1, 1).ToString("O"),
+            EffectiveEndDate = null, // Still active
+            IsDeprecated = false,
+            CreatedAt = now.ToString("O"),
+            CreatedBy = "system"
+        };
+        _standardsCatalog.Add(smeStandard);
+
+        // Legacy Standard (Deprecated)
+        var legacyStandard = new StandardsCatalogItem
+        {
+            Id = Guid.NewGuid().ToString(),
+            Identifier = "ESG-BASIC-2023",
+            Title = "Basic ESG Reporting Framework (Legacy)",
+            Description = "Legacy ESG reporting framework. Replaced by SME Simplified and CSRD/ESRS standards for better alignment with EU regulations.",
+            Version = "2023.2",
+            EffectiveStartDate = new DateTime(2023, 1, 1).ToString("O"),
+            EffectiveEndDate = new DateTime(2023, 12, 31).ToString("O"),
+            IsDeprecated = true,
+            CreatedAt = now.AddMonths(-12).ToString("O"),
+            CreatedBy = "system",
+            DeprecatedAt = new DateTime(2024, 1, 1).ToString("O")
+        };
+        _standardsCatalog.Add(legacyStandard);
+
+        // Create sample mappings for CSRD standard to demonstrate aliasing
+        if (_sectionCatalog.Any())
+        {
+            // Map ESRS E1 (Climate Change) to Energy & Emissions section
+            var energySection = _sectionCatalog.FirstOrDefault(s => s.Code == "ENV-001");
+            if (energySection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS E1",
+                    StandardReferenceTitle = "Climate Change",
+                    SectionCatalogId = energySection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
+
+            // Map ESRS S1 (Own Workforce) to Employee Health & Safety section
+            var safetySection = _sectionCatalog.FirstOrDefault(s => s.Code == "SOC-001");
+            if (safetySection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS S1",
+                    StandardReferenceTitle = "Own Workforce",
+                    SectionCatalogId = safetySection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
+
+            // Map ESRS G1 (Business Conduct) to Ethics & Compliance section
+            var ethicsSection = _sectionCatalog.FirstOrDefault(s => s.Code == "GOV-002");
+            if (ethicsSection != null)
+            {
+                _standardMappings.Add(new StandardSectionMapping
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    StandardId = csrdStandard.Id,
+                    StandardReference = "ESRS G1",
+                    StandardReferenceTitle = "Business Conduct",
+                    SectionCatalogId = ethicsSection.Id,
+                    CreatedAt = now.ToString("O"),
+                    CreatedBy = "system"
+                });
+            }
         }
     }
 
@@ -1829,6 +1942,262 @@ public sealed class InMemoryReportStore
             item.DeprecatedAt = DateTime.UtcNow.ToString("O");
 
             return (true, null);
+        }
+    }
+
+    // Standards Catalogue Management
+    
+    /// <summary>
+    /// Gets all standards from the catalogue, optionally including deprecated standards.
+    /// </summary>
+    public IReadOnlyList<StandardsCatalogItem> GetStandardsCatalog(bool includeDeprecated = false)
+    {
+        lock (_lock)
+        {
+            return includeDeprecated 
+                ? _standardsCatalog.ToList()
+                : _standardsCatalog.Where(s => !s.IsDeprecated).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Gets a specific standard by ID.
+    /// </summary>
+    public StandardsCatalogItem? GetStandard(string id)
+    {
+        lock (_lock)
+        {
+            return _standardsCatalog.FirstOrDefault(s => s.Id == id);
+        }
+    }
+
+    /// <summary>
+    /// Creates a new reporting standard in the catalogue.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, StandardsCatalogItem? Item) CreateStandard(CreateStandardRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Identifier))
+            {
+                return (false, "Identifier is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Version))
+            {
+                return (false, "Version is required.", null);
+            }
+
+            // Check if identifier already exists
+            if (_standardsCatalog.Any(s => s.Identifier.Equals(request.Identifier, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, $"A standard with identifier '{request.Identifier}' already exists.", null);
+            }
+
+            // Validate effective date range if provided
+            if (!string.IsNullOrWhiteSpace(request.EffectiveStartDate) && 
+                !string.IsNullOrWhiteSpace(request.EffectiveEndDate))
+            {
+                if (!DateTime.TryParse(request.EffectiveStartDate, out var startDate) ||
+                    !DateTime.TryParse(request.EffectiveEndDate, out var endDate))
+                {
+                    return (false, "Invalid date format for effective dates. Use ISO 8601 format.", null);
+                }
+
+                if (endDate <= startDate)
+                {
+                    return (false, "Effective end date must be after effective start date.", null);
+                }
+            }
+
+            var newItem = new StandardsCatalogItem
+            {
+                Id = Guid.NewGuid().ToString(),
+                Identifier = request.Identifier,
+                Title = request.Title,
+                Description = request.Description,
+                Version = request.Version,
+                EffectiveStartDate = request.EffectiveStartDate,
+                EffectiveEndDate = request.EffectiveEndDate,
+                IsDeprecated = false,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                CreatedBy = userId
+            };
+
+            _standardsCatalog.Add(newItem);
+            return (true, null, newItem);
+        }
+    }
+
+    /// <summary>
+    /// Updates an existing standard.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, StandardsCatalogItem? Item) UpdateStandard(string id, UpdateStandardRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            var item = _standardsCatalog.FirstOrDefault(s => s.Id == id);
+            if (item == null)
+            {
+                return (false, "Standard not found.", null);
+            }
+
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.Title))
+            {
+                return (false, "Title is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Version))
+            {
+                return (false, "Version is required.", null);
+            }
+
+            // Validate effective date range if provided
+            if (!string.IsNullOrWhiteSpace(request.EffectiveStartDate) && 
+                !string.IsNullOrWhiteSpace(request.EffectiveEndDate))
+            {
+                if (!DateTime.TryParse(request.EffectiveStartDate, out var startDate) ||
+                    !DateTime.TryParse(request.EffectiveEndDate, out var endDate))
+                {
+                    return (false, "Invalid date format for effective dates. Use ISO 8601 format.", null);
+                }
+
+                if (endDate <= startDate)
+                {
+                    return (false, "Effective end date must be after effective start date.", null);
+                }
+            }
+
+            item.Title = request.Title;
+            item.Description = request.Description;
+            item.Version = request.Version;
+            item.EffectiveStartDate = request.EffectiveStartDate;
+            item.EffectiveEndDate = request.EffectiveEndDate;
+            item.UpdatedAt = DateTime.UtcNow.ToString("O");
+            item.UpdatedBy = userId;
+
+            return (true, null, item);
+        }
+    }
+
+    /// <summary>
+    /// Marks a standard as deprecated.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage) DeprecateStandard(string id)
+    {
+        lock (_lock)
+        {
+            var item = _standardsCatalog.FirstOrDefault(s => s.Id == id);
+            if (item == null)
+            {
+                return (false, "Standard not found.");
+            }
+
+            if (item.IsDeprecated)
+            {
+                return (false, "Standard is already deprecated.");
+            }
+
+            item.IsDeprecated = true;
+            item.DeprecatedAt = DateTime.UtcNow.ToString("O");
+
+            return (true, null);
+        }
+    }
+
+    /// <summary>
+    /// Gets all mappings for a specific standard.
+    /// </summary>
+    public IReadOnlyList<StandardSectionMapping> GetStandardMappings(string standardId)
+    {
+        lock (_lock)
+        {
+            return _standardMappings
+                .Where(m => m.StandardId == standardId)
+                .ToList();
+        }
+    }
+
+    /// <summary>
+    /// Creates a new mapping between a standard reference and a section.
+    /// </summary>
+    public (bool IsValid, string? ErrorMessage, StandardSectionMapping? Mapping) CreateStandardMapping(CreateStandardMappingRequest request, string userId)
+    {
+        lock (_lock)
+        {
+            // Validate required fields
+            if (string.IsNullOrWhiteSpace(request.StandardId))
+            {
+                return (false, "StandardId is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.StandardReference))
+            {
+                return (false, "StandardReference is required.", null);
+            }
+
+            if (string.IsNullOrWhiteSpace(request.SectionCatalogId))
+            {
+                return (false, "SectionCatalogId is required.", null);
+            }
+
+            // Verify the standard exists
+            if (!_standardsCatalog.Any(s => s.Id == request.StandardId))
+            {
+                return (false, $"Standard with ID '{request.StandardId}' not found.", null);
+            }
+
+            // Verify the section catalog item exists
+            if (!_sectionCatalog.Any(s => s.Id == request.SectionCatalogId))
+            {
+                return (false, $"Section catalog item with ID '{request.SectionCatalogId}' not found.", null);
+            }
+
+            // Check if this mapping already exists
+            if (_standardMappings.Any(m => m.StandardId == request.StandardId && 
+                                          m.StandardReference.Equals(request.StandardReference, StringComparison.OrdinalIgnoreCase)))
+            {
+                return (false, $"A mapping for standard reference '{request.StandardReference}' already exists for this standard.", null);
+            }
+
+            var newMapping = new StandardSectionMapping
+            {
+                Id = Guid.NewGuid().ToString(),
+                StandardId = request.StandardId,
+                StandardReference = request.StandardReference,
+                StandardReferenceTitle = request.StandardReferenceTitle,
+                SectionCatalogId = request.SectionCatalogId,
+                CreatedAt = DateTime.UtcNow.ToString("O"),
+                CreatedBy = userId
+            };
+
+            _standardMappings.Add(newMapping);
+            return (true, null, newMapping);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a standard-to-section mapping.
+    /// </summary>
+    public bool DeleteStandardMapping(string id)
+    {
+        lock (_lock)
+        {
+            var mapping = _standardMappings.FirstOrDefault(m => m.Id == id);
+            if (mapping == null)
+            {
+                return false;
+            }
+
+            _standardMappings.Remove(mapping);
+            return true;
         }
     }
 
