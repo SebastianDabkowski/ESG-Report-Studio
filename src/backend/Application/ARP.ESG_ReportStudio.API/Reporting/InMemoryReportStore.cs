@@ -9248,6 +9248,25 @@ public sealed class InMemoryReportStore
                 return (false, "One or more approver IDs are invalid.", null);
             }
 
+            // Segregation of duties: Author cannot be an approver
+            if (request.ApproverIds.Contains(request.RequestedBy))
+            {
+                // Log the SoD violation attempt
+                _auditLog.Add(new AuditLogEntry
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    EntityType = "ApprovalRequest",
+                    EntityId = "N/A",
+                    Action = "segregation-of-duties-violation",
+                    UserId = request.RequestedBy,
+                    UserName = requester.Name,
+                    Timestamp = DateTime.UtcNow.ToString("O"),
+                    ChangeNote = "Attempted to create approval request with author as approver (blocked by segregation of duties rule)"
+                });
+                
+                return (false, "Segregation of duties violation: The author cannot be an approver for their own content. Please select different approvers.", null);
+            }
+
             // Create approval request
             var approvalRequest = new ApprovalRequest
             {
@@ -9328,6 +9347,30 @@ public sealed class InMemoryReportStore
                 return (false, "You are not authorized to decide on this approval.", null);
             }
 
+            // Get approval request to check for segregation of duties
+            var approvalRequest = _approvalRequests.FirstOrDefault(ar => ar.Id == record.ApprovalRequestId);
+            if (approvalRequest != null)
+            {
+                // Segregation of duties: Author cannot approve their own content
+                if (approvalRequest.RequestedBy == request.DecidedBy)
+                {
+                    // Log the SoD violation attempt
+                    _auditLog.Add(new AuditLogEntry
+                    {
+                        Id = Guid.NewGuid().ToString(),
+                        EntityType = "ApprovalRecord",
+                        EntityId = record.Id,
+                        Action = "segregation-of-duties-violation",
+                        UserId = request.DecidedBy,
+                        UserName = approver.Name,
+                        Timestamp = DateTime.UtcNow.ToString("O"),
+                        ChangeNote = $"Attempted to approve own content for approval request {approvalRequest.Id} (blocked by segregation of duties rule)"
+                    });
+                    
+                    return (false, "Segregation of duties violation: You cannot approve content that you authored. The approval must be performed by a different user.", null);
+                }
+            }
+
             // Check if already decided
             if (record.Status != "pending")
             {
@@ -9340,8 +9383,7 @@ public sealed class InMemoryReportStore
             record.DecidedAt = DateTime.UtcNow.ToString("O");
             record.Comment = request.Comment;
 
-            // Update overall approval request status
-            var approvalRequest = _approvalRequests.FirstOrDefault(ar => ar.Id == record.ApprovalRequestId);
+            // Update overall approval request status (approvalRequest already retrieved above)
             if (approvalRequest != null)
             {
                 // Check if all approvals are decided
