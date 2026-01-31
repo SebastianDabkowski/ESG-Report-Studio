@@ -19453,19 +19453,19 @@ public sealed class InMemoryReportStore
                     new FieldChange 
                     { 
                         Field = "EnabledIntegrations",
-                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry?.EnabledIntegrations ?? new List<string>()),
+                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry!.EnabledIntegrations),
                         NewValue = string.Join(", ", settings.EnabledIntegrations)
                     },
                     new FieldChange 
                     { 
                         Field = "EnabledStandards",
-                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry?.EnabledStandards ?? new List<string>()),
+                        OldValue = isNewSettings ? "[]" : string.Join(", ", historyEntry!.EnabledStandards),
                         NewValue = string.Join(", ", settings.EnabledStandards)
                     },
                     new FieldChange 
                     { 
                         Field = "EffectiveDate",
-                        OldValue = isNewSettings ? "" : historyEntry?.EffectiveDate ?? "",
+                        OldValue = isNewSettings ? "" : historyEntry!.EffectiveDate,
                         NewValue = settings.EffectiveDate
                     }
                 },

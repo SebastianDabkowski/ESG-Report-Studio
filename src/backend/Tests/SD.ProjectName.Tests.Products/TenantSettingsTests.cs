@@ -256,12 +256,12 @@ public class TenantSettingsTests
         var history = store.GetTenantSettingsHistory(orgId);
 
         // Assert
-        Assert.Single(history); // Only one history entry (for first update before second)
+        Assert.Single(history); // One history entry created when second update saved state before first update
         var historyEntry = history.First();
-        Assert.Equal(1, historyEntry.Version);
+        Assert.Equal(1, historyEntry.Version); // Captures version 1 (from first update)
         Assert.Single(historyEntry.EnabledIntegrations);
         Assert.Contains("HR", historyEntry.EnabledIntegrations);
-        Assert.Equal("admin-002", historyEntry.ChangedBy);
+        Assert.Equal("admin-002", historyEntry.ChangedBy); // Second update created this history entry
         Assert.Equal("Added Finance integration", historyEntry.ChangeReason);
     }
 
