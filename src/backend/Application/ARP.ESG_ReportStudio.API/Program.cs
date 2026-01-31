@@ -61,6 +61,7 @@ if (authSettings.Oidc?.Enabled == true)
             OnTokenValidated = async context =>
             {
                 var userProfileSync = context.HttpContext.RequestServices.GetRequiredService<IUserProfileSyncService>();
+                var sessionManager = context.HttpContext.RequestServices.GetRequiredService<ISessionManager>();
                 var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
                 
                 if (context.Principal?.Identity?.IsAuthenticated == true)
@@ -71,7 +72,7 @@ if (authSettings.Oidc?.Enabled == true)
                     if (!string.IsNullOrEmpty(userId))
                     {
                         // Sync user profile from claims
-                        await userProfileSync.SyncUserFromClaimsAsync(claims);
+                        var user = await userProfileSync.SyncUserFromClaimsAsync(claims);
                         
                         // Check if user is active
                         var isActive = await userProfileSync.IsUserActiveAsync(userId);
@@ -84,6 +85,8 @@ if (authSettings.Oidc?.Enabled == true)
                         
                         // Check if user has privileged roles requiring MFA
                         var requiresMfa = await userProfileSync.UserRequiresMfaAsync(userId);
+                        var mfaVerified = false;
+                        
                         if (requiresMfa)
                         {
                             // Verify MFA claims are present
@@ -95,6 +98,8 @@ if (authSettings.Oidc?.Enabled == true)
                                 return;
                             }
                             
+                            mfaVerified = true;
+                            
                             // Add MFA claim to the principal for audit trail
                             var identity = context.Principal.Identity as System.Security.Claims.ClaimsIdentity;
                             if (identity != null)
@@ -102,6 +107,18 @@ if (authSettings.Oidc?.Enabled == true)
                                 identity.AddClaim(new System.Security.Claims.Claim("mfa_verified", "true"));
                                 logger.LogInformation("User {UserId} authenticated with MFA", userId);
                             }
+                        }
+                        
+                        // Create a session for this authenticated user
+                        var ipAddress = context.HttpContext.Connection.RemoteIpAddress?.ToString();
+                        var userAgent = context.HttpContext.Request.Headers["User-Agent"].ToString();
+                        var session = await sessionManager.CreateSessionAsync(userId, user.Name, ipAddress, userAgent, mfaVerified);
+                        
+                        // Add session ID to claims for tracking
+                        var sessionIdentity = context.Principal.Identity as System.Security.Claims.ClaimsIdentity;
+                        if (sessionIdentity != null)
+                        {
+                            sessionIdentity.AddClaim(new System.Security.Claims.Claim("session_id", session.SessionId));
                         }
                     }
                 }
@@ -129,6 +146,10 @@ builder.Services.AddSingleton<ARP.ESG_ReportStudio.API.Reporting.InMemoryReportS
 
 // Add user profile sync service
 builder.Services.AddScoped<IUserProfileSyncService, UserProfileSyncService>();
+
+// Add session management services
+builder.Services.AddSingleton<ISessionManager, SessionManager>();
+builder.Services.AddHostedService<SessionCleanupService>();
 
 // Add notification services
 builder.Services.AddScoped<ARP.ESG_ReportStudio.API.Services.INotificationService, ARP.ESG_ReportStudio.API.Services.OwnerAssignmentNotificationService>();
@@ -173,6 +194,7 @@ app.UseHttpsRedirection();
 app.UseCors("DevCors");
 
 app.UseAuthentication();
+app.UseMiddleware<ARP.ESG_ReportStudio.API.Middleware.SessionActivityMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();

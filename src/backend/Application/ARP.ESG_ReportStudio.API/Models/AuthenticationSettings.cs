@@ -14,6 +14,11 @@ public sealed class AuthenticationSettings
     /// OIDC configuration settings.
     /// </summary>
     public OidcSettings? Oidc { get; set; }
+    
+    /// <summary>
+    /// Session timeout configuration settings.
+    /// </summary>
+    public SessionTimeoutSettings SessionTimeout { get; set; } = new();
 }
 
 /// <summary>
@@ -92,4 +97,40 @@ public sealed class OidcSettings
     /// Whether to require HTTPS metadata.
     /// </summary>
     public bool RequireHttpsMetadata { get; set; } = true;
+}
+
+/// <summary>
+/// Session timeout configuration settings.
+/// </summary>
+public sealed class SessionTimeoutSettings
+{
+    /// <summary>
+    /// Whether session timeout is enabled.
+    /// Default: true for security.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
+    
+    /// <summary>
+    /// Idle timeout in minutes before a session is considered inactive.
+    /// Default: 30 minutes.
+    /// </summary>
+    public int IdleTimeoutMinutes { get; set; } = 30;
+    
+    /// <summary>
+    /// Absolute timeout in minutes regardless of activity.
+    /// Default: 480 minutes (8 hours).
+    /// </summary>
+    public int AbsoluteTimeoutMinutes { get; set; } = 480;
+    
+    /// <summary>
+    /// Warning time in minutes before session expires to notify the user.
+    /// Default: 5 minutes.
+    /// </summary>
+    public int WarningBeforeTimeoutMinutes { get; set; } = 5;
+    
+    /// <summary>
+    /// Whether to allow session refresh when warned about timeout.
+    /// Default: true.
+    /// </summary>
+    public bool AllowSessionRefresh { get; set; } = true;
 }
