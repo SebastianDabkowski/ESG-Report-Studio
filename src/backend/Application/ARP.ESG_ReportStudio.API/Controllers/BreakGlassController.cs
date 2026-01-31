@@ -260,6 +260,8 @@ public sealed class BreakGlassController : ControllerBase
 
     /// <summary>
     /// Get break-glass configuration.
+    /// Admin users receive full configuration including authorized role IDs.
+    /// Non-admin users receive limited configuration with sensitive fields omitted.
     /// </summary>
     /// <response code="200">Returns break-glass configuration</response>
     /// <response code="401">User is not authenticated</response>
