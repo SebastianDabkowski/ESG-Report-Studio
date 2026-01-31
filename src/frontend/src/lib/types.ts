@@ -31,6 +31,7 @@ export interface User {
   avatarUrl?: string
   isActive?: boolean
   canExport?: boolean // Permission to export reports
+  accessExpiresAt?: string // ISO 8601 timestamp when user's access expires
 }
 
 export interface Organization {
@@ -1746,5 +1747,33 @@ export interface PermissionCheckRequest {
   resourceType: string
   resourceId?: string
   action: string
+}
+
+export interface SectionAccessGrant {
+  id: string
+  sectionId: string
+  userId: string
+  userName: string
+  grantedBy: string
+  grantedByName: string
+  grantedAt: string
+  reason?: string
+  expiresAt?: string
+}
+
+export interface InviteExternalAdvisorRequest {
+  userId: string
+  roleId: string
+  sectionIds: string[]
+  accessExpiresAt?: string
+  reason?: string
+  invitedBy: string
+}
+
+export interface InviteExternalAdvisorResponse {
+  success: boolean
+  errorMessage?: string
+  user?: User
+  sectionGrants: SectionAccessGrant[]
 }
 

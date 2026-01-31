@@ -28,6 +28,13 @@ public sealed class User
     /// Default: false (least privilege principle).
     /// </summary>
     public bool CanExport { get; set; } = false;
+    
+    /// <summary>
+    /// ISO 8601 timestamp when the user's access expires (optional).
+    /// When set, the user cannot authenticate or perform actions after this time.
+    /// Primarily used for time-bounded external advisor access.
+    /// </summary>
+    public string? AccessExpiresAt { get; set; }
 }
 
 public sealed class ReportingPeriod
@@ -7220,6 +7227,69 @@ public sealed class AssignUserRolesRequest
 }
 
 /// <summary>
+/// Request to invite an external advisor with limited access.
+/// </summary>
+public sealed class InviteExternalAdvisorRequest
+{
+    /// <summary>
+    /// User ID to invite as external advisor.
+    /// </summary>
+    public string UserId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Role ID to assign (should be an advisor role).
+    /// </summary>
+    public string RoleId { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Section IDs the advisor can access.
+    /// </summary>
+    public List<string> SectionIds { get; set; } = new();
+    
+    /// <summary>
+    /// Optional ISO 8601 timestamp when the advisor's access expires.
+    /// </summary>
+    public string? AccessExpiresAt { get; set; }
+    
+    /// <summary>
+    /// Optional reason for granting access.
+    /// </summary>
+    public string? Reason { get; set; }
+    
+    /// <summary>
+    /// User ID of the report manager performing the invite.
+    /// </summary>
+    public string InvitedBy { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Response for external advisor invitation.
+/// </summary>
+public sealed class InviteExternalAdvisorResponse
+{
+    /// <summary>
+    /// Whether the invitation was successful.
+    /// </summary>
+    public bool Success { get; set; }
+    
+    /// <summary>
+    /// Error message if invitation failed.
+    /// </summary>
+    public string? ErrorMessage { get; set; }
+    
+    /// <summary>
+    /// Updated user information.
+    /// </summary>
+    public User? User { get; set; }
+    
+    /// <summary>
+    /// Section access grants created.
+    /// </summary>
+    public List<SectionAccessGrant> SectionGrants { get; set; } = new();
+}
+
+
+/// <summary>
 /// Response containing effective permissions for a user.
 /// </summary>
 public sealed class EffectivePermissionsResponse
@@ -7430,6 +7500,12 @@ public sealed class SectionAccessGrant
     /// Optional reason for granting access.
     /// </summary>
     public string? Reason { get; set; }
+    
+    /// <summary>
+    /// Optional ISO 8601 timestamp when this access grant expires.
+    /// When set, access is automatically revoked after this time.
+    /// </summary>
+    public string? ExpiresAt { get; set; }
 }
 
 /// <summary>
@@ -7456,6 +7532,12 @@ public sealed class GrantSectionAccessRequest
     /// Optional reason for granting access.
     /// </summary>
     public string? Reason { get; set; }
+    
+    /// <summary>
+    /// Optional ISO 8601 timestamp when this access grant expires.
+    /// When set, access is automatically revoked after this time.
+    /// </summary>
+    public string? ExpiresAt { get; set; }
 }
 
 /// <summary>

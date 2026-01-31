@@ -236,6 +236,32 @@ export default function UserRoleAssignment({ userId: propUserId }: UserRoleAssig
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Access Expiry Warning */}
+              {selectedUser.accessExpiresAt && (
+                <div className={`flex items-center gap-2 rounded-md border p-3 ${
+                  new Date(selectedUser.accessExpiresAt) < new Date()
+                    ? 'border-destructive bg-destructive/10'
+                    : 'border-orange-600 bg-orange-50'
+                }`}>
+                  <Warning size={20} weight="bold" className={
+                    new Date(selectedUser.accessExpiresAt) < new Date()
+                      ? 'text-destructive'
+                      : 'text-orange-600'
+                  } />
+                  <div className="text-sm">
+                    {new Date(selectedUser.accessExpiresAt) < new Date() ? (
+                      <span className="text-destructive font-medium">
+                        Access expired on {new Date(selectedUser.accessExpiresAt).toLocaleDateString()}
+                      </span>
+                    ) : (
+                      <span className="text-orange-700">
+                        Access expires on {new Date(selectedUser.accessExpiresAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               {/* Assigned Roles */}
               <div>
                 <div className="mb-2 text-sm font-medium">Assigned Roles</div>

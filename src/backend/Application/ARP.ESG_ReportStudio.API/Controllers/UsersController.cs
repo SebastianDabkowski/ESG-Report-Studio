@@ -116,6 +116,31 @@ public sealed class UsersController : ControllerBase
     }
 
     /// <summary>
+    /// Invite an external advisor with limited access and optional expiry.
+    /// Assigns advisor role and grants access to specified sections.
+    /// </summary>
+    /// <param name="request">External advisor invitation request</param>
+    /// <response code="200">Advisor invited successfully</response>
+    /// <response code="400">Invalid request</response>
+    [HttpPost("invite-external-advisor")]
+    [ProducesResponseType(typeof(InviteExternalAdvisorResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public ActionResult<InviteExternalAdvisorResponse> InviteExternalAdvisor([FromBody] InviteExternalAdvisorRequest request)
+    {
+        // For demo purposes, using a mock user. In production, get from auth context
+        var userName = "Report Manager";
+
+        var response = _store.InviteExternalAdvisor(request, userName);
+        
+        if (!response.Success)
+        {
+            return BadRequest(new { error = response.ErrorMessage });
+        }
+
+        return Ok(response);
+    }
+
+    /// <summary>
     /// Get effective permissions for a user based on assigned roles.
     /// Uses union strategy: user has a permission if ANY assigned role grants it.
     /// Shows which roles contribute which permissions for transparency.

@@ -15637,6 +15637,169 @@ public sealed class InMemoryReportStore
     }
     
     /// <summary>
+    /// Invite an external advisor with limited access and optional expiry.
+    /// Assigns advisor role and grants access to specified sections.
+    /// </summary>
+    public InviteExternalAdvisorResponse InviteExternalAdvisor(InviteExternalAdvisorRequest request, string invitedByName)
+    {
+        lock (_lock)
+        {
+            var response = new InviteExternalAdvisorResponse();
+            
+            // Validate user exists
+            var user = _users.FirstOrDefault(u => u.Id == request.UserId);
+            if (user == null)
+            {
+                response.Success = false;
+                response.ErrorMessage = $"User with ID '{request.UserId}' not found.";
+                return response;
+            }
+            
+            // Validate role exists and is an advisor role
+            var role = _roles.FirstOrDefault(r => r.Id == request.RoleId);
+            if (role == null)
+            {
+                response.Success = false;
+                response.ErrorMessage = $"Role with ID '{request.RoleId}' not found.";
+                return response;
+            }
+            
+            if (!role.Name.Contains("Advisor", StringComparison.OrdinalIgnoreCase))
+            {
+                response.Success = false;
+                response.ErrorMessage = $"Role '{role.Name}' is not an advisor role. Please select an External Advisor role.";
+                return response;
+            }
+            
+            // Validate inviter exists
+            var inviter = _users.FirstOrDefault(u => u.Id == request.InvitedBy);
+            if (inviter == null)
+            {
+                response.Success = false;
+                response.ErrorMessage = $"Inviter user '{request.InvitedBy}' not found.";
+                return response;
+            }
+            
+            var timestamp = DateTime.UtcNow.ToString("O");
+            
+            // Assign role to user
+            if (!user.RoleIds.Contains(request.RoleId))
+            {
+                var oldRoleIds = user.RoleIds.ToList();
+                user.RoleIds.Add(request.RoleId);
+                
+                var roleChanges = new List<FieldChange>
+                {
+                    new()
+                    {
+                        Field = "RoleIds",
+                        OldValue = string.Join(", ", oldRoleIds),
+                        NewValue = string.Join(", ", user.RoleIds)
+                    }
+                };
+                
+                CreateAuditLogEntry(
+                    request.InvitedBy,
+                    invitedByName,
+                    "invite-external-advisor-role",
+                    "User",
+                    request.UserId,
+                    roleChanges,
+                    $"Assigned advisor role '{role.Name}' to user '{user.Name}' as external advisor");
+            }
+            
+            // Set access expiry if provided
+            if (!string.IsNullOrEmpty(request.AccessExpiresAt))
+            {
+                var expiryChanges = new List<FieldChange>
+                {
+                    new()
+                    {
+                        Field = "AccessExpiresAt",
+                        OldValue = user.AccessExpiresAt ?? "(none)",
+                        NewValue = request.AccessExpiresAt
+                    }
+                };
+                
+                user.AccessExpiresAt = request.AccessExpiresAt;
+                
+                CreateAuditLogEntry(
+                    request.InvitedBy,
+                    invitedByName,
+                    "set-access-expiry",
+                    "User",
+                    request.UserId,
+                    expiryChanges,
+                    $"Set access expiry for external advisor '{user.Name}' to {request.AccessExpiresAt}");
+            }
+            
+            // Grant access to specified sections
+            foreach (var sectionId in request.SectionIds)
+            {
+                var section = _sections.FirstOrDefault(s => s.Id == sectionId);
+                if (section == null)
+                {
+                    continue; // Skip invalid sections
+                }
+                
+                // Check if access already exists
+                var existingGrant = _sectionAccessGrants.FirstOrDefault(g => 
+                    g.SectionId == sectionId && g.UserId == request.UserId);
+                
+                if (existingGrant != null)
+                {
+                    // Update expiry on existing grant if provided
+                    if (!string.IsNullOrEmpty(request.AccessExpiresAt))
+                    {
+                        existingGrant.ExpiresAt = request.AccessExpiresAt;
+                    }
+                    response.SectionGrants.Add(existingGrant);
+                    continue;
+                }
+                
+                // Create new access grant
+                var grant = new SectionAccessGrant
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    SectionId = sectionId,
+                    UserId = request.UserId,
+                    UserName = user.Name,
+                    GrantedBy = request.InvitedBy,
+                    GrantedByName = inviter.Name,
+                    GrantedAt = timestamp,
+                    Reason = request.Reason,
+                    ExpiresAt = request.AccessExpiresAt
+                };
+                
+                _sectionAccessGrants.Add(grant);
+                response.SectionGrants.Add(grant);
+                
+                // Log to audit trail
+                var grantChanges = new List<FieldChange>
+                {
+                    new() { Field = "UserId", OldValue = "", NewValue = request.UserId },
+                    new() { Field = "SectionId", OldValue = "", NewValue = sectionId },
+                    new() { Field = "ExpiresAt", OldValue = "", NewValue = request.AccessExpiresAt ?? "(none)" }
+                };
+                
+                CreateAuditLogEntry(
+                    request.InvitedBy,
+                    invitedByName,
+                    "grant-advisor-section-access",
+                    "SectionAccess",
+                    grant.Id,
+                    grantChanges,
+                    $"Granted external advisor '{user.Name}' access to section '{section.Title}'" +
+                    (string.IsNullOrEmpty(request.AccessExpiresAt) ? "" : $" (expires {request.AccessExpiresAt})"));
+            }
+            
+            response.Success = true;
+            response.User = user;
+            return response;
+        }
+    }
+    
+    /// <summary>
     /// Calculate effective permissions for a user based on all assigned roles.
     /// Uses union strategy - user has a permission if ANY role grants it.
     /// </summary>
@@ -15886,6 +16049,46 @@ public sealed class InMemoryReportStore
                 return deniedResult;
             }
             
+            // Check if user access has expired
+            if (!string.IsNullOrEmpty(user.AccessExpiresAt))
+            {
+                var expiryTime = DateTime.Parse(user.AccessExpiresAt);
+                if (DateTime.UtcNow >= expiryTime)
+                {
+                    var expiredResult = new PermissionCheckResult
+                    {
+                        UserId = request.UserId,
+                        UserName = userName,
+                        ResourceType = request.ResourceType,
+                        ResourceId = request.ResourceId,
+                        Action = request.Action,
+                        Allowed = false,
+                        DenialReason = $"User access expired at {user.AccessExpiresAt}",
+                        CheckedAt = timestamp,
+                        EvaluatedRoles = new List<string>()
+                    };
+                    
+                    // Log the expired access attempt
+                    LogPermissionCheck(expiredResult);
+                    
+                    var expiryChanges = new List<FieldChange>
+                    {
+                        new() { Field = "AccessExpiresAt", OldValue = user.AccessExpiresAt, NewValue = user.AccessExpiresAt }
+                    };
+                    
+                    CreateAuditLogEntry(
+                        "system",
+                        "System",
+                        "access-expired",
+                        "User",
+                        user.Id,
+                        expiryChanges,
+                        $"User '{userName}' attempted to access system after expiry time {user.AccessExpiresAt}");
+                    
+                    return expiredResult;
+                }
+            }
+            
             // Get user's effective permissions
             var effectivePerms = GetEffectivePermissions(request.UserId);
             
@@ -16129,7 +16332,8 @@ public sealed class InMemoryReportStore
                     GrantedBy = request.GrantedBy,
                     GrantedByName = grantor.Name,
                     GrantedAt = timestamp,
-                    Reason = request.Reason
+                    Reason = request.Reason,
+                    ExpiresAt = request.ExpiresAt
                 };
                 
                 _sectionAccessGrants.Add(grant);
@@ -16336,9 +16540,12 @@ public sealed class InMemoryReportStore
                 return true;
             }
             
-            // Check for explicit access grant
+            // Check for explicit access grant that hasn't expired
+            var now = DateTime.UtcNow;
             var hasGrant = _sectionAccessGrants.Any(g => 
-                g.SectionId == sectionId && g.UserId == userId);
+                g.SectionId == sectionId && 
+                g.UserId == userId &&
+                (string.IsNullOrEmpty(g.ExpiresAt) || DateTime.Parse(g.ExpiresAt) > now));
             
             return hasGrant;
         }
@@ -16371,8 +16578,10 @@ public sealed class InMemoryReportStore
             // If not admin, filter to only accessible sections
             if (!isAdmin)
             {
+                var now = DateTime.UtcNow;
                 var accessibleSectionIds = _sectionAccessGrants
-                    .Where(g => g.UserId == userId)
+                    .Where(g => g.UserId == userId &&
+                        (string.IsNullOrEmpty(g.ExpiresAt) || DateTime.Parse(g.ExpiresAt) > now))
                     .Select(g => g.SectionId)
                     .ToHashSet();
                 
